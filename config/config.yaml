@@ -1,0 +1,140 @@
+# ==============================================================================
+# Polymarket 5-Minute Crypto Up/Down Quant System Configuration
+# ==============================================================================
+
+# System execution mode:
+# - "paper": Real-time live market feed + paper simulated execution (Default)
+# - "collect": Only ingest and persist ticks/orderbooks/trades, no orders
+# - "backtest": Historical backtesting
+# - "replay": Historical tick-by-tick replay
+mode: "paper"
+
+# ------------------------------------------------------------------------------
+# SAFETY SYSTEM (MANDATORY SAFEGUARDS)
+# ------------------------------------------------------------------------------
+safety:
+  # Hard stop: Real money trading MUST be strictly disabled.
+  # Any attempt to enable this will trigger hard failure in the safety guard engine.
+  real_trading_enabled: false
+  # Safety confirmation phrase required if ever audited
+  safety_signature: "PAPER_TRADING_ONLY_SAFETY_LOCK_ENGAGED"
+
+# ------------------------------------------------------------------------------
+# SERVER & NETWORK
+# ------------------------------------------------------------------------------
+server:
+  host: "127.0.0.1"
+  port: 8080
+  cors_allowed_origins:
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+
+# ------------------------------------------------------------------------------
+# DATABASE & STORAGE
+# ------------------------------------------------------------------------------
+database:
+  # SQLite with WAL mode enabled for zero-external-dependency local persistence
+  url: "sqlite://data/poly_quant.db?mode=rwc"
+  max_connections: 16
+  min_connections: 2
+  acquire_timeout_secs: 5
+
+# ------------------------------------------------------------------------------
+# BANKROLL MANAGEMENT
+# ------------------------------------------------------------------------------
+bankroll:
+  # Initial active bankroll capital in USDC
+  initial: 10.0
+  # Maximum active bankroll cap. Surplus profit is locked and never reinvested.
+  cap: 10.0
+  # If active bankroll falls at or below this value, all trading stops.
+  minimum: 2.0
+  # Mode:
+  # - "capital_recovery": Mode B (Default). Losses are replenished first up to cap;
+  #   any excess beyond cap goes into locked profit.
+  # - "profit_isolation": Mode A. Every winning trade returns original stake to active
+  #   bankroll, and 100% of net profit is locked permanently.
+  mode: "capital_recovery"
+
+# ------------------------------------------------------------------------------
+# POSITION SIZING
+# ------------------------------------------------------------------------------
+position:
+  # Stake mode: "fixed" or "percentage"
+  mode: "fixed"
+  # Fixed stake per trade in USDC
+  stake: 1.0
+  # Percentage stake of active bankroll (if mode is "percentage")
+  stake_percent: 0.10
+  # Hard ceiling on any single order stake in USDC
+  max_stake: 1.0
+
+# ------------------------------------------------------------------------------
+# STRATEGY & FILTERS (Decision Rule: UP / DOWN / SKIP)
+# ------------------------------------------------------------------------------
+strategy:
+  # Strategy version identifier
+  strategy_version: "v1.0.0"
+  # Minimum model predicted probability required to trade (e.g. 0.70 = 70%)
+  min_probability: 0.70
+  # Minimum net edge after fee and slippage (e.g. 0.05 = 5.0%)
+  min_net_edge: 0.05
+  # Maximum allowed entry price on Polymarket (e.g. 0.85 USDC)
+  max_entry_price: 0.85
+  # Maximum allowed bid-ask spread on Polymarket
+  max_spread: 0.04
+  # Minimum market liquidity in USDC
+  min_liquidity: 300.0
+  # Allowed time window within the 5-minute round (in seconds)
+  min_time_remaining_sec: 15
+  max_time_remaining_sec: 285
+  # Scoring thresholds for signal classification (0-100)
+  score_thresholds:
+    skip_below: 60.0
+    low: 60.0
+    medium: 70.0
+    high: 80.0
+    very_high: 90.0
+
+# ------------------------------------------------------------------------------
+# RISK CONTROLS & CIRCUIT BREAKERS
+# ------------------------------------------------------------------------------
+risk:
+  # Maximum daily loss limit in USDC. If breached, trading halts for the day.
+  daily_loss_limit: 2.0
+  # Maximum peak-to-trough drawdown (e.g. 0.20 = 20%)
+  max_drawdown: 0.20
+  # Maximum consecutive losses before triggering cooldown
+  max_consecutive_losses: 5
+  # Cooldown period in minutes after consecutive losses trigger
+  cooldown_minutes: 30
+
+# ------------------------------------------------------------------------------
+# PAPER EXECUTION & SIMULATED REALISM
+# ------------------------------------------------------------------------------
+execution:
+  # Simulated network and processing latency before order fill (milliseconds)
+  latency_ms: 250
+  # Walk the realistic orderbook depth instead of assuming infinite fill at Best Ask
+  orderbook_depth_fill: true
+  # Dynamic or baseline fee rate (1.2% estimated for Polymarket taker/gas)
+  fee_rate: 0.012
+  # Simulated baseline slippage rate (0.5%)
+  slippage_rate: 0.005
+
+# ------------------------------------------------------------------------------
+# DATA FRESHNESS & HEALTH CHECKS
+# ------------------------------------------------------------------------------
+freshness:
+  # Stale market tick threshold in milliseconds (Fail-Closed if exceeded)
+  stale_timeout_ms: 2000
+  # Maximum allowable clock skew relative to exchange timestamps in ms
+  max_clock_skew_ms: 1000
+
+# ------------------------------------------------------------------------------
+# TARGET ASSETS
+# ------------------------------------------------------------------------------
+assets:
+  - "BTC"
+  - "ETH"
+  - "SOL"

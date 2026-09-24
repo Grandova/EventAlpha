@@ -1,0 +1,10 @@
+/target
+/data/*.db
+/data/*.db-wal
+/data/*.db-shm
+.env
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
