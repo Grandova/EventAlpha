@@ -126,11 +126,13 @@ async fn test_collector_status_and_prices_api() {
     let config = Arc::new(AppConfig::load_from_path(tmp.path()).unwrap());
     let db = Arc::new(Database::new(&config).await.unwrap());
     let collector = Arc::new(CollectorManager::new(&config));
+    let polymarket = Arc::new(poly_quant_backend::polymarket::PolymarketManager::new(&config, db.clone()));
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         collector: collector.clone(),
+        polymarket,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

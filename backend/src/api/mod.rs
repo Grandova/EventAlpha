@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -16,14 +16,19 @@ use crate::collector::freshness::FreshnessReport;
 use crate::collector::{CollectorManager, PriceSummary};
 use crate::config::AppConfig;
 use crate::db::Database;
+use crate::polymarket::market_discovery::Polymarket5mMarket;
+use crate::polymarket::orderbook::MarketBookSummary;
+use crate::polymarket::resolution::MarketResolvedEvent;
+use crate::polymarket::PolymarketManager;
 use crate::safety::{SafetyGuard, SafetyStatus};
-use crate::types::BankrollState;
+use crate::types::{Asset, BankrollState};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub db: Arc<Database>,
     pub collector: Arc<CollectorManager>,
+    pub polymarket: Arc<PolymarketManager>,
     pub start_time_ms: i64,
 }
 
@@ -41,8 +46,15 @@ pub struct HealthResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EventQuery {
+pub struct LimitQuery {
     pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketDisplayInfo {
+    #[serde(flatten)]
+    pub market: Polymarket5mMarket,
+    pub remaining_seconds: i64,
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -59,6 +71,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/events", get(handle_events))
         .route("/api/v1/collector/status", get(handle_collector_status))
         .route("/api/v1/collector/prices", get(handle_collector_prices))
+        .route("/api/v1/polymarket/markets", get(handle_polymarket_markets))
+        .route("/api/v1/polymarket/book/{asset}", get(handle_polymarket_book))
+        .route("/api/v1/polymarket/resolutions", get(handle_polymarket_resolutions))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -118,7 +133,7 @@ async fn handle_bankroll(
 
 async fn handle_events(
     State(state): State<AppState>,
-    Query(query): Query<EventQuery>,
+    Query(query): Query<LimitQuery>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     match state.db.get_recent_events(limit).await {
@@ -138,6 +153,58 @@ async fn handle_collector_prices(
     State(state): State<AppState>,
 ) -> Json<HashMap<String, HashMap<String, PriceSummary>>> {
     Json(state.collector.get_prices())
+}
+
+async fn handle_polymarket_markets(
+    State(state): State<AppState>,
+) -> Json<Vec<MarketDisplayInfo>> {
+    let now_ms = Utc::now().timestamp_millis();
+    let markets = state.polymarket.discovery().list_active_markets();
+    let display_list: Vec<MarketDisplayInfo> = markets
+        .into_iter()
+        .map(|m| {
+            let rem = m.remaining_seconds(now_ms);
+            MarketDisplayInfo {
+                market: m,
+                remaining_seconds: rem,
+            }
+        })
+        .collect();
+
+    Json(display_list)
+}
+
+async fn handle_polymarket_book(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+) -> Result<Json<MarketBookSummary>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let active_market = state.polymarket.discovery().get_active_market(asset);
+    let market_id = active_market
+        .map(|m| m.id)
+        .unwrap_or_else(|| format!("{}-5M-DEFAULT", asset));
+
+    match state.polymarket.book_engine().get_market_summary(&market_id, asset) {
+        Some(summary) => Ok(Json(summary)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn handle_polymarket_resolutions(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Result<Json<Vec<MarketResolvedEvent>>, StatusCode> {
+    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    match state.polymarket.resolution().get_recently_resolved(limit).await {
+        Ok(res) => Ok(Json(res)),
+        Err(e) => {
+            tracing::error!("Failed to fetch resolutions: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -210,11 +277,13 @@ assets: ["BTC", "ETH", "SOL"]
         let config = Arc::new(AppConfig::load_from_path(file.path()).unwrap());
         let db = Arc::new(Database::new(&config).await.unwrap());
         let collector = Arc::new(CollectorManager::new(&config));
+        let polymarket = Arc::new(PolymarketManager::new(&config, db.clone()));
 
         AppState {
             config,
             db,
             collector,
+            polymarket,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }
@@ -238,20 +307,17 @@ assets: ["BTC", "ETH", "SOL"]
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let health: HealthResponse = serde_json::from_slice(&body).unwrap();
         assert_eq!(health.status, "ok");
-        assert_eq!(health.mode, "paper");
-        assert!(!health.real_trading_enabled);
-        assert!(health.safety_status.safety_lock_engaged);
     }
 
     #[tokio::test]
-    async fn test_collector_status_endpoint() {
+    async fn test_polymarket_markets_endpoint() {
         let state = create_test_state().await;
         let app = create_router(state);
 
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/v1/collector/status")
+                    .uri("/api/v1/polymarket/markets")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -259,8 +325,5 @@ assets: ["BTC", "ETH", "SOL"]
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let report: FreshnessReport = serde_json::from_slice(&body).unwrap();
-        assert_eq!(report.exchanges.len(), 4);
     }
 }

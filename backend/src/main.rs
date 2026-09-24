@@ -78,15 +78,20 @@ async fn main() -> Result<()> {
     let collector = Arc::new(poly_quant_backend::collector::CollectorManager::new(&config));
     collector.start(db.clone());
 
+    // 9. Initialize and launch Polymarket 5-minute lifecycle & book engine
+    let polymarket = Arc::new(poly_quant_backend::polymarket::PolymarketManager::new(&config, db.clone()));
+    polymarket.start(collector.clone());
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         collector: collector.clone(),
+        polymarket: polymarket.clone(),
         start_time_ms,
     };
 
-    // 9. Bind HTTP API server
+    // 10. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -96,8 +101,11 @@ async fn main() -> Result<()> {
     info!("Bankroll status available at: http://{}/api/v1/paper/bankroll", addr);
     info!("Exchange status available at: http://{}/api/v1/collector/status", addr);
     info!("Live cross-exchange prices: http://{}/api/v1/collector/prices", addr);
+    info!("Polymarket 5M markets: http://{}/api/v1/polymarket/markets", addr);
+    info!("Polymarket Orderbook (BTC): http://{}/api/v1/polymarket/book/BTC", addr);
+    info!("Polymarket Resolutions: http://{}/api/v1/polymarket/resolutions", addr);
 
-    // 10. Run server with graceful shutdown
+    // 11. Run server with graceful shutdown
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(db))
         .await?;
