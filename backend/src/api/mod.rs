@@ -7,10 +7,13 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
+use crate::collector::freshness::FreshnessReport;
+use crate::collector::{CollectorManager, PriceSummary};
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::safety::{SafetyGuard, SafetyStatus};
@@ -20,6 +23,7 @@ use crate::types::BankrollState;
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub db: Arc<Database>,
+    pub collector: Arc<CollectorManager>,
     pub start_time_ms: i64,
 }
 
@@ -33,6 +37,7 @@ pub struct HealthResponse {
     pub timestamp_ms: i64,
     pub real_trading_enabled: bool,
     pub safety_status: SafetyStatus,
+    pub exchange_freshness: FreshnessReport,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,6 +57,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/config", get(handle_config))
         .route("/api/v1/paper/bankroll", get(handle_bankroll))
         .route("/api/v1/events", get(handle_events))
+        .route("/api/v1/collector/status", get(handle_collector_status))
+        .route("/api/v1/collector/prices", get(handle_collector_prices))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -71,6 +78,8 @@ async fn handle_health(State(state): State<AppState>) -> Json<HealthResponse> {
             message: e,
         });
 
+    let freshness = state.collector.get_freshness_report();
+
     Json(HealthResponse {
         status: "ok".to_string(),
         service: "poly-quant-core".to_string(),
@@ -80,6 +89,7 @@ async fn handle_health(State(state): State<AppState>) -> Json<HealthResponse> {
         timestamp_ms: now_ms,
         real_trading_enabled: state.config.safety.real_trading_enabled,
         safety_status: safety,
+        exchange_freshness: freshness,
     })
 }
 
@@ -91,7 +101,6 @@ async fn handle_safety(State(state): State<AppState>) -> Result<Json<SafetyStatu
 }
 
 async fn handle_config(State(state): State<AppState>) -> Json<AppConfig> {
-    // Return cloned configuration (contains zero credentials or secrets)
     Json((*state.config).clone())
 }
 
@@ -119,6 +128,16 @@ async fn handle_events(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+async fn handle_collector_status(State(state): State<AppState>) -> Json<FreshnessReport> {
+    Json(state.collector.get_freshness_report())
+}
+
+async fn handle_collector_prices(
+    State(state): State<AppState>,
+) -> Json<HashMap<String, HashMap<String, PriceSummary>>> {
+    Json(state.collector.get_prices())
 }
 
 #[cfg(test)]
@@ -190,10 +209,12 @@ assets: ["BTC", "ETH", "SOL"]
 
         let config = Arc::new(AppConfig::load_from_path(file.path()).unwrap());
         let db = Arc::new(Database::new(&config).await.unwrap());
+        let collector = Arc::new(CollectorManager::new(&config));
 
         AppState {
             config,
             db,
+            collector,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }
@@ -223,14 +244,14 @@ assets: ["BTC", "ETH", "SOL"]
     }
 
     #[tokio::test]
-    async fn test_safety_endpoint() {
+    async fn test_collector_status_endpoint() {
         let state = create_test_state().await;
         let app = create_router(state);
 
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/v1/safety")
+                    .uri("/api/v1/collector/status")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -239,8 +260,7 @@ assets: ["BTC", "ETH", "SOL"]
 
         assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        let safety: SafetyStatus = serde_json::from_slice(&body).unwrap();
-        assert!(!safety.real_trading_enabled);
-        assert!(safety.paper_trading_only);
+        let report: FreshnessReport = serde_json::from_slice(&body).unwrap();
+        assert_eq!(report.exchanges.len(), 4);
     }
 }

@@ -74,14 +74,19 @@ async fn main() -> Result<()> {
         bankroll.active_bankroll, bankroll.bankroll_cap, bankroll.locked_profit, bankroll.mode
     );
 
+    // 8. Initialize and launch multi-exchange live market collectors
+    let collector = Arc::new(poly_quant_backend::collector::CollectorManager::new(&config));
+    collector.start(db.clone());
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
+        collector: collector.clone(),
         start_time_ms,
     };
 
-    // 8. Bind HTTP API server
+    // 9. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -89,8 +94,10 @@ async fn main() -> Result<()> {
     info!("Health check available at: http://{}/api/v1/health", addr);
     info!("Safety status available at: http://{}/api/v1/safety", addr);
     info!("Bankroll status available at: http://{}/api/v1/paper/bankroll", addr);
+    info!("Exchange status available at: http://{}/api/v1/collector/status", addr);
+    info!("Live cross-exchange prices: http://{}/api/v1/collector/prices", addr);
 
-    // 9. Run server with graceful shutdown
+    // 10. Run server with graceful shutdown
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(db))
         .await?;

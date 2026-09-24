@@ -34,7 +34,7 @@ thiserror = "2.0"
 
 # Networking & WebSockets
 reqwest = { version = "0.12", features = ["json"] }
-tokio-tungstenite = { version = "0.26", features = ["connect"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures-util = "0.3"
 
 # Concurrency & In-memory cache

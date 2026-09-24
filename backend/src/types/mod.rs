@@ -89,12 +89,15 @@ impl std::fmt::Display for Exchange {
 pub struct MarketTick {
     pub exchange: Exchange,
     pub symbol: String,
-    pub timestamp_ms: i64,
+    pub asset: Asset,
+    pub exchange_timestamp_ms: i64,
+    pub receive_timestamp_ms: i64,
+    pub latency_ms: i64,
     pub bid: f64,
     pub ask: f64,
     pub mid: f64,
     pub last: f64,
-    pub volume: f64,
+    pub volume_24h: f64,
 }
 
 /// Polymarket 5-minute Market Specific Tick
@@ -139,11 +142,25 @@ pub struct OrderBookSnapshot {
 pub struct TradeTick {
     pub exchange: Exchange,
     pub symbol: String,
-    pub timestamp_ms: i64,
+    pub asset: Asset,
+    pub exchange_timestamp_ms: i64,
+    pub receive_timestamp_ms: i64,
+    pub latency_ms: i64,
     pub price: f64,
     pub size: f64,
     pub side: String, // "buy" or "sell"
     pub is_aggressive: bool,
+}
+
+/// Real-time health and connectivity metrics for an exchange
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExchangeHealth {
+    pub exchange: Exchange,
+    pub connected: bool,
+    pub last_update_ms: i64,
+    pub latency_ms: i64,
+    pub ticks_received: u64,
+    pub is_stale: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
