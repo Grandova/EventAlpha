@@ -97,6 +97,7 @@ async fn setup_phase5() -> (
         collector.clone(),
         db.clone(),
     ));
+    let models = Arc::new(poly_quant_backend::models::ModelManager::new());
 
     let state = AppState {
         config: config.clone(),
@@ -105,6 +106,7 @@ async fn setup_phase5() -> (
         polymarket: polymarket.clone(),
         composite: composite.clone(),
         features: features.clone(),
+        models,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

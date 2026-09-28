@@ -98,6 +98,10 @@ async fn main() -> Result<()> {
     ));
     features.start();
 
+    // 12. Initialize and launch ML Prediction & Probability Calibration Engine
+    let models = Arc::new(poly_quant_backend::models::ModelManager::new());
+    models.start(features.subscribe(), db.clone());
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
@@ -106,10 +110,11 @@ async fn main() -> Result<()> {
         polymarket: polymarket.clone(),
         composite: composite.clone(),
         features: features.clone(),
+        models: models.clone(),
         start_time_ms,
     };
 
-    // 12. Bind HTTP API server
+    // 13. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -127,8 +132,11 @@ async fn main() -> Result<()> {
     info!("Real-time Features (BTC): http://{}/api/v1/features/latest/BTC", addr);
     info!("All Real-time Features: http://{}/api/v1/features/all", addr);
     info!("Feature Names (37 dims): http://{}/api/v1/features/names", addr);
+    info!("Dataset Summary: http://{}/api/v1/dataset/summary", addr);
+    info!("Model Predictions (BTC): http://{}/api/v1/models/prediction/BTC", addr);
+    info!("All Model Predictions: http://{}/api/v1/models/all", addr);
 
-    // 13. Run server with graceful shutdown
+    // 14. Run server with graceful shutdown
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(db))
         .await?;

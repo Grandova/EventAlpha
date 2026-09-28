@@ -137,6 +137,7 @@ async fn test_collector_status_and_prices_api() {
         collector.clone(),
         db.clone(),
     ));
+    let models = Arc::new(poly_quant_backend::models::ModelManager::new());
 
     let state = AppState {
         config: config.clone(),
@@ -145,6 +146,7 @@ async fn test_collector_status_and_prices_api() {
         polymarket,
         composite,
         features,
+        models,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

@@ -19,6 +19,7 @@ use crate::config::AppConfig;
 use crate::dataset::{DatasetExporter, DatasetSummary};
 use crate::db::Database;
 use crate::features::{FeatureEngine, FeatureSnapshot, FEATURE_NAMES};
+use crate::models::{ModelManager, ModelPrediction};
 use crate::polymarket::market_discovery::Polymarket5mMarket;
 use crate::polymarket::orderbook::MarketBookSummary;
 use crate::polymarket::resolution::MarketResolvedEvent;
@@ -34,6 +35,7 @@ pub struct AppState {
     pub polymarket: Arc<PolymarketManager>,
     pub composite: Arc<CompositePriceEngine>,
     pub features: Arc<FeatureEngine>,
+    pub models: Arc<ModelManager>,
     pub start_time_ms: i64,
 }
 
@@ -85,6 +87,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/features/all", get(handle_features_all))
         .route("/api/v1/features/names", get(handle_features_names))
         .route("/api/v1/dataset/summary", get(handle_dataset_summary))
+        .route("/api/v1/models/prediction/{asset}", get(handle_model_prediction))
+        .route("/api/v1/models/all", get(handle_models_all))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -274,6 +278,26 @@ async fn handle_dataset_summary(
     }
 }
 
+async fn handle_model_prediction(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+) -> Result<Json<ModelPrediction>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    match state.models.get_latest_prediction(asset) {
+        Some(prediction) => Ok(Json(prediction)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn handle_models_all(
+    State(state): State<AppState>,
+) -> Json<HashMap<String, ModelPrediction>> {
+    Json(state.models.get_all_latest_predictions())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,6 +376,7 @@ assets: ["BTC", "ETH", "SOL"]
             collector.clone(),
             db.clone(),
         ));
+        let models = Arc::new(ModelManager::new());
 
         AppState {
             config,
@@ -360,6 +385,7 @@ assets: ["BTC", "ETH", "SOL"]
             polymarket,
             composite,
             features,
+            models,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

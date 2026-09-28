@@ -5,6 +5,7 @@ pub mod config;
 pub mod dataset;
 pub mod db;
 pub mod features;
+pub mod models;
 pub mod polymarket;
 pub mod safety;
 pub mod types;
