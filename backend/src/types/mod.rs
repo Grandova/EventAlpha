@@ -351,6 +351,22 @@ pub struct PaperResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeStatistics {
+    pub total_trades: i64,
+    pub winning_trades: i64,
+    pub losing_trades: i64,
+    pub void_trades: i64,
+    pub win_rate: f64,
+    pub total_pnl: f64,
+    pub gross_profit: f64,
+    pub gross_loss: f64,
+    pub profit_factor: f64,
+    pub avg_trade_pnl: f64,
+    pub max_win: f64,
+    pub max_loss: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemEvent {
     pub event_type: String,
     pub severity: String,

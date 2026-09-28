@@ -30,7 +30,7 @@ use crate::safety::{SafetyGuard, SafetyStatus};
 use crate::strategy::StrategyEngine;
 use crate::types::{
     Asset, BankrollHistoryEntry, BankrollState, DecisionLog, PaperOrder, PaperPosition,
-    PredictionSignal, RiskStatus,
+    PaperResult, PredictionSignal, RiskStatus, TradeStatistics,
 };
 
 #[derive(Clone)]
@@ -106,6 +106,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/paper/orders", get(handle_paper_orders))
         .route("/api/v1/paper/positions/active", get(handle_paper_positions_active))
         .route("/api/v1/paper/positions/history", get(handle_paper_positions_history))
+        .route("/api/v1/paper/results", get(handle_paper_results))
+        .route("/api/v1/paper/statistics", get(handle_paper_statistics))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -380,6 +382,29 @@ async fn handle_paper_positions_history(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+async fn handle_paper_results(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Result<Json<Vec<PaperResult>>, StatusCode> {
+    let limit = query.limit.unwrap_or(50);
+    state
+        .execution
+        .get_paper_results(limit)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn handle_paper_statistics(
+    State(state): State<AppState>,
+) -> Result<Json<TradeStatistics>, StatusCode> {
+    state
+        .execution
+        .get_trade_statistics()
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
 
 #[cfg(test)]
 mod tests {

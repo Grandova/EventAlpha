@@ -132,6 +132,7 @@ async fn main() -> Result<()> {
     ));
     execution.set_risk_manager(risk.clone()).await;
     execution.start(strategy.subscribe_signals());
+    execution.start_resolution_listener(polymarket.subscribe_resolutions());
 
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {

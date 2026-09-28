@@ -10,9 +10,11 @@ use uuid::Uuid;
 use crate::config::{ExecutionConfig, PositionConfig};
 use crate::db::Database;
 use crate::polymarket::orderbook::PolymarketBookEngine;
+use crate::polymarket::resolution::MarketResolvedEvent;
 use crate::safety::SafetyGuard;
 use crate::types::{
-    MarketSide, PaperOrder, PaperPosition, PredictionSignal, SignalAction,
+    MarketSide, PaperOrder, PaperPosition, PaperResult, PredictionSignal, Resolution,
+    SignalAction, TradeStatistics,
 };
 
 #[derive(Clone)]
@@ -27,6 +29,7 @@ pub struct PaperExecutionEngine {
     order_history: Arc<RwLock<VecDeque<PaperOrder>>>,
     order_tx: broadcast::Sender<PaperOrder>,
     position_tx: broadcast::Sender<PaperPosition>,
+    result_tx: broadcast::Sender<PaperResult>,
     risk: Arc<RwLock<Option<Arc<crate::risk::RiskManager>>>>,
 }
 
@@ -42,6 +45,7 @@ impl PaperExecutionEngine {
 
         let (order_tx, _) = broadcast::channel(1024);
         let (position_tx, _) = broadcast::channel(1024);
+        let (result_tx, _) = broadcast::channel(1024);
 
         Self {
             execution_config,
@@ -52,6 +56,7 @@ impl PaperExecutionEngine {
             order_history: Arc::new(RwLock::new(VecDeque::with_capacity(500))),
             order_tx,
             position_tx,
+            result_tx,
             risk: Arc::new(RwLock::new(None)),
         }
     }
@@ -275,5 +280,190 @@ impl PaperExecutionEngine {
 
     pub fn subscribe_positions(&self) -> broadcast::Receiver<PaperPosition> {
         self.position_tx.subscribe()
+    }
+
+    pub fn subscribe_results(&self) -> broadcast::Receiver<PaperResult> {
+        self.result_tx.subscribe()
+    }
+
+    /// Settle a single active position based on market resolution outcome
+    pub async fn settle_position(
+        &self,
+        position_id: &str,
+        resolution: Resolution,
+        resolved_at_ms: i64,
+    ) -> Result<Option<PaperResult>, String> {
+        let position = match self.active_positions.get(position_id) {
+            Some(p) => p.clone(),
+            None => return Ok(None),
+        };
+
+        if position.status != "OPEN" {
+            return Ok(None);
+        }
+
+        let (outcome_str, is_win, is_loss) = match resolution {
+            Resolution::Up => {
+                if position.side == MarketSide::Up {
+                    ("WIN", true, false)
+                } else {
+                    ("LOSS", false, true)
+                }
+            }
+            Resolution::Down => {
+                if position.side == MarketSide::Down {
+                    ("WIN", true, false)
+                } else {
+                    ("LOSS", false, true)
+                }
+            }
+            Resolution::Void => ("VOID", false, false),
+        };
+
+        let (payout, net_profit, returned_stake) = if is_win {
+            // Polymarket binary options pay $1.00 USDC per share upon winning
+            let payout = position.shares * 1.0;
+            let net_profit = payout - position.stake;
+            let returned_stake = position.stake;
+            (payout, net_profit, returned_stake)
+        } else if is_loss {
+            (0.0, -position.stake, 0.0)
+        } else {
+            // Void / Tie: full refund of initial stake
+            (position.stake, 0.0, position.stake)
+        };
+
+        // Call RiskManager to update ledger, replenishing active bankroll or locking profit
+        let (bankroll_before, bankroll_after, locked_profit_before, locked_profit_after) = {
+            let r_guard = self.risk.read().await;
+            if let Some(ref risk) = *r_guard {
+                let b_before = risk.get_bankroll_state().await;
+                let b_after = risk
+                    .process_settlement(
+                        returned_stake,
+                        net_profit,
+                        outcome_str,
+                        Some(&position.position_id),
+                    )
+                    .await
+                    .unwrap_or(b_before.clone());
+                (
+                    b_before.active_bankroll,
+                    b_after.active_bankroll,
+                    b_before.locked_profit,
+                    b_after.locked_profit,
+                )
+            } else {
+                (10.0, 10.0, 0.0, 0.0)
+            }
+        };
+
+        // Update position in SQLite
+        let status_str = format!("RESOLVED_{}", outcome_str);
+        let _ = self
+            .db
+            .update_position_status(&position.position_id, &status_str, resolved_at_ms)
+            .await;
+
+        // Remove from in-memory active positions
+        self.active_positions.remove(position_id);
+
+        let mut settled_pos = position.clone();
+        settled_pos.status = status_str.clone();
+        settled_pos.settled_at_ms = Some(resolved_at_ms);
+
+        // Broadcast position update
+        let _ = self.position_tx.send(settled_pos.clone());
+
+        let result = PaperResult {
+            result_id: format!("res_{}", Uuid::new_v4().simple()),
+            order_id: position.order_id.clone(),
+            market_id: position.market_id.clone(),
+            asset: position.asset,
+            side: position.side,
+            entry_time_ms: position.entry_time_ms,
+            entry_price: position.entry_price,
+            fill_price: position.entry_price,
+            shares: position.shares,
+            stake: position.stake,
+            predicted_probability: 0.0,
+            model_confidence: "NORMAL".to_string(),
+            gross_edge: 0.0,
+            net_edge: 0.0,
+            fee: 0.0,
+            slippage: 0.0,
+            outcome: outcome_str.to_string(),
+            payout,
+            pnl: net_profit,
+            bankroll_before,
+            bankroll_after,
+            locked_profit_before,
+            locked_profit_after,
+            strategy_version: "v1.0.0".to_string(),
+            model_version: "v1.0.0".to_string(),
+            created_at_ms: resolved_at_ms,
+        };
+
+        // Persist result to SQLite
+        if let Err(e) = self.db.insert_paper_result(&result).await {
+            error!("Failed to persist paper result: {:#}", e);
+        }
+
+        // Broadcast result event
+        let _ = self.result_tx.send(result.clone());
+
+        info!(
+            "🏆 PAPER SETTLEMENT: {} {} {:?} | Outcome: {} | PnL: ${:+.2} | Payout: ${:.2} | Active Bankroll: ${:.2} -> ${:.2} | Locked: ${:.2} -> ${:.2}",
+            position.asset, position.side, position.position_id, outcome_str, net_profit, payout,
+            bankroll_before, bankroll_after, locked_profit_before, locked_profit_after
+        );
+
+        Ok(Some(result))
+    }
+
+    /// Settle all active positions associated with a resolved market
+    pub async fn handle_market_resolved(
+        &self,
+        event: &MarketResolvedEvent,
+    ) -> Result<Vec<PaperResult>, String> {
+        let matching_pos_ids: Vec<String> = self
+            .active_positions
+            .iter()
+            .filter(|entry| entry.value().market_id == event.market_id && entry.value().status == "OPEN")
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        let mut results = Vec::new();
+        for pos_id in matching_pos_ids {
+            if let Ok(Some(res)) = self
+                .settle_position(&pos_id, event.resolution, event.resolved_at_ms)
+                .await
+            {
+                results.push(res);
+            }
+        }
+        Ok(results)
+    }
+
+    /// Background listener for Polymarket market resolution events
+    pub fn start_resolution_listener(
+        &self,
+        mut resolution_rx: broadcast::Receiver<MarketResolvedEvent>,
+    ) {
+        info!("Starting PaperExecutionEngine real-time resolution listener...");
+        let engine = self.clone();
+        tokio::spawn(async move {
+            while let Ok(event) = resolution_rx.recv().await {
+                let _ = engine.handle_market_resolved(&event).await;
+            }
+        });
+    }
+
+    pub async fn get_paper_results(&self, limit: i64) -> anyhow::Result<Vec<PaperResult>> {
+        self.db.get_paper_results(limit).await
+    }
+
+    pub async fn get_trade_statistics(&self) -> anyhow::Result<TradeStatistics> {
+        self.db.get_trade_statistics().await
     }
 }

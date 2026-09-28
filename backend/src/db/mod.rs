@@ -689,6 +689,238 @@ impl Database {
 
         Ok(list)
     }
+
+    /// Insert a settled paper trade result with full balance attribution
+    pub async fn insert_paper_result(&self, res: &crate::types::PaperResult) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        let asset_str = res.asset.to_string();
+        let side_str = res.side.to_string();
+
+        // Ensure parent market exists
+        let condition_id = format!("cond_{}", &res.market_id);
+        let _ = sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'resolved', ?, ?)
+            "#,
+        )
+        .bind(&res.market_id)
+        .bind(&condition_id)
+        .bind(&asset_str)
+        .bind(res.entry_time_ms)
+        .bind(res.entry_time_ms + 300_000)
+        .bind(now_ms)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await;
+
+        // Ensure parent paper order exists
+        let _ = sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO paper_orders (
+                order_id, market_id, asset, side, stake, shares,
+                quote_price, fill_price, slippage, fee, status, signal_id, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', NULL, ?)
+            "#,
+        )
+        .bind(&res.order_id)
+        .bind(&res.market_id)
+        .bind(&asset_str)
+        .bind(&side_str)
+        .bind(res.stake)
+        .bind(res.shares)
+        .bind(res.entry_price)
+        .bind(res.fill_price)
+        .bind(res.slippage)
+        .bind(res.fee)
+        .bind(res.entry_time_ms)
+        .execute(&self.pool)
+        .await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO paper_results (
+                result_id, order_id, market_id, asset, side, entry_time,
+                entry_price, fill_price, shares, stake, predicted_probability,
+                model_confidence, gross_edge, net_edge, fee, slippage,
+                outcome, payout, pnl, bankroll_before, bankroll_after,
+                locked_profit_before, locked_profit_after, strategy_version,
+                model_version, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&res.result_id)
+        .bind(&res.order_id)
+        .bind(&res.market_id)
+        .bind(&asset_str)
+        .bind(&side_str)
+        .bind(res.entry_time_ms)
+        .bind(res.entry_price)
+        .bind(res.fill_price)
+        .bind(res.shares)
+        .bind(res.stake)
+        .bind(res.predicted_probability)
+        .bind(&res.model_confidence)
+        .bind(res.gross_edge)
+        .bind(res.net_edge)
+        .bind(res.fee)
+        .bind(res.slippage)
+        .bind(&res.outcome)
+        .bind(res.payout)
+        .bind(res.pnl)
+        .bind(res.bankroll_before)
+        .bind(res.bankroll_after)
+        .bind(res.locked_profit_before)
+        .bind(res.locked_profit_after)
+        .bind(&res.strategy_version)
+        .bind(&res.model_version)
+        .bind(res.created_at_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to insert paper result")?;
+
+        Ok(())
+    }
+
+    /// Retrieve recent paper results
+    pub async fn get_paper_results(&self, limit: i64) -> Result<Vec<crate::types::PaperResult>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT result_id, order_id, market_id, asset, side, entry_time,
+                   entry_price, fill_price, shares, stake, predicted_probability,
+                   model_confidence, gross_edge, net_edge, fee, slippage,
+                   outcome, payout, pnl, bankroll_before, bankroll_after,
+                   locked_profit_before, locked_profit_after, strategy_version,
+                   model_version, created_at
+            FROM paper_results
+            ORDER BY id DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query paper results")?;
+
+        let mut results = Vec::new();
+        for r in rows {
+            let asset_str: String = r.get("asset");
+            let asset: crate::types::Asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+            let side_str: String = r.get("side");
+            let side = if side_str.to_uppercase() == "UP" {
+                crate::types::MarketSide::Up
+            } else {
+                crate::types::MarketSide::Down
+            };
+
+            results.push(crate::types::PaperResult {
+                result_id: r.get("result_id"),
+                order_id: r.get("order_id"),
+                market_id: r.get("market_id"),
+                asset,
+                side,
+                entry_time_ms: r.get("entry_time"),
+                entry_price: r.get("entry_price"),
+                fill_price: r.get("fill_price"),
+                shares: r.get("shares"),
+                stake: r.get("stake"),
+                predicted_probability: r.get("predicted_probability"),
+                model_confidence: r.get("model_confidence"),
+                gross_edge: r.get("gross_edge"),
+                net_edge: r.get("net_edge"),
+                fee: r.get("fee"),
+                slippage: r.get("slippage"),
+                outcome: r.get("outcome"),
+                payout: r.get("payout"),
+                pnl: r.get("pnl"),
+                bankroll_before: r.get("bankroll_before"),
+                bankroll_after: r.get("bankroll_after"),
+                locked_profit_before: r.get("locked_profit_before"),
+                locked_profit_after: r.get("locked_profit_after"),
+                strategy_version: r.get("strategy_version"),
+                model_version: r.get("model_version"),
+                created_at_ms: r.get("created_at"),
+            });
+        }
+
+        Ok(results)
+    }
+
+    /// Calculate summary trade statistics across all paper results
+    pub async fn get_trade_statistics(&self) -> Result<crate::types::TradeStatistics> {
+        let results = self.get_paper_results(10_000).await?;
+
+        let total_trades = results.len() as i64;
+        let mut winning_trades = 0i64;
+        let mut losing_trades = 0i64;
+        let mut void_trades = 0i64;
+        let mut total_pnl = 0.0;
+        let mut gross_profit = 0.0;
+        let mut gross_loss = 0.0;
+        let mut max_win = 0.0f64;
+        let mut max_loss = 0.0f64;
+
+        for r in &results {
+            total_pnl += r.pnl;
+            match r.outcome.to_uppercase().as_str() {
+                "WIN" => {
+                    winning_trades += 1;
+                    gross_profit += r.pnl;
+                    if r.pnl > max_win {
+                        max_win = r.pnl;
+                    }
+                }
+                "LOSS" => {
+                    losing_trades += 1;
+                    gross_loss += -r.pnl;
+                    if r.pnl < max_loss {
+                        max_loss = r.pnl;
+                    }
+                }
+                _ => {
+                    void_trades += 1;
+                }
+            }
+        }
+
+        let non_void = winning_trades + losing_trades;
+        let win_rate = if non_void > 0 {
+            (winning_trades as f64 / non_void as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let profit_factor = if gross_loss > 0.0 {
+            gross_profit / gross_loss
+        } else if gross_profit > 0.0 {
+            999.99
+        } else {
+            0.0
+        };
+
+        let avg_trade_pnl = if total_trades > 0 {
+            total_pnl / total_trades as f64
+        } else {
+            0.0
+        };
+
+        Ok(crate::types::TradeStatistics {
+            total_trades,
+            winning_trades,
+            losing_trades,
+            void_trades,
+            win_rate,
+            total_pnl,
+            gross_profit,
+            gross_loss,
+            profit_factor,
+            avg_trade_pnl,
+            max_win,
+            max_loss,
+        })
+    }
 }
 
 #[cfg(test)]
