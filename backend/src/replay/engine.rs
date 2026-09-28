@@ -91,7 +91,7 @@ impl ReplayEngine {
 
                 let (sig, _) = self.strategy.evaluate(&pred, None, None, 0.001, true, 150);
 
-                let comp_price = if r.features.len() > 0 {
+                let comp_price = if !r.features.is_empty() {
                     r.features[0]
                 } else {
                     60000.0
@@ -310,7 +310,7 @@ impl ReplayEngine {
 
     /// Set replay playback speed multiplier
     pub async fn set_speed(&self, speed: f64) -> f64 {
-        let spd = speed.max(0.1).min(100.0);
+        let spd = speed.clamp(0.1, 100.0);
         *self.speed.write().await = spd;
         spd
     }
@@ -411,7 +411,7 @@ impl ReplayEngine {
                 }
 
                 // Calculate realistic inter-frame delay scaled by speed
-                let dt_ms = (frames[next_idx].timestamp_ms - frame.timestamp_ms).max(10).min(5000);
+                let dt_ms = (frames[next_idx].timestamp_ms - frame.timestamp_ms).clamp(10, 5000);
                 drop(frames);
 
                 let speed = *speed_arc.read().await;

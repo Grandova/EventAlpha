@@ -235,7 +235,7 @@ impl Database {
         };
 
         // Ensure parent market exists in case of synthetic/test runs
-        let condition_id = format!("cond_{}", &signal.market_id);
+        let condition_id = format!("cond_{}", signal.market_id);
         let _ = sqlx::query(
             r#"
             INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
@@ -362,7 +362,7 @@ impl Database {
         let asset_str = order.asset.to_string();
         let side_str = order.side.to_string();
 
-        let condition_id = format!("cond_{}", &order.market_id);
+        let condition_id = format!("cond_{}", order.market_id);
         let _ = sqlx::query(
             r#"
             INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
@@ -464,7 +464,7 @@ impl Database {
         let asset_str = pos.asset.to_string();
         let side_str = pos.side.to_string();
 
-        let condition_id = format!("cond_{}", &pos.market_id);
+        let condition_id = format!("cond_{}", pos.market_id);
         let _ = sqlx::query(
             r#"
             INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
@@ -697,7 +697,7 @@ impl Database {
         let side_str = res.side.to_string();
 
         // Ensure parent market exists
-        let condition_id = format!("cond_{}", &res.market_id);
+        let condition_id = format!("cond_{}", res.market_id);
         let _ = sqlx::query(
             r#"
             INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)

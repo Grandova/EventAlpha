@@ -9,6 +9,8 @@ class WebSocketClient {
   private isExplicitlyClosed = false;
   private isConnected = false;
 
+  private reconnectAttempts = 0;
+
   constructor() {
     this.connect();
   }
@@ -24,6 +26,20 @@ class WebSocketClient {
       return;
     }
 
+    // Clean up any stale socket references and detached event listeners
+    if (this.ws) {
+      try {
+        this.ws.onopen = null;
+        this.ws.onmessage = null;
+        this.ws.onclose = null;
+        this.ws.onerror = null;
+        this.ws.close();
+      } catch {
+        // Ignore close errors on stale socket
+      }
+      this.ws = null;
+    }
+
     this.isExplicitlyClosed = false;
     const url = this.getWsUrl();
 
@@ -32,13 +48,20 @@ class WebSocketClient {
 
       this.ws.onopen = () => {
         this.isConnected = true;
+        this.reconnectAttempts = 0;
         console.log('[WebSocket] Connected to /api/v1/ws');
       };
 
       this.ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data) as WsMessage;
-          this.handlers.forEach((handler) => handler(msg));
+          this.handlers.forEach((handler) => {
+            try {
+              handler(msg);
+            } catch (err) {
+              console.error('[WebSocket] Error in message handler:', err);
+            }
+          });
         } catch (err) {
           console.error('[WebSocket] Failed to parse message:', err);
         }
@@ -47,7 +70,6 @@ class WebSocketClient {
       this.ws.onclose = () => {
         this.isConnected = false;
         if (!this.isExplicitlyClosed) {
-          console.warn('[WebSocket] Connection closed. Reconnecting in 2s...');
           this.scheduleReconnect();
         }
       };
@@ -62,11 +84,14 @@ class WebSocketClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimeout) return;
+    if (this.reconnectTimeout || this.isExplicitlyClosed) return;
+    this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, 6);
+    const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 8000);
+    console.warn(`[WebSocket] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${this.reconnectAttempts})...`);
     this.reconnectTimeout = window.setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect();
-    }, 2000);
+    }, delay);
   }
 
   public subscribe(handler: MessageHandler): () => void {
@@ -78,6 +103,7 @@ class WebSocketClient {
 
   public disconnect(): void {
     this.isExplicitlyClosed = true;
+    this.reconnectAttempts = 0;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

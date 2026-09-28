@@ -134,8 +134,7 @@ impl LogisticRegressionModel {
     /// Predict raw probability P(Up) from a feature vector slice
     pub fn predict_vector(&self, vec: &[f64]) -> f64 {
         let mut z = self.config.bias;
-        for i in 0..vec.len() {
-            let val = vec[i];
+        for (i, &val) in vec.iter().enumerate() {
             let mean = self.config.means.get(i).copied().unwrap_or(0.0);
             let std = self.config.stds.get(i).copied().unwrap_or(1.0).max(1e-6);
             let norm_x = (val - mean) / std;
@@ -197,8 +196,8 @@ impl LogisticRegressionModel {
                 self.config.bias -= lr * error;
 
                 // Update weights with L2 regularization
-                for i in 0..n_features {
-                    let grad = error * norm_x[i] + (l2_reg * self.config.weights[i]);
+                for (i, &nx) in norm_x.iter().enumerate().take(n_features) {
+                    let grad = error * nx + (l2_reg * self.config.weights[i]);
                     self.config.weights[i] -= lr * grad;
                 }
             }

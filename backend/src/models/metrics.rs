@@ -115,7 +115,7 @@ mod tests {
         let m = MetricsCalculator::evaluate(&preds, &labels).unwrap();
         // (0.5 - 1.0)^2 = 0.25
         assert!((m.brier_score - 0.25).abs() < 1e-4);
-        // Log loss for 0.5 is -ln(0.5) = 0.6931
-        assert!((m.log_loss - 0.6931).abs() < 1e-3);
+        // Log loss for 0.5 is -ln(0.5) = ln(2)
+        assert!((m.log_loss - std::f64::consts::LN_2).abs() < 1e-4);
     }
 }

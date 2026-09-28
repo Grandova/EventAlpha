@@ -103,10 +103,10 @@ impl MarketDiscoveryEngine {
             };
 
             let resolution_str: Option<String> = row.get("resolution");
-            let resolution = resolution_str.and_then(|r| match r.as_str() {
-                "UP" => Some(Resolution::Up),
-                "DOWN" => Some(Resolution::Down),
-                _ => Some(Resolution::Void),
+            let resolution = resolution_str.map(|r| match r.as_str() {
+                "UP" => Resolution::Up,
+                "DOWN" => Resolution::Down,
+                _ => Resolution::Void,
             });
 
             let up_token = format!("{}_{}_UP", market_id, asset);

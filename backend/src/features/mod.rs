@@ -120,7 +120,7 @@ impl FeatureEngine {
         let comp = self.composite.calculate_snapshot(asset, now_ms)?;
 
         // Update price history for velocity & acceleration
-        let mut hist = self.price_history.entry(asset).or_insert_with(VecDeque::new);
+        let mut hist = self.price_history.entry(asset).or_default();
         hist.push_back((now_ms, comp.composite_price));
         let cutoff = now_ms - (MAX_PRICE_HISTORY_SECS * 1000);
         while let Some(&(ts, _)) = hist.front() {

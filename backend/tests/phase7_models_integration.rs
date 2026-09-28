@@ -302,7 +302,7 @@ fn test_ensemble_and_confidence_levels() {
     // Neutral features produce P around 0.50 and Low/Medium confidence
     let neutral = sample_neutral_features();
     let (p_neutral, neutral_conf) = ensemble.predict(&neutral);
-    assert!(p_neutral >= 0.40 && p_neutral <= 0.60);
+    assert!((0.40..=0.60).contains(&p_neutral));
     assert!(neutral_conf == ConfidenceLevel::Low || neutral_conf == ConfidenceLevel::Medium);
 }
 

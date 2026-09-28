@@ -19,6 +19,12 @@ pub struct TradeFlowTracker {
     trades: Arc<DashMap<Asset, VecDeque<TradeRecord>>>,
 }
 
+impl Default for TradeFlowTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TradeFlowTracker {
     pub fn new() -> Self {
         Self {
@@ -35,7 +41,7 @@ impl TradeFlowTracker {
             is_buy,
         };
 
-        let mut queue = self.trades.entry(tick.asset).or_insert_with(VecDeque::new);
+        let mut queue = self.trades.entry(tick.asset).or_default();
         queue.push_back(record);
 
         // Prune older than MAX_TRADE_WINDOW_SECS

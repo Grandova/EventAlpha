@@ -293,7 +293,7 @@ async fn test_risk_status_and_bankroll_history_rest_api() {
     assert_eq!(res.status(), StatusCode::OK);
     let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
     let risk_status: RiskStatus = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(risk_status.is_trading_halted, false);
+    assert!(!risk_status.is_trading_halted);
     assert_eq!(risk_status.consecutive_losses, 0);
 
     // 2. GET /api/v1/paper/bankroll

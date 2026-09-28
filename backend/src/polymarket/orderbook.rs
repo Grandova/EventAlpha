@@ -54,6 +54,12 @@ pub struct PolymarketBookEngine {
     obi_history: Arc<DashMap<Asset, VecDeque<(i64, f64)>>>,
 }
 
+impl Default for PolymarketBookEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolymarketBookEngine {
     pub fn new() -> Self {
         Self {
@@ -100,7 +106,7 @@ impl PolymarketBookEngine {
         let obi_top20 = Self::calc_obi(&bids, &asks, 20);
 
         if side == MarketSide::Up {
-            let mut hist = self.obi_history.entry(asset).or_insert_with(VecDeque::new);
+            let mut hist = self.obi_history.entry(asset).or_default();
             hist.push_back((now_ms, obi_top5));
             // Keep at most 120 seconds of OBI samples
             while let Some(&(ts, _)) = hist.front() {
@@ -235,7 +241,11 @@ impl PolymarketBookEngine {
             ));
         }
 
-        let avg_fill_price = stake_usdc / total_shares;
+        if total_shares <= 0.0 || !total_shares.is_finite() {
+            return Err("Zero shares fulfilled in orderbook execution".to_string());
+        }
+
+        let avg_fill_price = (stake_usdc / total_shares).clamp(0.001, 1.0);
         let slippage = (avg_fill_price - best_ask).max(0.0);
 
         Ok(SimulatedFill {

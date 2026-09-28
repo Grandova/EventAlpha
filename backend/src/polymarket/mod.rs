@@ -96,9 +96,9 @@ impl PolymarketManager {
 
                         // 3. Maintain / seed orderbook implied probabilities
                         let implied_p = match (market.open_price, current_spot_price) {
-                            (Some(open), Some(curr)) => {
+                            (Some(open), Some(curr)) if open > 0.0 && curr.is_finite() && open.is_finite() => {
                                 // Heuristic implied probability based on distance and volatility
-                                let diff_pct = (curr - open) / open;
+                                let diff_pct = ((curr - open) / open).clamp(-0.5, 0.5);
                                 (0.50 + diff_pct * 50.0).clamp(0.05, 0.95)
                             }
                             _ => 0.50,

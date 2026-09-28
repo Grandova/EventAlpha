@@ -56,15 +56,16 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let mut resolution_rx = state.polymarket.subscribe_resolutions();
     let mut ticker_timer = interval(Duration::from_millis(500));
     let mut heartbeat_timer = interval(Duration::from_millis(1000));
+    let mut ping_timer = interval(Duration::from_secs(15));
 
     debug!("New WebSocket client connected to /api/v1/ws");
 
-    // Spawn client reader to handle pings and incoming messages
+    // Spawn client reader to handle incoming messages and close frames
     let mut client_task = tokio::spawn(async move {
-        while let Some(Ok(msg)) = receiver.next().await {
-            match msg {
-                Message::Close(_) => break,
-                Message::Ping(_) => {
+        while let Some(res) = receiver.next().await {
+            match res {
+                Ok(Message::Close(_)) | Err(_) => break,
+                Ok(Message::Ping(_)) => {
                     // Axum automatically replies to pings
                 }
                 _ => {}
@@ -77,6 +78,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
         loop {
             tokio::select! {
+                // 0. Periodic ping (15s) to detect dead sockets immediately
+                _ = ping_timer.tick() => {
+                    if sender.send(Message::Ping(vec![].into())).await.is_err() {
+                        return;
+                    }
+                }
                 // 1. Periodic Ticker update (500ms)
                 _ = ticker_timer.tick() => {
                     let now_ms = Utc::now().timestamp_millis();

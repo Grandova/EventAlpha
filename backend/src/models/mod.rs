@@ -63,6 +63,12 @@ pub struct ModelManager {
     prediction_tx: broadcast::Sender<ModelPrediction>,
 }
 
+impl Default for ModelManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModelManager {
     pub fn new() -> Self {
         let (prediction_tx, _) = broadcast::channel(1024);

@@ -40,38 +40,56 @@ pub struct SignalScorer;
 
 impl SignalScorer {
     /// 1. Net edge points: [0, 35]
+    ///
     /// 5% net edge gives 10 pts, scales linearly to 35 pts at 15%+ net edge
     pub fn compute_edge_points(net_edge: f64, min_net_edge: f64) -> f64 {
-        if net_edge <= 0.0 {
+        if !net_edge.is_finite() || net_edge <= 0.0 {
             0.0
+        } else if min_net_edge <= 0.0 {
+            10.0
         } else if net_edge < min_net_edge {
             // Partial credit if positive but below hard filter
             (net_edge / min_net_edge).clamp(0.0, 1.0) * 10.0
         } else {
             let high_edge = 0.15;
-            let ratio = ((net_edge - min_net_edge) / (high_edge - min_net_edge)).clamp(0.0, 1.0);
+            let ratio = if high_edge > min_net_edge {
+                ((net_edge - min_net_edge) / (high_edge - min_net_edge)).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
             10.0 + ratio * 25.0
         }
     }
 
     /// 2. Calibrated probability points: [0, 25]
+    ///
     /// 70% gives 10 pts, scales linearly to 25 pts at 90%+
     pub fn compute_prob_points(calibrated_p: f64, min_prob: f64) -> f64 {
-        if calibrated_p <= 0.50 {
+        if !calibrated_p.is_finite() || calibrated_p <= 0.50 {
             0.0
+        } else if min_prob <= 0.50 {
+            10.0
         } else if calibrated_p < min_prob {
             let ratio = ((calibrated_p - 0.50) / (min_prob - 0.50)).clamp(0.0, 1.0);
             ratio * 10.0
         } else {
             let max_target = 0.90;
-            let ratio = ((calibrated_p - min_prob) / (max_target - min_prob)).clamp(0.0, 1.0);
+            let ratio = if max_target > min_prob {
+                ((calibrated_p - min_prob) / (max_target - min_prob)).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
             10.0 + ratio * 15.0
         }
     }
 
     /// 3. Directed OrderBook Imbalance points: [0, 20]
+    ///
     /// directed_obi in [-1.0, 1.0] (positive means depth favors prediction direction)
     pub fn compute_obi_points(directed_obi: f64) -> f64 {
+        if !directed_obi.is_finite() {
+            return 10.0;
+        }
         let clamped = directed_obi.clamp(-1.0, 1.0);
         if clamped >= 0.5 {
             20.0
@@ -84,8 +102,12 @@ impl SignalScorer {
     }
 
     /// 4. Multi-Exchange trade momentum / CVD agreement: [0, 15]
+    ///
     /// directed_momentum in [-1.0, 1.0] (positive means trade flow agrees with prediction)
     pub fn compute_momentum_points(directed_momentum: f64) -> f64 {
+        if !directed_momentum.is_finite() {
+            return 7.5;
+        }
         let clamped = directed_momentum.clamp(-1.0, 1.0);
         if clamped >= 0.4 {
             15.0
@@ -97,6 +119,7 @@ impl SignalScorer {
     }
 
     /// 5. Timing window sweet spot: [0, 5]
+    ///
     /// Sweet spot between 60s and 210s remaining (market established, safe from last-minute chaotic flushes)
     pub fn compute_timing_points(remaining_seconds: i64) -> f64 {
         if (60..=210).contains(&remaining_seconds) {
@@ -111,6 +134,7 @@ impl SignalScorer {
     }
 
     /// Calculate total score in [0.0, 100.0] and return detailed breakdown
+    #[allow(clippy::too_many_arguments)]
     pub fn compute_score(
         net_edge: f64,
         calibrated_p: f64,

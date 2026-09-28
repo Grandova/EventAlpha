@@ -120,7 +120,7 @@ impl CompositePriceEngine {
             .sum();
 
         // Update rolling history
-        let mut hist = self.price_history.entry(asset).or_insert_with(VecDeque::new);
+        let mut hist = self.price_history.entry(asset).or_default();
         hist.push_back((now_ms, composite_price));
         let cutoff_ms = now_ms - (MAX_HISTORY_SECS * 1000);
         while let Some(&(ts, _)) = hist.front() {
