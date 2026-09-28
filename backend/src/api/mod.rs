@@ -14,6 +14,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::collector::freshness::FreshnessReport;
 use crate::collector::{CollectorManager, PriceSummary};
+use crate::composite::{CompositePriceEngine, CompositePriceSnapshot};
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::polymarket::market_discovery::Polymarket5mMarket;
@@ -29,6 +30,7 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub collector: Arc<CollectorManager>,
     pub polymarket: Arc<PolymarketManager>,
+    pub composite: Arc<CompositePriceEngine>,
     pub start_time_ms: i64,
 }
 
@@ -74,6 +76,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/polymarket/markets", get(handle_polymarket_markets))
         .route("/api/v1/polymarket/book/{asset}", get(handle_polymarket_book))
         .route("/api/v1/polymarket/resolutions", get(handle_polymarket_resolutions))
+        .route("/api/v1/composite/price/{asset}", get(handle_composite_price))
+        .route("/api/v1/composite/all", get(handle_composite_all))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -207,6 +211,26 @@ async fn handle_polymarket_resolutions(
     }
 }
 
+async fn handle_composite_price(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+) -> Result<Json<CompositePriceSnapshot>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    match state.composite.get_latest_snapshot(asset) {
+        Some(snapshot) => Ok(Json(snapshot)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn handle_composite_all(
+    State(state): State<AppState>,
+) -> Json<HashMap<String, CompositePriceSnapshot>> {
+    Json(state.composite.get_all_snapshots())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,12 +302,14 @@ assets: ["BTC", "ETH", "SOL"]
         let db = Arc::new(Database::new(&config).await.unwrap());
         let collector = Arc::new(CollectorManager::new(&config));
         let polymarket = Arc::new(PolymarketManager::new(&config, db.clone()));
+        let composite = Arc::new(CompositePriceEngine::new(collector.clone(), polymarket.discovery().clone()));
 
         AppState {
             config,
             db,
             collector,
             polymarket,
+            composite,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

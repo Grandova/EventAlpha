@@ -187,4 +187,12 @@ impl CollectorManager {
 
         result
     }
+
+    pub fn freshness_tracker(&self) -> &FreshnessTracker {
+        &self.freshness
+    }
+
+    pub fn record_test_tick(&self, tick: MarketTick) {
+        self.latest_ticks.insert((tick.exchange, tick.asset), tick);
+    }
 }

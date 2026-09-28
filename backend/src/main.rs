@@ -82,16 +82,24 @@ async fn main() -> Result<()> {
     let polymarket = Arc::new(poly_quant_backend::polymarket::PolymarketManager::new(&config, db.clone()));
     polymarket.start(collector.clone());
 
+    // 10. Initialize and launch Composite Price Engine
+    let composite = Arc::new(poly_quant_backend::composite::CompositePriceEngine::new(
+        collector.clone(),
+        polymarket.discovery().clone(),
+    ));
+    composite.start();
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         collector: collector.clone(),
         polymarket: polymarket.clone(),
+        composite: composite.clone(),
         start_time_ms,
     };
 
-    // 10. Bind HTTP API server
+    // 11. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -103,6 +111,8 @@ async fn main() -> Result<()> {
     info!("Live cross-exchange prices: http://{}/api/v1/collector/prices", addr);
     info!("Polymarket 5M markets: http://{}/api/v1/polymarket/markets", addr);
     info!("Polymarket Orderbook (BTC): http://{}/api/v1/polymarket/book/BTC", addr);
+    info!("Composite Price (BTC): http://{}/api/v1/composite/price/BTC", addr);
+    info!("All Composite Prices: http://{}/api/v1/composite/all", addr);
     info!("Polymarket Resolutions: http://{}/api/v1/polymarket/resolutions", addr);
 
     // 11. Run server with graceful shutdown

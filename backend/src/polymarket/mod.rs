@@ -133,16 +133,16 @@ impl PolymarketManager {
         });
     }
 
-    pub fn discovery(&self) -> &MarketDiscoveryEngine {
-        &self.discovery
+    pub fn discovery(&self) -> Arc<MarketDiscoveryEngine> {
+        self.discovery.clone()
     }
 
-    pub fn book_engine(&self) -> &PolymarketBookEngine {
-        &self.book_engine
+    pub fn book_engine(&self) -> Arc<PolymarketBookEngine> {
+        self.book_engine.clone()
     }
 
-    pub fn resolution(&self) -> &ResolutionEngine {
-        &self.resolution
+    pub fn resolution(&self) -> Arc<ResolutionEngine> {
+        self.resolution.clone()
     }
 
     pub fn subscribe_ticks(&self) -> broadcast::Receiver<PolymarketTick> {

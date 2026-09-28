@@ -79,12 +79,17 @@ async fn setup_phase3_app() -> (axum::Router, Arc<PolymarketManager>, Arc<Databa
     let db = Arc::new(Database::new(&config).await.unwrap());
     let collector = Arc::new(CollectorManager::new(&config));
     let polymarket = Arc::new(PolymarketManager::new(&config, db.clone()));
+    let composite = Arc::new(poly_quant_backend::composite::CompositePriceEngine::new(
+        collector.clone(),
+        polymarket.discovery().clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         collector,
         polymarket: polymarket.clone(),
+        composite,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);
