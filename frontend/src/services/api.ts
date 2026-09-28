@@ -21,6 +21,10 @@ import {
   ReplayStateResponse,
   ReplayFrame,
   SystemEvent,
+  StrategyConfig,
+  ModelTrainRequest,
+  ModelTrainResult,
+  GenerateSyntheticResponse,
 } from '../types';
 
 const BASE_URL = '';
@@ -125,4 +129,29 @@ export const api = {
   getReplayStatus: () => fetchJson<ReplayStateResponse>('/api/v1/replay/status'),
   getReplayFrames: (offset = 0, limit = 100) =>
     fetchJson<ReplayFrame[]>(`/api/v1/replay/frames?offset=${offset}&limit=${limit}`),
+
+  // Strategy Config Hot Reload
+  getStrategyConfig: () => fetchJson<StrategyConfig>('/api/v1/strategy/config'),
+  updateStrategyConfig: (config: StrategyConfig) =>
+    fetchJson<StrategyConfig>('/api/v1/strategy/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    }),
+
+  // Model Training
+  trainModel: (req: ModelTrainRequest) =>
+    fetchJson<ModelTrainResult>('/api/v1/models/train', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }),
+
+  // Synthetic Dataset Generation
+  generateSyntheticDataset: (rounds = 50) =>
+    fetchJson<GenerateSyntheticResponse>('/api/v1/dataset/generate_synthetic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rounds }),
+    }),
 };

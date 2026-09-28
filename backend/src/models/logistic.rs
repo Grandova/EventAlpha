@@ -22,7 +22,7 @@ pub struct LogisticModelConfig {
 
 #[derive(Clone)]
 pub struct LogisticRegressionModel {
-    config: LogisticModelConfig,
+    pub config: LogisticModelConfig,
 }
 
 impl LogisticRegressionModel {

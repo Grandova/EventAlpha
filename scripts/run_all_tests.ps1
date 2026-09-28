@@ -8,7 +8,7 @@ Write-Host "   POLYQUANT 5M - FULL AUTOMATED VERIFICATION SUITE       " -Foregro
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Run Cargo Test Suite
-Write-Host "`n[1/2] Running 14 Rust Integration Test Suites + Unit Tests..." -ForegroundColor Yellow
+Write-Host "`n[1/2] Running 15 Rust Integration Test Suites + Unit Tests..." -ForegroundColor Yellow
 Set-Location (Join-Path $RootDir "backend")
 cargo test -- --nocapture
 
@@ -28,6 +28,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "`n==========================================================" -ForegroundColor Green
-Write-Host "   ALL 14 TEST SUITES + FRONTEND BUILD PASSED (100% OK)   " -ForegroundColor Green
+Write-Host "   ALL 15 TEST SUITES + FRONTEND BUILD PASSED (100% OK)   " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
 Set-Location $RootDir

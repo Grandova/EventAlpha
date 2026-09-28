@@ -9,7 +9,10 @@ import { FeatureMonitor } from './components/FeatureMonitor';
 import { BacktestConsole } from './components/BacktestConsole';
 import { ReplayConsole } from './components/ReplayConsole';
 import { EventLogViewer } from './components/EventLogViewer';
+import { OrderbookVisualizer } from './components/OrderbookVisualizer';
+import { StrategyTuner } from './components/StrategyTuner';
 import { api } from './services/api';
+import { wsClient } from './services/ws';
 import {
   Asset,
   HealthResponse,
@@ -124,6 +127,68 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // 3. Real-time sub-100ms WebSocket Multiplexed Stream
+  useEffect(() => {
+    const unsubscribe = wsClient.subscribe((msg) => {
+      switch (msg.type) {
+        case 'ticker':
+          if (msg.data.asset === activeAsset) {
+            setComposite((prev) =>
+              prev
+                ? { ...prev, composite_price: msg.data.composite_price }
+                : null
+            );
+            if (msg.data.spot_prices && msg.data.spot_prices.length > 0) {
+              setSpotPrices(msg.data.spot_prices);
+            }
+          }
+          break;
+
+        case 'signal':
+          if (msg.data.signal.asset === activeAsset) {
+            setSignal(msg.data.signal);
+          }
+          break;
+
+        case 'bankroll':
+          setBankroll((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  active_bankroll: msg.data.active,
+                  locked_profit: msg.data.locked,
+                  total_equity: msg.data.total,
+                }
+              : null
+          );
+          break;
+
+        case 'resolution':
+          api.getActivePositions().then(setActivePositions).catch(() => {});
+          api.getPaperResults(50).then(setSettledResults).catch(() => {});
+          api.getPaperStatistics().then(setStatistics).catch(() => {});
+          api.getBankroll().then(setBankroll).catch(() => {});
+          break;
+
+        case 'heartbeat':
+          setHealth((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  uptime_secs: msg.data.uptime_secs,
+                  timestamp_ms: msg.data.timestamp_ms,
+                }
+              : null
+          );
+          break;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [activeAsset]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-3 sm:p-4 lg:p-6 max-w-[1720px] mx-auto">
       {/* Top Header & Navigation */}
@@ -152,6 +217,13 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Orderbook Depth Ladder */}
+            <OrderbookVisualizer
+              asset={activeAsset}
+              book={book}
+              onRefresh={() => api.getPolymarketBook(activeAsset).then(setBook)}
+            />
+
             {/* Middle row: Bankroll & Risk Management */}
             <BankrollRiskMonitor bankroll={bankroll} risk={risk} />
 
@@ -167,13 +239,21 @@ export const App: React.FC = () => {
 
         {activeTab === 'microstructure' && (
           <div className="space-y-4">
-            <PolymarketRoundCard market={market} book={book} prediction={prediction} />
+            <OrderbookVisualizer
+              asset={activeAsset}
+              book={book}
+              onRefresh={() => api.getPolymarketBook(activeAsset).then(setBook)}
+            />
             <FeatureMonitor asset={activeAsset} features={features} />
           </div>
         )}
 
         {activeTab === 'features' && (
           <FeatureMonitor asset={activeAsset} features={features} />
+        )}
+
+        {activeTab === 'tuning' && (
+          <StrategyTuner />
         )}
 
         {activeTab === 'backtest' && (

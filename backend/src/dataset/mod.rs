@@ -156,4 +156,133 @@ impl DatasetExporter {
         let split = splitter.split(records).map_err(|e| anyhow::anyhow!(e))?;
         Ok(split.summary)
     }
+
+    /// Generate synthetic realistic resolved market rounds and feature snapshots for rapid testing and training
+    pub async fn generate_synthetic_rounds(db: &Database, rounds: usize) -> Result<(usize, usize)> {
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let assets = [Asset::BTC, Asset::ETH, Asset::SOL];
+        let mut total_markets = 0;
+        let mut total_features = 0;
+
+        for r in 0..rounds {
+            let offset_ms = (rounds - r) as i64 * 300_000;
+            let round_start = now_ms - offset_ms;
+            let round_end = round_start + 300_000;
+
+            for &asset in &assets {
+                let base_price = match asset {
+                    Asset::BTC => 65000.0,
+                    Asset::ETH => 3400.0,
+                    Asset::SOL => 145.0,
+                };
+
+                let seed = ((r * 17 + asset as usize * 31) % 100) as f64 / 100.0;
+                let is_up = seed > 0.48;
+                let price_change_pct = if is_up {
+                    0.001 + seed * 0.004
+                } else {
+                    -0.001 - (1.0 - seed) * 0.004
+                };
+
+                let open_price = base_price * (1.0 + ((r % 20) as f64 - 10.0) * 0.001);
+                let close_price = open_price * (1.0 + price_change_pct);
+                let resolution_str = if is_up { "UP" } else { "DOWN" };
+                let market_id = format!("{}-{}-syn", asset, round_start / 1000);
+                let condition_id = format!("cond_{}", market_id);
+
+                let _ = sqlx::query(
+                    r#"
+                    INSERT OR REPLACE INTO markets (
+                        id, condition_id, asset, start_time, end_time, open_price, final_price, resolution, status, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'resolved', ?, ?)
+                    "#,
+                )
+                .bind(&market_id)
+                .bind(&condition_id)
+                .bind(asset.to_string())
+                .bind(round_start)
+                .bind(round_end)
+                .bind(open_price)
+                .bind(close_price)
+                .bind(resolution_str)
+                .bind(round_start)
+                .bind(round_end)
+                .execute(db.pool())
+                .await?;
+
+                total_markets += 1;
+
+                for elapsed in [60, 180] {
+                    let snap_time = round_start + elapsed * 1000;
+                    let remaining_seconds = 300 - elapsed;
+                    let progress = elapsed as f64 / 300.0;
+                    let curr_price = open_price + (close_price - open_price) * progress;
+                    let dist_pct = (curr_price - open_price) / open_price;
+                    let sign = if is_up { 1.0 } else { -1.0 };
+
+                    let snap = FeatureSnapshot {
+                        asset,
+                        market_id: market_id.clone(),
+                        timestamp_ms: snap_time,
+                        composite_price: curr_price,
+                        return_1s: sign * 0.0001 * seed,
+                        return_3s: sign * 0.0003 * seed,
+                        return_5s: sign * 0.0005 * seed,
+                        return_10s: sign * 0.0008 * seed,
+                        return_30s: sign * 0.0015 * seed,
+                        return_60s: sign * 0.0020 * seed,
+                        realized_vol_5s: 0.0005,
+                        realized_vol_10s: 0.0008,
+                        realized_vol_30s: 0.0015,
+                        realized_vol_60s: 0.0022,
+                        velocity_5s: sign * 0.5 * seed,
+                        velocity_15s: sign * 0.3 * seed,
+                        acceleration_5s_15s: sign * 0.1,
+                        distance_from_open: curr_price - open_price,
+                        distance_percent: dist_pct,
+                        distance_to_vol_ratio: dist_pct / 0.0022,
+                        remaining_seconds: remaining_seconds as f64,
+                        elapsed_seconds: elapsed as f64,
+                        time_decay_factor: remaining_seconds as f64 / 300.0,
+                        spread_binance_okx: 0.5,
+                        spread_binance_bybit: 0.8,
+                        spread_binance_coinbase: 1.0,
+                        cvd_5s: sign * 15.0 * seed,
+                        cvd_15s: sign * 35.0 * seed,
+                        cvd_30s: sign * 70.0 * seed,
+                        cvd_60s: sign * 120.0 * seed,
+                        trade_imbalance_5s: sign * 0.3 * seed,
+                        trade_imbalance_15s: sign * 0.25 * seed,
+                        trade_imbalance_30s: sign * 0.2 * seed,
+                        trade_imbalance_60s: sign * 0.15 * seed,
+                        poly_obi_top5: sign * 0.35 * seed,
+                        poly_obi_top10: sign * 0.25 * seed,
+                        poly_obi_top20: sign * 0.18 * seed,
+                        poly_spread: 0.02,
+                        poly_total_liquidity: 5000.0,
+                        poly_implied_prob: (0.50 + sign * 0.15 * seed).clamp(0.05, 0.95),
+                    };
+
+                    let json_vec = snap.to_json();
+                    let _ = sqlx::query(
+                        r#"
+                        INSERT INTO features (market_id, timestamp, feature_name, feature_vector_json, created_at)
+                        VALUES (?, ?, 'snapshot_v1', ?, ?)
+                        "#,
+                    )
+                    .bind(&market_id)
+                    .bind(snap_time)
+                    .bind(&json_vec)
+                    .bind(snap_time)
+                    .execute(db.pool())
+                    .await?;
+
+                    total_features += 1;
+                }
+            }
+        }
+
+        Ok((total_markets, total_features))
+    }
 }

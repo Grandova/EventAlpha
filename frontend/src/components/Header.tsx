@@ -107,6 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
             { id: 'dashboard', label: 'Dashboard 概览' },
             { id: 'microstructure', label: 'OrderBook 盘口深度' },
             { id: 'features', label: '37-Dim 特征监控' },
+            { id: 'tuning', label: 'Strategy 调优与训练' },
             { id: 'backtest', label: 'Backtest 回测引擎' },
             { id: 'replay', label: 'Replay 逐帧回放' },
             { id: 'events', label: 'Audit Logs 审计日志' },

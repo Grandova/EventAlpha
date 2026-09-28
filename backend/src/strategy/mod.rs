@@ -9,6 +9,8 @@ use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use parking_lot::RwLock as SyncRwLock;
+
 use crate::collector::FreshnessTracker;
 use crate::composite::CompositePriceEngine;
 use crate::config::{ExecutionConfig, StrategyConfig};
@@ -24,7 +26,7 @@ pub use scoring::{ScoreBreakdown, ScoreTier, SignalScorer};
 
 #[derive(Clone)]
 pub struct StrategyEngine {
-    config: StrategyConfig,
+    config: Arc<SyncRwLock<StrategyConfig>>,
     execution_config: ExecutionConfig,
     db: Arc<Database>,
     latest_signals: Arc<DashMap<Asset, PredictionSignal>>,
@@ -40,13 +42,21 @@ impl StrategyEngine {
     ) -> Self {
         let (signal_tx, _) = broadcast::channel(1024);
         Self {
-            config,
+            config: Arc::new(SyncRwLock::new(config)),
             execution_config,
             db,
             latest_signals: Arc::new(DashMap::new()),
             recent_decisions: Arc::new(RwLock::new(VecDeque::with_capacity(500))),
             signal_tx,
         }
+    }
+
+    pub fn get_config(&self) -> StrategyConfig {
+        self.config.read().clone()
+    }
+
+    pub fn update_config(&self, new_config: StrategyConfig) {
+        *self.config.write() = new_config;
     }
 
     /// Pure evaluation function without side effects, ideal for testing and real-time execution
@@ -93,14 +103,16 @@ impl StrategyEngine {
         let spread = polymarket_tick.and_then(|t| t.spread).unwrap_or(0.02);
         let total_liquidity = polymarket_tick.and_then(|t| t.liquidity).unwrap_or(500.0);
 
+        let cfg = self.config.read();
+
         // Run 7 Hard Filter Gates
         let fresh_res = HardFilterEngine::check_freshness(is_fresh);
-        let time_res = HardFilterEngine::check_timing(remaining_seconds, &self.config);
-        let prob_res = HardFilterEngine::check_probability(calibrated_p, &self.config);
-        let entry_res = HardFilterEngine::check_entry_price(market_ask, &self.config);
-        let spread_res = HardFilterEngine::check_spread(spread, &self.config);
-        let liq_res = HardFilterEngine::check_liquidity(total_liquidity, &self.config);
-        let edge_res = HardFilterEngine::check_net_edge(net_edge, &self.config);
+        let time_res = HardFilterEngine::check_timing(remaining_seconds, &cfg);
+        let prob_res = HardFilterEngine::check_probability(calibrated_p, &cfg);
+        let entry_res = HardFilterEngine::check_entry_price(market_ask, &cfg);
+        let spread_res = HardFilterEngine::check_spread(spread, &cfg);
+        let liq_res = HardFilterEngine::check_liquidity(total_liquidity, &cfg);
+        let edge_res = HardFilterEngine::check_net_edge(net_edge, &cfg);
 
         // Compute Opportunity Score
         let breakdown = SignalScorer::compute_score(
@@ -109,9 +121,9 @@ impl StrategyEngine {
             directed_obi,
             directed_momentum,
             remaining_seconds,
-            self.config.min_net_edge,
-            self.config.min_probability,
-            &self.config.score_thresholds,
+            cfg.min_net_edge,
+            cfg.min_probability,
+            &cfg.score_thresholds,
         );
 
         // Check first filter rejection or evaluate final action
@@ -129,12 +141,12 @@ impl StrategyEngine {
             (SignalAction::Skip, liq_res.reason().unwrap_or("Insufficient liquidity").to_string())
         } else if !edge_res.is_pass() {
             (SignalAction::Skip, edge_res.reason().unwrap_or("Insufficient net edge").to_string())
-        } else if breakdown.total_score < self.config.score_thresholds.skip_below {
+        } else if breakdown.total_score < cfg.score_thresholds.skip_below {
             (
                 SignalAction::Skip,
                 format!(
                     "Score {:.1} < threshold {:.1}",
-                    breakdown.total_score, self.config.score_thresholds.skip_below
+                    breakdown.total_score, cfg.score_thresholds.skip_below
                 ),
             )
         } else {
@@ -148,7 +160,7 @@ impl StrategyEngine {
                 format!(
                     "PASSED all filters & score {:.1} >= {:.1} (NetEdge: {:.2}%, P: {:.1}%)",
                     breakdown.total_score,
-                    self.config.score_thresholds.skip_below,
+                    cfg.score_thresholds.skip_below,
                     net_edge * 100.0,
                     calibrated_p * 100.0
                 ),

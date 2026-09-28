@@ -1,3 +1,5 @@
+pub mod ws;
+
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -126,7 +128,12 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/replay/speed", post(handle_replay_speed))
         .route("/api/v1/replay/stop", post(handle_replay_stop))
         .route("/api/v1/replay/status", get(handle_replay_status))
-        .route("/api/v1/replay/frames", get(handle_replay_frames));
+        .route("/api/v1/replay/frames", get(handle_replay_frames))
+        .route("/api/v1/ws", get(ws::handle_ws_upgrade))
+        .route("/api/v1/strategy/config", get(handle_strategy_config_get).post(handle_strategy_config_update))
+        .route("/api/v1/models/config", get(handle_model_config))
+        .route("/api/v1/models/train", post(handle_model_train))
+        .route("/api/v1/dataset/generate_synthetic", post(handle_dataset_generate_synthetic));
 
     let frontend_dist = std::path::Path::new("frontend/dist");
     let router = if frontend_dist.exists() {
@@ -527,6 +534,67 @@ async fn handle_replay_frames(
     let offset = q.offset.unwrap_or(0);
     let limit = q.limit.unwrap_or(100);
     Json(state.replay.get_frames(offset, limit).await)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GenerateSyntheticRequest {
+    pub rounds: Option<usize>,
+}
+
+async fn handle_strategy_config_get(
+    State(state): State<AppState>,
+) -> Json<crate::config::StrategyConfig> {
+    Json(state.strategy.get_config())
+}
+
+async fn handle_strategy_config_update(
+    State(state): State<AppState>,
+    Json(new_config): Json<crate::config::StrategyConfig>,
+) -> Json<crate::config::StrategyConfig> {
+    state.strategy.update_config(new_config.clone());
+    Json(new_config)
+}
+
+async fn handle_model_config(
+    State(state): State<AppState>,
+) -> Json<crate::models::LogisticModelConfig> {
+    Json(state.models.get_logistic_config())
+}
+
+async fn handle_model_train(
+    State(state): State<AppState>,
+    Json(req): Json<crate::models::ModelTrainRequest>,
+) -> Result<Json<crate::models::ModelTrainResult>, StatusCode> {
+    let records = DatasetExporter::load_from_db(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let epochs = req.epochs.unwrap_or(20);
+    let lr = req.lr.unwrap_or(0.05);
+    let l2 = req.l2_reg.unwrap_or(0.001);
+
+    match state.models.train_logistic(&records, epochs, lr, l2) {
+        Some(res) => Ok(Json(res)),
+        None => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+async fn handle_dataset_generate_synthetic(
+    State(state): State<AppState>,
+    Json(req): Json<GenerateSyntheticRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let rounds = req.rounds.unwrap_or(50);
+    let (markets, features) = DatasetExporter::generate_synthetic_rounds(&state.db, rounds)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "rounds_generated": markets / 3,
+        "markets_created": markets,
+        "features_created": features,
+        "message": format!("Successfully generated {} synthetic rounds across BTC, ETH, and SOL", markets / 3)
+    })))
 }
 
 #[cfg(test)]

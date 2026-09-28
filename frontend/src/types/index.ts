@@ -95,15 +95,27 @@ export interface MarketDisplayInfo {
   remaining_seconds: number;
 }
 
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+}
+
 export interface BookSideDepth {
+  token_id?: string;
+  asset?: Asset;
+  side?: 'UP' | 'DOWN';
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
   best_bid?: number;
   best_ask?: number;
+  mid?: number;
   spread?: number;
   total_bid_depth_usdc: number;
   total_ask_depth_usdc: number;
   obi_top5: number;
   obi_top10: number;
   obi_top20: number;
+  last_update_ms?: number;
 }
 
 export interface MarketBookSummary {
@@ -442,3 +454,56 @@ export interface SystemEvent {
   payload_json?: string;
   timestamp_ms: number;
 }
+
+export interface ScoreThresholds {
+  skip_below: number;
+  low: number;
+  medium: number;
+  high: number;
+  very_high: number;
+}
+
+export interface StrategyConfig {
+  strategy_version: string;
+  min_probability: number;
+  min_net_edge: number;
+  max_entry_price: number;
+  max_spread: number;
+  min_liquidity: number;
+  min_time_remaining_sec: number;
+  max_time_remaining_sec: number;
+  score_thresholds: ScoreThresholds;
+}
+
+export interface ModelTrainRequest {
+  epochs?: number;
+  lr?: number;
+  l2_reg?: number;
+}
+
+export interface ModelTrainResult {
+  success: boolean;
+  samples_trained: number;
+  accuracy: number;
+  brier_score: number;
+  log_loss: number;
+  expected_calibration_error: number;
+  model_version: string;
+  top_features: [string, number][];
+}
+
+export interface GenerateSyntheticResponse {
+  status: string;
+  rounds_generated: number;
+  markets_created: number;
+  features_created: number;
+  message: string;
+}
+
+export type WsMessage =
+  | { type: 'heartbeat'; data: { timestamp_ms: number; uptime_secs: number; is_fresh: boolean } }
+  | { type: 'ticker'; data: { asset: Asset; composite_price: number; spot_prices: PriceSummary[] } }
+  | { type: 'signal'; data: { signal: PredictionSignal } }
+  | { type: 'resolution'; data: { event: any } }
+  | { type: 'bankroll'; data: { active: number; locked: number; total: number } };
+
