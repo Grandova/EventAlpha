@@ -115,6 +115,15 @@ async fn main() -> Result<()> {
         collector.freshness(),
     );
 
+    // 14. Initialize and launch Realistic Paper Execution Engine
+    let execution = Arc::new(poly_quant_backend::execution::PaperExecutionEngine::new(
+        config.execution.clone(),
+        config.position.clone(),
+        db.clone(),
+        polymarket.book_engine(),
+    ));
+    execution.start(strategy.subscribe_signals());
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
@@ -125,10 +134,11 @@ async fn main() -> Result<()> {
         features: features.clone(),
         models: models.clone(),
         strategy: strategy.clone(),
+        execution: execution.clone(),
         start_time_ms,
     };
 
-    // 14. Bind HTTP API server
+    // 15. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -152,6 +162,9 @@ async fn main() -> Result<()> {
     info!("Strategy Signal (BTC): http://{}/api/v1/strategy/signals/latest/BTC", addr);
     info!("All Strategy Signals: http://{}/api/v1/strategy/signals/latest", addr);
     info!("Recent Decisions: http://{}/api/v1/strategy/decisions/recent", addr);
+    info!("Active Paper Positions: http://{}/api/v1/paper/positions/active", addr);
+    info!("Recent Paper Orders: http://{}/api/v1/paper/orders", addr);
+    info!("Position History: http://{}/api/v1/paper/positions/history", addr);
 
     // 15. Run server with graceful shutdown
     axum::serve(listener, app)

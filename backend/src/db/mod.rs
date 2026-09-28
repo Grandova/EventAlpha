@@ -355,6 +355,273 @@ impl Database {
 
         Ok(signals)
     }
+
+    /// Insert a paper order record
+    pub async fn insert_paper_order(&self, order: &crate::types::PaperOrder) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        let asset_str = order.asset.to_string();
+        let side_str = order.side.to_string();
+
+        let condition_id = format!("cond_{}", &order.market_id);
+        let _ = sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+            "#,
+        )
+        .bind(&order.market_id)
+        .bind(&condition_id)
+        .bind(&asset_str)
+        .bind(order.timestamp_ms)
+        .bind(order.timestamp_ms + 300_000)
+        .bind(now_ms)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO paper_orders (
+                order_id, market_id, asset, side, stake, shares,
+                quote_price, fill_price, slippage, fee, status, signal_id, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&order.order_id)
+        .bind(&order.market_id)
+        .bind(&asset_str)
+        .bind(&side_str)
+        .bind(order.stake)
+        .bind(order.shares)
+        .bind(order.quote_price)
+        .bind(order.fill_price)
+        .bind(order.slippage)
+        .bind(order.fee)
+        .bind(&order.status)
+        .bind(&order.signal_id)
+        .bind(order.timestamp_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to insert paper order")?;
+
+        Ok(())
+    }
+
+    /// Retrieve recent paper orders
+    pub async fn get_recent_paper_orders(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::types::PaperOrder>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT order_id, market_id, asset, side, stake, shares,
+                   quote_price, fill_price, slippage, fee, status, signal_id, created_at
+            FROM paper_orders
+            ORDER BY id DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query paper orders")?;
+
+        let mut orders = Vec::new();
+        for r in rows {
+            let asset_str: String = r.get("asset");
+            let asset: crate::types::Asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+            let side_str: String = r.get("side");
+            let side = if side_str.to_uppercase() == "UP" {
+                crate::types::MarketSide::Up
+            } else {
+                crate::types::MarketSide::Down
+            };
+
+            orders.push(crate::types::PaperOrder {
+                order_id: r.get("order_id"),
+                market_id: r.get("market_id"),
+                asset,
+                side,
+                stake: r.get("stake"),
+                shares: r.get("shares"),
+                quote_price: r.get("quote_price"),
+                fill_price: r.get("fill_price"),
+                slippage: r.get("slippage"),
+                fee: r.get("fee"),
+                status: r.get("status"),
+                signal_id: r.get("signal_id"),
+                timestamp_ms: r.get("created_at"),
+            });
+        }
+
+        Ok(orders)
+    }
+
+    /// Insert a paper position
+    pub async fn insert_paper_position(&self, pos: &crate::types::PaperPosition) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        let asset_str = pos.asset.to_string();
+        let side_str = pos.side.to_string();
+
+        let condition_id = format!("cond_{}", &pos.market_id);
+        let _ = sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+            "#,
+        )
+        .bind(&pos.market_id)
+        .bind(&condition_id)
+        .bind(&asset_str)
+        .bind(pos.entry_time_ms)
+        .bind(pos.entry_time_ms + 300_000)
+        .bind(now_ms)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO paper_positions (
+                position_id, market_id, asset, side, entry_time,
+                entry_price, stake, shares, status, settled_at, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&pos.position_id)
+        .bind(&pos.market_id)
+        .bind(&asset_str)
+        .bind(&side_str)
+        .bind(pos.entry_time_ms)
+        .bind(pos.entry_price)
+        .bind(pos.stake)
+        .bind(pos.shares)
+        .bind(&pos.status)
+        .bind(pos.settled_at_ms)
+        .bind(pos.created_at_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to insert paper position")?;
+
+        Ok(())
+    }
+
+    /// Retrieve active (OPEN) paper positions
+    pub async fn get_active_positions(&self) -> Result<Vec<crate::types::PaperPosition>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT position_id, market_id, asset, side, entry_time,
+                   entry_price, stake, shares, status, settled_at, created_at
+            FROM paper_positions
+            WHERE status = 'OPEN'
+            ORDER BY id DESC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query active paper positions")?;
+
+        let mut positions = Vec::new();
+        for r in rows {
+            let asset_str: String = r.get("asset");
+            let asset: crate::types::Asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+            let side_str: String = r.get("side");
+            let side = if side_str.to_uppercase() == "UP" {
+                crate::types::MarketSide::Up
+            } else {
+                crate::types::MarketSide::Down
+            };
+
+            positions.push(crate::types::PaperPosition {
+                position_id: r.get("position_id"),
+                order_id: "".to_string(),
+                market_id: r.get("market_id"),
+                asset,
+                side,
+                entry_time_ms: r.get("entry_time"),
+                entry_price: r.get("entry_price"),
+                stake: r.get("stake"),
+                shares: r.get("shares"),
+                status: r.get("status"),
+                settled_at_ms: r.get("settled_at"),
+                created_at_ms: r.get("created_at"),
+            });
+        }
+
+        Ok(positions)
+    }
+
+    /// Retrieve all positions history
+    pub async fn get_positions_history(&self, limit: i64) -> Result<Vec<crate::types::PaperPosition>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT position_id, market_id, asset, side, entry_time,
+                   entry_price, stake, shares, status, settled_at, created_at
+            FROM paper_positions
+            ORDER BY id DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query position history")?;
+
+        let mut positions = Vec::new();
+        for r in rows {
+            let asset_str: String = r.get("asset");
+            let asset: crate::types::Asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+            let side_str: String = r.get("side");
+            let side = if side_str.to_uppercase() == "UP" {
+                crate::types::MarketSide::Up
+            } else {
+                crate::types::MarketSide::Down
+            };
+
+            positions.push(crate::types::PaperPosition {
+                position_id: r.get("position_id"),
+                order_id: "".to_string(),
+                market_id: r.get("market_id"),
+                asset,
+                side,
+                entry_time_ms: r.get("entry_time"),
+                entry_price: r.get("entry_price"),
+                stake: r.get("stake"),
+                shares: r.get("shares"),
+                status: r.get("status"),
+                settled_at_ms: r.get("settled_at"),
+                created_at_ms: r.get("created_at"),
+            });
+        }
+
+        Ok(positions)
+    }
+
+    /// Update position status upon settlement or closure
+    pub async fn update_position_status(
+        &self,
+        position_id: &str,
+        status: &str,
+        settled_at_ms: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE paper_positions
+            SET status = ?, settled_at = ?
+            WHERE position_id = ?
+            "#,
+        )
+        .bind(status)
+        .bind(settled_at_ms)
+        .bind(position_id)
+        .execute(&self.pool)
+        .await
+        .context("Failed to update paper position status")?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

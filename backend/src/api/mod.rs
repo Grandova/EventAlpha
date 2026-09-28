@@ -22,11 +22,14 @@ use crate::features::{FeatureEngine, FeatureSnapshot, FEATURE_NAMES};
 use crate::models::{ModelManager, ModelPrediction};
 use crate::polymarket::market_discovery::Polymarket5mMarket;
 use crate::polymarket::orderbook::MarketBookSummary;
+use crate::execution::PaperExecutionEngine;
 use crate::polymarket::resolution::MarketResolvedEvent;
 use crate::polymarket::PolymarketManager;
 use crate::safety::{SafetyGuard, SafetyStatus};
 use crate::strategy::StrategyEngine;
-use crate::types::{Asset, BankrollState, DecisionLog, PredictionSignal};
+use crate::types::{
+    Asset, BankrollState, DecisionLog, PaperOrder, PaperPosition, PredictionSignal,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -38,6 +41,7 @@ pub struct AppState {
     pub features: Arc<FeatureEngine>,
     pub models: Arc<ModelManager>,
     pub strategy: Arc<StrategyEngine>,
+    pub execution: Arc<PaperExecutionEngine>,
     pub start_time_ms: i64,
 }
 
@@ -94,6 +98,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/strategy/signals/latest/{asset}", get(handle_strategy_signal_latest))
         .route("/api/v1/strategy/signals/latest", get(handle_strategy_signals_all))
         .route("/api/v1/strategy/decisions/recent", get(handle_strategy_decisions_recent))
+        .route("/api/v1/paper/orders", get(handle_paper_orders))
+        .route("/api/v1/paper/positions/active", get(handle_paper_positions_active))
+        .route("/api/v1/paper/positions/history", get(handle_paper_positions_history))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -331,6 +338,34 @@ async fn handle_strategy_decisions_recent(
     Json(state.strategy.get_recent_decisions(limit).await)
 }
 
+async fn handle_paper_orders(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Json<Vec<PaperOrder>> {
+    let limit = query.limit.unwrap_or(50) as usize;
+    Json(state.execution.get_recent_orders(limit).await)
+}
+
+async fn handle_paper_positions_active(
+    State(state): State<AppState>,
+) -> Json<Vec<PaperPosition>> {
+    Json(state.execution.get_active_positions())
+}
+
+async fn handle_paper_positions_history(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Result<Json<Vec<PaperPosition>>, StatusCode> {
+    let limit = query.limit.unwrap_or(50);
+    state
+        .execution
+        .get_position_history(limit)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,6 +450,12 @@ assets: ["BTC", "ETH", "SOL"]
             config.execution.clone(),
             db.clone(),
         ));
+        let execution = Arc::new(PaperExecutionEngine::new(
+            config.execution.clone(),
+            config.position.clone(),
+            db.clone(),
+            polymarket.book_engine(),
+        ));
 
         AppState {
             config,
@@ -425,6 +466,7 @@ assets: ["BTC", "ETH", "SOL"]
             features,
             models,
             strategy,
+            execution,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

@@ -93,6 +93,12 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         config.execution.clone(),
         db.clone(),
     ));
+    let execution = Arc::new(poly_quant_backend::execution::PaperExecutionEngine::new(
+        config.execution.clone(),
+        config.position.clone(),
+        db.clone(),
+        polymarket.book_engine(),
+    ));
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
@@ -102,6 +108,7 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         features,
         models,
         strategy,
+        execution,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let router = create_router(state);

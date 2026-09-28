@@ -103,6 +103,12 @@ async fn setup_phase5() -> (
         config.execution.clone(),
         db.clone(),
     ));
+    let execution = Arc::new(poly_quant_backend::execution::PaperExecutionEngine::new(
+        config.execution.clone(),
+        config.position.clone(),
+        db.clone(),
+        polymarket.book_engine(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -113,6 +119,7 @@ async fn setup_phase5() -> (
         features: features.clone(),
         models,
         strategy,
+        execution,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

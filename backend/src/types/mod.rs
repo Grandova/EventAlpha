@@ -279,6 +279,22 @@ pub struct PaperOrder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaperPosition {
+    pub position_id: String,
+    pub order_id: String,
+    pub market_id: String,
+    pub asset: Asset,
+    pub side: MarketSide,
+    pub entry_time_ms: i64,
+    pub entry_price: f64,
+    pub stake: f64,
+    pub shares: f64,
+    pub status: String, // "OPEN", "CLOSED"
+    pub settled_at_ms: Option<i64>,
+    pub created_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaperResult {
     pub result_id: String,
     pub order_id: String,

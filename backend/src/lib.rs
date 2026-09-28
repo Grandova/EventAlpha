@@ -4,6 +4,7 @@ pub mod composite;
 pub mod config;
 pub mod dataset;
 pub mod db;
+pub mod execution;
 pub mod features;
 pub mod models;
 pub mod polymarket;
