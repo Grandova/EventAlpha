@@ -2,6 +2,7 @@ pub mod api;
 pub mod collector;
 pub mod composite;
 pub mod config;
+pub mod dataset;
 pub mod db;
 pub mod features;
 pub mod polymarket;

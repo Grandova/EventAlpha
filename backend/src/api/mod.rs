@@ -16,6 +16,7 @@ use crate::collector::freshness::FreshnessReport;
 use crate::collector::{CollectorManager, PriceSummary};
 use crate::composite::{CompositePriceEngine, CompositePriceSnapshot};
 use crate::config::AppConfig;
+use crate::dataset::{DatasetExporter, DatasetSummary};
 use crate::db::Database;
 use crate::features::{FeatureEngine, FeatureSnapshot, FEATURE_NAMES};
 use crate::polymarket::market_discovery::Polymarket5mMarket;
@@ -83,6 +84,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/features/latest/{asset}", get(handle_features_latest))
         .route("/api/v1/features/all", get(handle_features_all))
         .route("/api/v1/features/names", get(handle_features_names))
+        .route("/api/v1/dataset/summary", get(handle_dataset_summary))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -258,6 +260,18 @@ async fn handle_features_all(
 
 async fn handle_features_names() -> Json<Vec<&'static str>> {
     Json(FEATURE_NAMES.to_vec())
+}
+
+async fn handle_dataset_summary(
+    State(state): State<AppState>,
+) -> Result<Json<DatasetSummary>, StatusCode> {
+    match DatasetExporter::get_dataset_summary(&state.db).await {
+        Ok(summary) => Ok(Json(summary)),
+        Err(e) => {
+            tracing::error!("Failed to fetch dataset summary: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 #[cfg(test)]
