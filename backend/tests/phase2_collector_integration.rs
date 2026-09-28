@@ -150,6 +150,14 @@ async fn test_collector_status_and_prices_api() {
         polymarket.book_engine(),
     ));
 
+    let bankroll = db.get_or_init_bankroll(&config).await.unwrap();
+    let risk = Arc::new(poly_quant_backend::risk::RiskManager::new(
+        config.bankroll.clone(),
+        config.risk.clone(),
+        bankroll,
+        db.clone(),
+    ));
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
@@ -160,6 +168,7 @@ async fn test_collector_status_and_prices_api() {
         models,
         strategy,
         execution,
+        risk,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

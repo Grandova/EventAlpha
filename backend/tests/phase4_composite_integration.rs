@@ -108,6 +108,14 @@ async fn setup_phase4() -> (
         polymarket.book_engine(),
     ));
 
+    let bankroll = db.get_or_init_bankroll(&config).await.unwrap();
+    let risk = Arc::new(poly_quant_backend::risk::RiskManager::new(
+        config.bankroll.clone(),
+        config.risk.clone(),
+        bankroll,
+        db.clone(),
+    ));
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
@@ -118,6 +126,7 @@ async fn setup_phase4() -> (
         models,
         strategy,
         execution,
+        risk,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

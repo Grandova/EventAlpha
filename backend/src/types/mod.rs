@@ -262,6 +262,32 @@ pub struct BankrollState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BankrollHistoryEntry {
+    pub id: i64,
+    pub timestamp_ms: i64,
+    pub active_bankroll: f64,
+    pub locked_profit: f64,
+    pub total_equity: f64,
+    pub change_amount: f64,
+    pub reason: String,
+    pub trade_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskStatus {
+    pub is_trading_halted: bool,
+    pub halt_reason: Option<String>,
+    pub daily_loss_current: f64,
+    pub daily_loss_limit: f64,
+    pub current_drawdown: f64,
+    pub max_drawdown_limit: f64,
+    pub peak_equity: f64,
+    pub consecutive_losses: u32,
+    pub max_consecutive_losses: u32,
+    pub cooldown_until_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaperOrder {
     pub order_id: String,
     pub market_id: String,

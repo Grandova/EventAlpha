@@ -106,6 +106,13 @@ async fn setup_phase7() -> (axum::Router, Arc<ModelManager>, Arc<Database>) {
         db.clone(),
         polymarket.book_engine(),
     ));
+    let bankroll = db.get_or_init_bankroll(&config).await.unwrap();
+    let risk = Arc::new(poly_quant_backend::risk::RiskManager::new(
+        config.bankroll.clone(),
+        config.risk.clone(),
+        bankroll,
+        db.clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -117,6 +124,7 @@ async fn setup_phase7() -> (axum::Router, Arc<ModelManager>, Arc<Database>) {
         models: models.clone(),
         strategy,
         execution,
+        risk,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

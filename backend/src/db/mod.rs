@@ -622,6 +622,73 @@ impl Database {
 
         Ok(())
     }
+
+    /// Record a bankroll modification transaction
+    pub async fn record_bankroll_entry(
+        &self,
+        active: f64,
+        locked: f64,
+        total: f64,
+        change: f64,
+        reason: &str,
+        trade_id: Option<&str>,
+    ) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        sqlx::query(
+            r#"
+            INSERT INTO bankroll_history (timestamp, active_bankroll, locked_profit, total_equity, change_amount, reason, trade_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(now_ms)
+        .bind(active)
+        .bind(locked)
+        .bind(total)
+        .bind(change)
+        .bind(reason)
+        .bind(trade_id)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to record bankroll history entry")?;
+
+        Ok(())
+    }
+
+    /// Retrieve bankroll transaction history
+    pub async fn get_bankroll_history(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::types::BankrollHistoryEntry>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, timestamp, active_bankroll, locked_profit, total_equity, change_amount, reason, trade_id
+            FROM bankroll_history
+            ORDER BY id DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query bankroll history")?;
+
+        let list = rows
+            .into_iter()
+            .map(|r| crate::types::BankrollHistoryEntry {
+                id: r.get("id"),
+                timestamp_ms: r.get("timestamp"),
+                active_bankroll: r.get("active_bankroll"),
+                locked_profit: r.get("locked_profit"),
+                total_equity: r.get("total_equity"),
+                change_amount: r.get("change_amount"),
+                reason: r.get("reason"),
+                trade_id: r.get("trade_id"),
+            })
+            .collect();
+
+        Ok(list)
+    }
 }
 
 #[cfg(test)]

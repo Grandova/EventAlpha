@@ -25,10 +25,12 @@ use crate::polymarket::orderbook::MarketBookSummary;
 use crate::execution::PaperExecutionEngine;
 use crate::polymarket::resolution::MarketResolvedEvent;
 use crate::polymarket::PolymarketManager;
+use crate::risk::RiskManager;
 use crate::safety::{SafetyGuard, SafetyStatus};
 use crate::strategy::StrategyEngine;
 use crate::types::{
-    Asset, BankrollState, DecisionLog, PaperOrder, PaperPosition, PredictionSignal,
+    Asset, BankrollHistoryEntry, BankrollState, DecisionLog, PaperOrder, PaperPosition,
+    PredictionSignal, RiskStatus,
 };
 
 #[derive(Clone)]
@@ -42,6 +44,7 @@ pub struct AppState {
     pub models: Arc<ModelManager>,
     pub strategy: Arc<StrategyEngine>,
     pub execution: Arc<PaperExecutionEngine>,
+    pub risk: Arc<RiskManager>,
     pub start_time_ms: i64,
 }
 
@@ -81,6 +84,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/safety", get(handle_safety))
         .route("/api/v1/config", get(handle_config))
         .route("/api/v1/paper/bankroll", get(handle_bankroll))
+        .route("/api/v1/paper/bankroll/history", get(handle_bankroll_history))
+        .route("/api/v1/risk/status", get(handle_risk_status))
         .route("/api/v1/events", get(handle_events))
         .route("/api/v1/collector/status", get(handle_collector_status))
         .route("/api/v1/collector/prices", get(handle_collector_prices))
@@ -146,17 +151,27 @@ async fn handle_config(State(state): State<AppState>) -> Json<AppConfig> {
     Json((*state.config).clone())
 }
 
-async fn handle_bankroll(
-    State(state): State<AppState>,
-) -> Result<Json<BankrollState>, StatusCode> {
-    match state.db.get_or_init_bankroll(&state.config).await {
-        Ok(bankroll) => Ok(Json(bankroll)),
-        Err(e) => {
-            tracing::error!("Error retrieving bankroll: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+async fn handle_bankroll(State(state): State<AppState>) -> Json<BankrollState> {
+    Json(state.risk.get_bankroll_state().await)
 }
+
+async fn handle_bankroll_history(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Result<Json<Vec<BankrollHistoryEntry>>, StatusCode> {
+    let limit = query.limit.unwrap_or(50);
+    state
+        .risk
+        .get_history(limit)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn handle_risk_status(State(state): State<AppState>) -> Json<RiskStatus> {
+    Json(state.risk.get_risk_status().await)
+}
+
 
 async fn handle_events(
     State(state): State<AppState>,
@@ -457,6 +472,14 @@ assets: ["BTC", "ETH", "SOL"]
             polymarket.book_engine(),
         ));
 
+        let bankroll_state = db.get_or_init_bankroll(&config).await.unwrap();
+        let risk = Arc::new(RiskManager::new(
+            config.bankroll.clone(),
+            config.risk.clone(),
+            bankroll_state,
+            db.clone(),
+        ));
+
         AppState {
             config,
             db,
@@ -467,6 +490,7 @@ assets: ["BTC", "ETH", "SOL"]
             models,
             strategy,
             execution,
+            risk,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

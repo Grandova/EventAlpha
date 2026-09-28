@@ -115,13 +115,22 @@ async fn main() -> Result<()> {
         collector.freshness(),
     );
 
-    // 14. Initialize and launch Realistic Paper Execution Engine
+    // 14. Initialize Risk & Bankroll Manager
+    let risk = Arc::new(poly_quant_backend::risk::RiskManager::new(
+        config.bankroll.clone(),
+        config.risk.clone(),
+        bankroll,
+        db.clone(),
+    ));
+
+    // 15. Initialize and launch Realistic Paper Execution Engine
     let execution = Arc::new(poly_quant_backend::execution::PaperExecutionEngine::new(
         config.execution.clone(),
         config.position.clone(),
         db.clone(),
         polymarket.book_engine(),
     ));
+    execution.set_risk_manager(risk.clone()).await;
     execution.start(strategy.subscribe_signals());
 
     let start_time_ms = Utc::now().timestamp_millis();
@@ -135,10 +144,11 @@ async fn main() -> Result<()> {
         models: models.clone(),
         strategy: strategy.clone(),
         execution: execution.clone(),
+        risk: risk.clone(),
         start_time_ms,
     };
 
-    // 15. Bind HTTP API server
+    // 16. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -165,6 +175,8 @@ async fn main() -> Result<()> {
     info!("Active Paper Positions: http://{}/api/v1/paper/positions/active", addr);
     info!("Recent Paper Orders: http://{}/api/v1/paper/orders", addr);
     info!("Position History: http://{}/api/v1/paper/positions/history", addr);
+    info!("Bankroll Ledger History: http://{}/api/v1/paper/bankroll/history", addr);
+    info!("Risk Control Status: http://{}/api/v1/risk/status", addr);
 
     // 15. Run server with graceful shutdown
     axum::serve(listener, app)

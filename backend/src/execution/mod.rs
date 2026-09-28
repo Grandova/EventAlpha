@@ -27,6 +27,7 @@ pub struct PaperExecutionEngine {
     order_history: Arc<RwLock<VecDeque<PaperOrder>>>,
     order_tx: broadcast::Sender<PaperOrder>,
     position_tx: broadcast::Sender<PaperPosition>,
+    risk: Arc<RwLock<Option<Arc<crate::risk::RiskManager>>>>,
 }
 
 impl PaperExecutionEngine {
@@ -51,7 +52,13 @@ impl PaperExecutionEngine {
             order_history: Arc::new(RwLock::new(VecDeque::with_capacity(500))),
             order_tx,
             position_tx,
+            risk: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub async fn set_risk_manager(&self, risk: Arc<crate::risk::RiskManager>) {
+        let mut r = self.risk.write().await;
+        *r = Some(risk);
     }
 
     /// Execute a trading signal using realistic orderbook depth-walking and simulated latency
@@ -85,6 +92,17 @@ impl PaperExecutionEngine {
         let requested_stake = self.position_config.stake.min(self.position_config.max_stake);
         if requested_stake <= 0.0 {
             return Err("Requested stake must be positive".to_string());
+        }
+
+        // Pre-trade Risk & Circuit Breaker Check
+        {
+            let r_guard = self.risk.read().await;
+            if let Some(ref risk) = *r_guard {
+                if let Err(reason) = risk.can_open_position(requested_stake).await {
+                    warn!("🛑 RiskManager rejected order for {}: {}", signal.asset, reason);
+                    return Ok(None);
+                }
+            }
         }
 
         // Simulate network / order transmission latency
@@ -183,6 +201,16 @@ impl PaperExecutionEngine {
         }
         if let Err(e) = self.db.insert_paper_position(&position).await {
             error!("Failed to persist paper position: {:#}", e);
+        }
+
+        // Deduct stake from active bankroll
+        {
+            let r_guard = self.risk.read().await;
+            if let Some(ref risk) = *r_guard {
+                let _ = risk
+                    .reserve_stake(order.stake, "PAPER_ORDER_OPEN", Some(&order.order_id))
+                    .await;
+            }
         }
 
         // Cache active position and order history
