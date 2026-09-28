@@ -216,6 +216,145 @@ impl Database {
 
         Ok(events)
     }
+
+    /// Insert a prediction signal record
+    pub async fn insert_prediction(&self, signal: &crate::types::PredictionSignal) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        let asset_str = signal.asset.to_string();
+        let action_str = match signal.action {
+            crate::types::SignalAction::BuyUp => "BUY_UP",
+            crate::types::SignalAction::BuyDown => "BUY_DOWN",
+            crate::types::SignalAction::Skip => "SKIP",
+        };
+        let conf_str = match signal.confidence {
+            crate::types::ConfidenceLevel::Skip => "SKIP",
+            crate::types::ConfidenceLevel::Low => "LOW",
+            crate::types::ConfidenceLevel::Medium => "MEDIUM",
+            crate::types::ConfidenceLevel::High => "HIGH",
+            crate::types::ConfidenceLevel::VeryHigh => "VERY_HIGH",
+        };
+
+        // Ensure parent market exists in case of synthetic/test runs
+        let condition_id = format!("cond_{}", &signal.market_id);
+        let _ = sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO markets (id, condition_id, asset, start_time, end_time, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+            "#,
+        )
+        .bind(&signal.market_id)
+        .bind(&condition_id)
+        .bind(&asset_str)
+        .bind(signal.timestamp_ms)
+        .bind(signal.timestamp_ms + 300_000)
+        .bind(now_ms)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await;
+
+        sqlx::query(
+            r#"
+            INSERT INTO predictions (
+                prediction_id, market_id, asset, timestamp, model_version,
+                p_up, p_down, fair_value_up, fair_value_down, market_implied_up,
+                gross_edge, estimated_fee, estimated_slippage, net_edge,
+                confidence, signal_score, recommended_action, decision_reason, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&signal.prediction_id)
+        .bind(&signal.market_id)
+        .bind(&asset_str)
+        .bind(signal.timestamp_ms)
+        .bind(&signal.model_version)
+        .bind(signal.p_up)
+        .bind(signal.p_down)
+        .bind(signal.fair_value_up)
+        .bind(signal.fair_value_down)
+        .bind(signal.market_implied_up)
+        .bind(signal.gross_edge)
+        .bind(signal.estimated_fee)
+        .bind(signal.estimated_slippage)
+        .bind(signal.net_edge)
+        .bind(conf_str)
+        .bind(signal.signal_score)
+        .bind(action_str)
+        .bind(&signal.decision_reason)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to insert prediction signal")?;
+
+        Ok(())
+    }
+
+    /// Retrieve recent prediction signals
+    pub async fn get_recent_predictions(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::types::PredictionSignal>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT prediction_id, market_id, asset, timestamp, model_version,
+                   p_up, p_down, fair_value_up, fair_value_down, market_implied_up,
+                   gross_edge, estimated_fee, estimated_slippage, net_edge,
+                   confidence, signal_score, recommended_action, decision_reason
+            FROM predictions
+            ORDER BY id DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query recent predictions")?;
+
+        let mut signals = Vec::new();
+        for r in rows {
+            let asset_str: String = r.get("asset");
+            let asset: crate::types::Asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+
+            let action_str: String = r.get("recommended_action");
+            let action = match action_str.as_str() {
+                "BUY_UP" => crate::types::SignalAction::BuyUp,
+                "BUY_DOWN" => crate::types::SignalAction::BuyDown,
+                _ => crate::types::SignalAction::Skip,
+            };
+
+            let conf_str: String = r.get("confidence");
+            let confidence = match conf_str.as_str() {
+                "LOW" => crate::types::ConfidenceLevel::Low,
+                "MEDIUM" => crate::types::ConfidenceLevel::Medium,
+                "HIGH" => crate::types::ConfidenceLevel::High,
+                "VERY_HIGH" => crate::types::ConfidenceLevel::VeryHigh,
+                _ => crate::types::ConfidenceLevel::Skip,
+            };
+
+            signals.push(crate::types::PredictionSignal {
+                prediction_id: r.get("prediction_id"),
+                market_id: r.get("market_id"),
+                asset,
+                timestamp_ms: r.get("timestamp"),
+                model_version: r.get("model_version"),
+                p_up: r.get("p_up"),
+                p_down: r.get("p_down"),
+                fair_value_up: r.get("fair_value_up"),
+                fair_value_down: r.get("fair_value_down"),
+                market_implied_up: r.get("market_implied_up"),
+                gross_edge: r.get("gross_edge"),
+                estimated_fee: r.get("estimated_fee"),
+                estimated_slippage: r.get("estimated_slippage"),
+                net_edge: r.get("net_edge"),
+                signal_score: r.get("signal_score"),
+                confidence,
+                action,
+                decision_reason: r.get("decision_reason"),
+            });
+        }
+
+        Ok(signals)
+    }
 }
 
 #[cfg(test)]

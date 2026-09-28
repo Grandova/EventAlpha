@@ -8,4 +8,5 @@ pub mod features;
 pub mod models;
 pub mod polymarket;
 pub mod safety;
+pub mod strategy;
 pub mod types;

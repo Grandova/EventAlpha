@@ -102,6 +102,19 @@ async fn main() -> Result<()> {
     let models = Arc::new(poly_quant_backend::models::ModelManager::new());
     models.start(features.subscribe(), db.clone());
 
+    // 13. Initialize and launch Strategy Engine & Opportunity Filtering
+    let strategy = Arc::new(poly_quant_backend::strategy::StrategyEngine::new(
+        config.strategy.clone(),
+        config.execution.clone(),
+        db.clone(),
+    ));
+    strategy.start(
+        models.subscribe(),
+        polymarket.book_engine(),
+        composite.clone(),
+        collector.freshness(),
+    );
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
@@ -111,10 +124,11 @@ async fn main() -> Result<()> {
         composite: composite.clone(),
         features: features.clone(),
         models: models.clone(),
+        strategy: strategy.clone(),
         start_time_ms,
     };
 
-    // 13. Bind HTTP API server
+    // 14. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -135,8 +149,11 @@ async fn main() -> Result<()> {
     info!("Dataset Summary: http://{}/api/v1/dataset/summary", addr);
     info!("Model Predictions (BTC): http://{}/api/v1/models/prediction/BTC", addr);
     info!("All Model Predictions: http://{}/api/v1/models/all", addr);
+    info!("Strategy Signal (BTC): http://{}/api/v1/strategy/signals/latest/BTC", addr);
+    info!("All Strategy Signals: http://{}/api/v1/strategy/signals/latest", addr);
+    info!("Recent Decisions: http://{}/api/v1/strategy/decisions/recent", addr);
 
-    // 14. Run server with graceful shutdown
+    // 15. Run server with graceful shutdown
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(db))
         .await?;

@@ -88,6 +88,11 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         db.clone(),
     ));
     let models = Arc::new(poly_quant_backend::models::ModelManager::new());
+    let strategy = Arc::new(poly_quant_backend::strategy::StrategyEngine::new(
+        config.strategy.clone(),
+        config.execution.clone(),
+        db.clone(),
+    ));
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
@@ -96,6 +101,7 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         composite,
         features,
         models,
+        strategy,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let router = create_router(state);

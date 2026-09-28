@@ -25,7 +25,8 @@ use crate::polymarket::orderbook::MarketBookSummary;
 use crate::polymarket::resolution::MarketResolvedEvent;
 use crate::polymarket::PolymarketManager;
 use crate::safety::{SafetyGuard, SafetyStatus};
-use crate::types::{Asset, BankrollState};
+use crate::strategy::StrategyEngine;
+use crate::types::{Asset, BankrollState, DecisionLog, PredictionSignal};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -36,6 +37,7 @@ pub struct AppState {
     pub composite: Arc<CompositePriceEngine>,
     pub features: Arc<FeatureEngine>,
     pub models: Arc<ModelManager>,
+    pub strategy: Arc<StrategyEngine>,
     pub start_time_ms: i64,
 }
 
@@ -89,6 +91,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/dataset/summary", get(handle_dataset_summary))
         .route("/api/v1/models/prediction/{asset}", get(handle_model_prediction))
         .route("/api/v1/models/all", get(handle_models_all))
+        .route("/api/v1/strategy/signals/latest/{asset}", get(handle_strategy_signal_latest))
+        .route("/api/v1/strategy/signals/latest", get(handle_strategy_signals_all))
+        .route("/api/v1/strategy/decisions/recent", get(handle_strategy_decisions_recent))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -298,6 +303,34 @@ async fn handle_models_all(
     Json(state.models.get_all_latest_predictions())
 }
 
+async fn handle_strategy_signal_latest(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+) -> Result<Json<PredictionSignal>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    match state.strategy.get_latest_signal(asset) {
+        Some(sig) => Ok(Json(sig)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn handle_strategy_signals_all(
+    State(state): State<AppState>,
+) -> Json<HashMap<String, PredictionSignal>> {
+    Json(state.strategy.get_all_latest_signals())
+}
+
+async fn handle_strategy_decisions_recent(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Json<Vec<DecisionLog>> {
+    let limit = query.limit.unwrap_or(50) as usize;
+    Json(state.strategy.get_recent_decisions(limit).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,6 +410,11 @@ assets: ["BTC", "ETH", "SOL"]
             db.clone(),
         ));
         let models = Arc::new(ModelManager::new());
+        let strategy = Arc::new(StrategyEngine::new(
+            config.strategy.clone(),
+            config.execution.clone(),
+            db.clone(),
+        ));
 
         AppState {
             config,
@@ -386,6 +424,7 @@ assets: ["BTC", "ETH", "SOL"]
             composite,
             features,
             models,
+            strategy,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

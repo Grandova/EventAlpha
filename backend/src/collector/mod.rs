@@ -14,7 +14,7 @@ use tracing::info;
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::types::{Asset, Exchange, MarketTick, TradeTick};
-use freshness::{FreshnessReport, FreshnessTracker};
+pub use freshness::{FreshnessReport, FreshnessTracker};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PriceSummary {
@@ -190,6 +190,10 @@ impl CollectorManager {
 
     pub fn freshness_tracker(&self) -> &FreshnessTracker {
         &self.freshness
+    }
+
+    pub fn freshness(&self) -> FreshnessTracker {
+        self.freshness.clone()
     }
 
     pub fn record_test_tick(&self, tick: MarketTick) {
