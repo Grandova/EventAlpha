@@ -17,6 +17,7 @@ use crate::collector::{CollectorManager, PriceSummary};
 use crate::composite::{CompositePriceEngine, CompositePriceSnapshot};
 use crate::config::AppConfig;
 use crate::db::Database;
+use crate::features::{FeatureEngine, FeatureSnapshot, FEATURE_NAMES};
 use crate::polymarket::market_discovery::Polymarket5mMarket;
 use crate::polymarket::orderbook::MarketBookSummary;
 use crate::polymarket::resolution::MarketResolvedEvent;
@@ -31,6 +32,7 @@ pub struct AppState {
     pub collector: Arc<CollectorManager>,
     pub polymarket: Arc<PolymarketManager>,
     pub composite: Arc<CompositePriceEngine>,
+    pub features: Arc<FeatureEngine>,
     pub start_time_ms: i64,
 }
 
@@ -78,6 +80,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/polymarket/resolutions", get(handle_polymarket_resolutions))
         .route("/api/v1/composite/price/{asset}", get(handle_composite_price))
         .route("/api/v1/composite/all", get(handle_composite_all))
+        .route("/api/v1/features/latest/{asset}", get(handle_features_latest))
+        .route("/api/v1/features/all", get(handle_features_all))
+        .route("/api/v1/features/names", get(handle_features_names))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -231,6 +236,30 @@ async fn handle_composite_all(
     Json(state.composite.get_all_snapshots())
 }
 
+async fn handle_features_latest(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+) -> Result<Json<FeatureSnapshot>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    match state.features.get_latest_features(asset) {
+        Some(snapshot) => Ok(Json(snapshot)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn handle_features_all(
+    State(state): State<AppState>,
+) -> Json<HashMap<String, FeatureSnapshot>> {
+    Json(state.features.get_all_latest_features())
+}
+
+async fn handle_features_names() -> Json<Vec<&'static str>> {
+    Json(FEATURE_NAMES.to_vec())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,6 +332,12 @@ assets: ["BTC", "ETH", "SOL"]
         let collector = Arc::new(CollectorManager::new(&config));
         let polymarket = Arc::new(PolymarketManager::new(&config, db.clone()));
         let composite = Arc::new(CompositePriceEngine::new(collector.clone(), polymarket.discovery().clone()));
+        let features = Arc::new(FeatureEngine::new(
+            composite.clone(),
+            polymarket.clone(),
+            collector.clone(),
+            db.clone(),
+        ));
 
         AppState {
             config,
@@ -310,6 +345,7 @@ assets: ["BTC", "ETH", "SOL"]
             collector,
             polymarket,
             composite,
+            features,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

@@ -89,6 +89,12 @@ async fn setup_phase4() -> (
         collector.clone(),
         polymarket.discovery().clone(),
     ));
+    let features = Arc::new(poly_quant_backend::features::FeatureEngine::new(
+        composite.clone(),
+        polymarket.clone(),
+        collector.clone(),
+        db.clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -96,6 +102,7 @@ async fn setup_phase4() -> (
         collector: collector.clone(),
         polymarket: polymarket.clone(),
         composite: composite.clone(),
+        features,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

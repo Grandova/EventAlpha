@@ -83,6 +83,12 @@ async fn setup_phase3_app() -> (axum::Router, Arc<PolymarketManager>, Arc<Databa
         collector.clone(),
         polymarket.discovery().clone(),
     ));
+    let features = Arc::new(poly_quant_backend::features::FeatureEngine::new(
+        composite.clone(),
+        polymarket.clone(),
+        collector.clone(),
+        db.clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -90,6 +96,7 @@ async fn setup_phase3_app() -> (axum::Router, Arc<PolymarketManager>, Arc<Databa
         collector,
         polymarket: polymarket.clone(),
         composite,
+        features,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

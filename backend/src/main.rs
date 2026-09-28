@@ -89,6 +89,15 @@ async fn main() -> Result<()> {
     ));
     composite.start();
 
+    // 11. Initialize and launch Real-Time Feature Engineering Engine
+    let features = Arc::new(poly_quant_backend::features::FeatureEngine::new(
+        composite.clone(),
+        polymarket.clone(),
+        collector.clone(),
+        db.clone(),
+    ));
+    features.start();
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
@@ -96,10 +105,11 @@ async fn main() -> Result<()> {
         collector: collector.clone(),
         polymarket: polymarket.clone(),
         composite: composite.clone(),
+        features: features.clone(),
         start_time_ms,
     };
 
-    // 11. Bind HTTP API server
+    // 12. Bind HTTP API server
     let app = create_router(state);
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -114,8 +124,11 @@ async fn main() -> Result<()> {
     info!("Composite Price (BTC): http://{}/api/v1/composite/price/BTC", addr);
     info!("All Composite Prices: http://{}/api/v1/composite/all", addr);
     info!("Polymarket Resolutions: http://{}/api/v1/polymarket/resolutions", addr);
+    info!("Real-time Features (BTC): http://{}/api/v1/features/latest/BTC", addr);
+    info!("All Real-time Features: http://{}/api/v1/features/all", addr);
+    info!("Feature Names (37 dims): http://{}/api/v1/features/names", addr);
 
-    // 11. Run server with graceful shutdown
+    // 13. Run server with graceful shutdown
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(db))
         .await?;

@@ -81,12 +81,19 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         collector.clone(),
         polymarket.discovery().clone(),
     ));
+    let features = Arc::new(poly_quant_backend::features::FeatureEngine::new(
+        composite.clone(),
+        polymarket.clone(),
+        collector.clone(),
+        db.clone(),
+    ));
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         collector,
         polymarket,
         composite,
+        features,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let router = create_router(state);
