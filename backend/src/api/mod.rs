@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use crate::backtest::{BacktestEngine, BacktestRequest, BacktestResult};
@@ -85,7 +86,7 @@ pub fn create_router(state: AppState) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    Router::new()
+    let router = Router::new()
         .route("/api/v1/health", get(handle_health))
         .route("/api/v1/safety", get(handle_safety))
         .route("/api/v1/config", get(handle_config))
@@ -125,7 +126,19 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/replay/speed", post(handle_replay_speed))
         .route("/api/v1/replay/stop", post(handle_replay_stop))
         .route("/api/v1/replay/status", get(handle_replay_status))
-        .route("/api/v1/replay/frames", get(handle_replay_frames))
+        .route("/api/v1/replay/frames", get(handle_replay_frames));
+
+    let frontend_dist = std::path::Path::new("frontend/dist");
+    let router = if frontend_dist.exists() {
+        router.fallback_service(
+            ServeDir::new("frontend/dist")
+                .not_found_service(ServeFile::new("frontend/dist/index.html")),
+        )
+    } else {
+        router
+    };
+
+    router
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
