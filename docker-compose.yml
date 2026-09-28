@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  polyquant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: polyquant-core
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - RUST_LOG=info,poly_quant_backend=debug,tower_http=info
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

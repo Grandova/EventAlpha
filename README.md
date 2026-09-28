@@ -6,7 +6,7 @@
 ![Rust](https://img.shields.io/badge/Rust-1.85+-orange)
 ![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite%206%20%7C%20Tailwind-blue)
 ![Database](https://img.shields.io/badge/Database-SQLite%20WAL%20(15%20Tables)-purple)
-![Tests](https://img.shields.io/badge/Tests-14%20Suites%20%7C%2087%20Passed%20(100%25)-success)
+![Tests](https://img.shields.io/badge/Tests-15%20Suites%20%7C%2089%20Passed%20(100%25)-success)
 
 ---
 
@@ -191,22 +191,45 @@ flowchart TD
 
 ---
 
-## 九、快速启动指南
+## 九、Linux 服务器与宝塔面板 (aaPanel) 一键部署
 
-### 环境要求
-- **Rust**: 1.85+（带 Cargo）
-- **Node.js**: v18+（推荐 v20 或 v24）及 npm
-- **操作系统**: Windows / macOS / Linux
+系统原生完美支持任何 Linux 云服务器（Ubuntu / Debian / CentOS / Rocky / AlmaLinux）以及宝塔面板 (aaPanel)。
 
-### 一键启动（推荐）
-在项目根目录下通过 PowerShell 执行：
+### 1. 原生 Linux / 宝塔终端一键安装 (最推荐)
+在云服务器或宝塔「终端」中执行：
+```bash
+sudo bash install.sh
+```
+一键全自动安装系统编译库、Node.js v20 LTS 与 Rust 稳定版工具链，编译前后端生产包，并注册为 `systemd` 系统守护服务。
+
+### 2. 全局命令行快捷管理
+安装后系统自动注入全局管理命令：
+```bash
+polyquant status   # 查看服务运行状态、内存、PID、监听端口与心跳
+polyquant log      # 实时查看行情采集、策略评估与模拟撮合日志
+polyquant restart  # 一键重启量化服务
+polyquant stop     # 停止量化服务
+polyquant config   # 编辑调优量化参数
+polyquant update   # 一键 git pull 拉取最新代码并热重构更新
+```
+
+### 3. 宝塔面板专属部署
+详见完整图文实操文档：[Linux 与宝塔面板一键部署手册](docs/LINUX_AND_BAOTA_DEPLOYMENT.md)
+- **宝塔防火墙**：安全 -> 防火墙放行 `8080` 端口；
+- **域名绑定与 Nginx 反向代理**：网站设置 -> 反向代理，目标填 `http://127.0.0.1:8080`，复制预置的 [deploy/baota/nginx_reverse_proxy.conf](deploy/baota/nginx_reverse_proxy.conf) 配置文件即可开启 WebSocket 极速推流；
+- **Supervisor 进程守护**：预置 [deploy/baota/supervisor_polyquant.ini](deploy/baota/supervisor_polyquant.ini)；
+- **Docker 容器化一键启动**：`docker compose up -d`。
+
+---
+
+## 十、Windows 本地快速启动（开发者模式）
+
+### 一键启动
+在 Windows 下通过 PowerShell 执行：
 ```powershell
 .\scripts\start_all.ps1
 ```
-该脚本将自动执行：
-1. 检查并构建前端控制台静态资源至 `frontend/dist`；
-2. 启动 Rust 高性能后台服务（端口 `8080`）；
-3. 自动在浏览器中打开全功能监控控制台：`http://127.0.0.1:8080`。
+自动构建前端静态资源至 `frontend/dist`，启动后端服务，并在浏览器自动弹出 `http://127.0.0.1:8080` 控制台。
 
 ### 分步手动启动
 #### 1. 启动后台服务
@@ -220,7 +243,6 @@ cd frontend
 npm install
 npm run dev
 ```
-打开 `http://localhost:3000` 即可实时热更新开发。
 
 ---
 

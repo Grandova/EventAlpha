@@ -118,11 +118,11 @@ impl AppConfig {
             }
         }
 
-        if let Ok(host) = std::env::var("HOST") {
+        if let Ok(host) = std::env::var("HOST").or_else(|_| std::env::var("SERVER_HOST")) {
             config.server.host = host;
         }
 
-        if let Ok(port) = std::env::var("PORT") {
+        if let Ok(port) = std::env::var("PORT").or_else(|_| std::env::var("SERVER_PORT")) {
             if let Ok(p) = port.parse::<u16>() {
                 config.server.port = p;
             }
@@ -148,11 +148,13 @@ impl AppConfig {
             }
         }
 
-        // Priority 2: config/config.yaml
+        // Priority 2: Standard search candidates
         let candidates = [
             "config/config.yaml",
             "../config/config.yaml",
             "../../config/config.yaml",
+            "/opt/polyquant/config/config.yaml",
+            "/etc/polyquant/config.yaml",
         ];
 
         for candidate in candidates {

@@ -135,11 +135,30 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/models/train", post(handle_model_train))
         .route("/api/v1/dataset/generate_synthetic", post(handle_dataset_generate_synthetic));
 
-    let frontend_dist = std::path::Path::new("frontend/dist");
-    let router = if frontend_dist.exists() {
+    let candidates = [
+        std::env::var("FRONTEND_DIST_PATH").ok(),
+        Some("frontend/dist".to_string()),
+        Some("../frontend/dist".to_string()),
+        Some("../../frontend/dist".to_string()),
+        Some("/opt/polyquant/frontend/dist".to_string()),
+        Some("/var/www/polyquant/frontend/dist".to_string()),
+    ];
+
+    let mut dist_path: Option<std::path::PathBuf> = None;
+    for cand in candidates.into_iter().flatten() {
+        let p = std::path::Path::new(&cand);
+        if p.exists() && p.join("index.html").exists() {
+            dist_path = Some(p.to_path_buf());
+            break;
+        }
+    }
+
+    let router = if let Some(path) = dist_path {
+        tracing::info!("Serving frontend SPA static assets from {:?}", path);
+        let index_file = path.join("index.html");
         router.fallback_service(
-            ServeDir::new("frontend/dist")
-                .not_found_service(ServeFile::new("frontend/dist/index.html")),
+            ServeDir::new(&path)
+                .not_found_service(ServeFile::new(index_file)),
         )
     } else {
         router
