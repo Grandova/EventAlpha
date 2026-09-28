@@ -118,6 +118,11 @@ async fn setup_phase5() -> (
         db.clone(),
     ));
 
+    let backtest = Arc::new(poly_quant_backend::backtest::BacktestEngine::new(
+        db.clone(),
+        models.clone(),
+    ));
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
@@ -129,6 +134,7 @@ async fn setup_phase5() -> (
         strategy,
         execution,
         risk,
+        backtest,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

@@ -127,6 +127,10 @@ impl ModelManager {
         map
     }
 
+    pub fn predict_vector(&self, vec: &[f64]) -> f64 {
+        self.logistic.predict_vector(vec)
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<ModelPrediction> {
         self.prediction_tx.subscribe()
     }

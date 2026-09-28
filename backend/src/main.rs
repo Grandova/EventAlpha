@@ -134,6 +134,12 @@ async fn main() -> Result<()> {
     execution.start(strategy.subscribe_signals());
     execution.start_resolution_listener(polymarket.subscribe_resolutions());
 
+    // 16. Initialize High-Performance Backtest Engine
+    let backtest = Arc::new(poly_quant_backend::backtest::BacktestEngine::new(
+        db.clone(),
+        models.clone(),
+    ));
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
@@ -146,6 +152,7 @@ async fn main() -> Result<()> {
         strategy: strategy.clone(),
         execution: execution.clone(),
         risk: risk.clone(),
+        backtest,
         start_time_ms,
     };
 

@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use chrono::Utc;
@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
+use crate::backtest::{BacktestEngine, BacktestRequest, BacktestResult};
 use crate::collector::freshness::FreshnessReport;
 use crate::collector::{CollectorManager, PriceSummary};
 use crate::composite::{CompositePriceEngine, CompositePriceSnapshot};
@@ -45,6 +46,7 @@ pub struct AppState {
     pub strategy: Arc<StrategyEngine>,
     pub execution: Arc<PaperExecutionEngine>,
     pub risk: Arc<RiskManager>,
+    pub backtest: Arc<BacktestEngine>,
     pub start_time_ms: i64,
 }
 
@@ -108,6 +110,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/paper/positions/history", get(handle_paper_positions_history))
         .route("/api/v1/paper/results", get(handle_paper_results))
         .route("/api/v1/paper/statistics", get(handle_paper_statistics))
+        .route("/api/v1/backtest/run", post(handle_backtest_run))
+        .route("/api/v1/backtest/latest", get(handle_backtest_latest))
+        .route("/api/v1/backtest/history", get(handle_backtest_history))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -406,6 +411,35 @@ async fn handle_paper_statistics(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+async fn handle_backtest_run(
+    State(state): State<AppState>,
+    Json(req): Json<BacktestRequest>,
+) -> Result<Json<BacktestResult>, (StatusCode, String)> {
+    state
+        .backtest
+        .run_backtest(req)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+async fn handle_backtest_latest(
+    State(state): State<AppState>,
+) -> Result<Json<BacktestResult>, StatusCode> {
+    match state.backtest.get_latest_backtest().await {
+        Some(res) => Ok(Json(res)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn handle_backtest_history(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Json<Vec<BacktestResult>> {
+    let limit = query.limit.unwrap_or(20) as usize;
+    Json(state.backtest.get_backtest_history(limit).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,6 +539,8 @@ assets: ["BTC", "ETH", "SOL"]
             db.clone(),
         ));
 
+        let backtest = Arc::new(BacktestEngine::new(db.clone(), models.clone()));
+
         AppState {
             config,
             db,
@@ -516,6 +552,7 @@ assets: ["BTC", "ETH", "SOL"]
             strategy,
             execution,
             risk,
+            backtest,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

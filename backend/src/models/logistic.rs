@@ -131,6 +131,20 @@ impl LogisticRegressionModel {
         (p_up, contributions)
     }
 
+    /// Predict raw probability P(Up) from a feature vector slice
+    pub fn predict_vector(&self, vec: &[f64]) -> f64 {
+        let mut z = self.config.bias;
+        for i in 0..vec.len() {
+            let val = vec[i];
+            let mean = self.config.means.get(i).copied().unwrap_or(0.0);
+            let std = self.config.stds.get(i).copied().unwrap_or(1.0).max(1e-6);
+            let norm_x = (val - mean) / std;
+            let w = self.config.weights.get(i).copied().unwrap_or(0.0);
+            z += w * norm_x;
+        }
+        1.0 / (1.0 + (-z).exp())
+    }
+
     /// Train model on historical walk-forward records using L2 regularized SGD
     pub fn train(&mut self, records: &[DatasetRecord], epochs: usize, lr: f64, l2_reg: f64) {
         if records.is_empty() {

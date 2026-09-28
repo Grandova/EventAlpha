@@ -1,4 +1,5 @@
 pub mod api;
+pub mod backtest;
 pub mod collector;
 pub mod composite;
 pub mod config;

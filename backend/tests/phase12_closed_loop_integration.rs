@@ -123,6 +123,10 @@ async fn setup_closed_loop_test_app() -> (
         bankroll,
         db.clone(),
     ));
+    let backtest = Arc::new(poly_quant_backend::backtest::BacktestEngine::new(
+        db.clone(),
+        models.clone(),
+    ));
     execution.set_risk_manager(risk.clone()).await;
 
     let state = AppState {
@@ -136,6 +140,7 @@ async fn setup_closed_loop_test_app() -> (
         strategy,
         execution: execution.clone(),
         risk: risk.clone(),
+        backtest,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);
