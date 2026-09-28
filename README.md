@@ -1,144 +1,259 @@
 # Polymarket 5-Minute Crypto Up/Down Quant System
-### 高精度量化预测、概率校准与真实盘口模拟交易系统
+### 高精度量化预测、概率校准、真实深度模拟撮合与逐帧回放系统
 
-![Mode](https://img.shields.io/badge/Mode-Paper_Trading_Only-brightgreen)
-![Rust](https://img.shields.io/badge/Rust-1.98+-orange)
-![License](https://img.shields.io/badge/License-Proprietary-blue)
+![Mode](https://img.shields.io/badge/Trading%20Mode-Strictly%20Paper%20Only-brightgreen)
+![Safety](https://img.shields.io/badge/Safety%20Lock-Kernel%20Panic%20Enforced-red)
+![Rust](https://img.shields.io/badge/Rust-1.85+-orange)
+![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite%206%20%7C%20Tailwind-blue)
+![Database](https://img.shields.io/badge/Database-SQLite%20WAL%20(15%20Tables)-purple)
+![Tests](https://img.shields.io/badge/Tests-14%20Suites%20%7C%2087%20Passed%20(100%25)-success)
 
 ---
 
-## 一、系统核心定位与设计目标
+## 一、系统定位与设计原则
 
-本项目用于深入研究与量化验证 **Polymarket** 上的 **BTC / ETH / SOL 5 分钟 Up/Down 二元预测市场**。
-系统遵循工业级量化工程规范开发，坚持以 **“真实可运行、数据零泄漏、真实盘口撮合、长期可验证”** 为最高原则。
+本项目为研究与量化验证 **Polymarket** 上的 **BTC / ETH / SOL 5 分钟 Up/Down 二元期权预测市场** 的工业级量化模拟交易与回测系统。
+系统坚决摒弃“玩具 Demo”逻辑，全链路遵循高频量化与预测市场微观结构规范，以 **“真实可运行、数据零泄漏、严格时间箭头、真实盘口撮合、长期可持续验证”** 为核心准则。
 
-### 核心安全准则（Zero Real Money Risk）
-- **硬性禁止真实交易**：系统底层设计 `SafetyGuard` 强制断言，`real_trading_enabled` 必须恒为 `false`。
-- **Fail-Closed 保护**：行情断连、数据 stale、时钟漂移、盘口异常时自动停止下达模拟订单。
-- **双层资金管理模式**：Active Bankroll（受控风险本金）与 Locked Profit（锁定利润完全隔离），杜绝盲目复利风险。
+### 核心安全准则（Zero Real Money Risk Invariant）
+1. **系统内核级禁止实盘**：系统底层 `SafetyGuard` 强制断言，`real_trading_enabled` 必须恒为 `false`；任何试图在配置中启用实盘的操作均会在服务启动最前置阶段直接触发 `panic!` 终止进程。
+2. **私钥隔离**：系统中不存在任何私钥存储或真实链上交易签名模块，彻底杜绝任何资金损失风险。
+3. **Fail-Closed 保护**：行情断连、数据滞后（>2000ms）、时钟漂移（>1000ms）、盘口深度不足（<$300）时自动阻断模拟下单。
 
 ---
 
 ## 二、系统架构总览
 
-```
-Poly量化/
-  ├── Cargo.toml                       # 根目录 Cargo 工作空间配置
-  ├── config/
-  │    └── config.yaml                 # 核心系统配置（资金、策略、风控、撮合、新鲜度）
-  ├── .env.example                     # 环境变量范本
-  ├── backend/                         # Rust 高性能实时核心服务
-  │    ├── Cargo.toml
-  │    ├── migrations/
-  │    │    └── 0001_initial_schema.sql# 数据库 Schema 迁移脚本
-  │    ├── src/
-  │    │    ├── lib.rs
-  │    │    ├── main.rs                # 服务主入口与优雅停机
-  │    │    ├── safety/                # 底层内核安全守卫 (SafetyGuard)
-  │    │    ├── config/                # 严格配置加载器与校验器
-  │    │    ├── types/                 # 统一领域模型 (MarketTick, Prediction, Bankroll 等)
-  │    │    ├── db/                    # 数据库连接池 (SQLite WAL) 与仓储
-  │    │    └── api/                   # Axum HTTP REST & 状态监控端点
-  │    └── tests/
-  │         └── phase1_integration.rs  # Phase 1 端到端集成测试
-  ├── frontend/                        # 现代化 Web Dashboard（计划中）
-  ├── ml/                              # 机器学习训练、校准与特征导出（计划中）
-  └── data/                            # 本地 SQLite 时序数据存储
+```mermaid
+flowchart TD
+    subgraph Data Layer [数据采集与新鲜度追踪]
+        B[Binance L2 & Ticks] --> C[Collector Engine]
+        O[OKX L2 & Ticks] --> C
+        BY[Bybit L2 & Ticks] --> C
+        CB[Coinbase L2 & Ticks] --> C
+        P_CLOB[Polymarket CLOB & Discovery] --> PM[Polymarket Engine]
+        C --> FRESH[Freshness Tracker <2000ms]
+    end
+
+    subgraph Core Quant Engine [核心量化与特征计算]
+        C --> COMP[Composite Price Engine]
+        COMP --> FEAT[37-Dim Real-Time Feature Matrix]
+        PM --> FEAT
+        FEAT --> ML[ML Logistic & Platt Calibrator & Ensemble]
+    end
+
+    subgraph Strategy & Risk [策略门控与风控]
+        ML --> STRAT[Strategy Engine: 7 Hard Filter Gates]
+        FEAT --> STRAT
+        STRAT --> SCORE[Opportunity Scoring: 0-100 Rubric]
+        SCORE --> RISK[Risk Manager: Mode B $10 Cap & Mode A]
+    end
+
+    subgraph Execution & Simulation [真实深度撮合与回测]
+        RISK --> EXEC[Paper Execution: Section 21 Depth-Walking Fill]
+        PM --> EXEC
+        EXEC --> DB[(SQLite WAL Database: 15 Tables)]
+        DB --> SETTLE[Closed-Loop Resolution Listener]
+        SETTLE --> RISK
+    end
+
+    subgraph Diagnostic & UI [回放与前端控制台]
+        DB --> BT[High-Performance Backtest Engine]
+        DB --> REPLAY[Historical Replay Engine: 1x-50x / Step]
+        DB --> API[Axum REST & WebSocket Server :8080]
+        API --> UI[React 18 + Vite + Tailwind Web Console]
+    end
 ```
 
 ---
 
-## 三、资金管理与风控模型
+## 三、全系统十六阶段完整功能全景
 
-### 1. Active Bankroll 与 Locked Profit
-- **Active Bankroll**：真正参与模拟下注的动态本金（默认初始 10 USDC，上限 Cap 10 USDC）。
-- **Locked Profit**：交易盈利剥离池，**永远不用于再次下注**。
-- **模式 A (Profit Isolation)**：单笔盈利后，本金归还 Active Bankroll，所有净利润进入 Locked Profit。
-- **模式 B (Capital Recovery，默认推荐)**：若本金发生回撤（如 10U → 9U），后续盈利优先补回本金至 Cap（10U），溢出部分全额锁定入 Locked Profit。
-
-### 2. 多重风控熔断机制
-| 参数项 | 默认阈值 | 作用描述 |
+| 阶段 | 模块名称 | 核心功能与交付成果 |
 | :--- | :--- | :--- |
-| `bankroll.minimum` | `2.0 USDC` | 若本金 $\le 2$ USDC，自动停止所有新交易 |
-| `risk.daily_loss_limit` | `2.0 USDC` | 当日累计亏损达到限制，当日自动停机 |
-| `risk.max_consecutive_losses` | `5 次` | 连续亏损 5 笔进入 30 分钟策略冷静期 |
-| `risk.max_drawdown` | `20%` | 峰值回撤达到 20% 自动暂停模拟下单 |
+| **Phase 1** | 项目骨架与内核守卫 | 严格目录架构、配置校验、`SafetyGuard` 熔断内核、15 张 SQLite 迁移表 |
+| **Phase 2** | 多源行情采集与新鲜度 | Binance/OKX/Bybit/Coinbase 采集器、Fail-closed（<2000ms）心跳监控 |
+| **Phase 3** | Polymarket 发现与盘口 | 5分钟周期计算、CLOB 订单簿维护、Top 5/10/20 OBI、结算监听器 |
+| **Phase 4** | 稳健综合价格计算 | 动态加权中间价、多周期收益率、已实现波动率 $\sigma$、开盘价偏离度 |
+| **Phase 5** | 37维实时特征引擎 | 收益率、波动率、CVD 累积成交差、订单簿微观结构、时间衰减因子 |
+| **Phase 6** | 训练数据集生成与导出 | 严格无未来函数数据集构建、Walk-Forward 切分（70/15/15）、CSV/JSONL 导出 |
+| **Phase 7** | 机器学习与概率校准 | 逻辑回归 + 在线 SGD、Platt 概率校准器、双模型集成与 Brier Score |
+| **Phase 8** | 数据集导出与验证端点 | 样本统计汇总、正负样本平衡度监控、`/api/v1/dataset/summary` |
+| **Phase 9** | 策略引擎与机会评分 | 7 重严格硬过滤器门控（Fail-closed）、[0, 100] 分值机会评价体系 |
+| **Phase 10** | 真实模拟撮合执行 | Section 21 真实订单簿深度穿透撮合、滑点模拟、1.2% 手续费扣除 |
+| **Phase 11** | 资金与风控引擎 | 模式 B（$10 本金回收封顶）、模式 A（利润完全隔离）、四重熔断风控 |
+| **Phase 12** | 闭环市场结算与账本 | 真实市场结算事件监听、二元期权 $1.00/$0.00 收益计算、账本自动复原 |
+| **Phase 13** | 高性能历史回测引擎 | 事件驱动历史仿真、Sharpe / Sortino / Calmar 风险比率、净值曲线追踪 |
+| **Phase 14** | 历史逐帧回放引擎 | 历史 Tick 与特征逐帧步进（Step）、时间定位（Seek）、1x~50x 变速回放 |
+| **Phase 15** | 现代化前端控制台 | React 18 + Vite 6 + Tailwind 黑色高对比度量化控制台、真实深度梯形图 |
+| **Phase 16** | 一键打包与自动化脚本 | `start_all.ps1`、`run_all_tests.ps1`，零依赖启动全套系统 |
 
 ---
 
-## 四、数据库模型 (Section 28 标准)
+## 四、资金管理与风控模型详解
 
-系统底层由 15 张高度规范化的数据表组成：
-1. `markets`: 5 分钟周期市场元数据（开始/结束时间、开盘价、结算价、状态）
-2. `market_ticks`: Polymarket 盘口深度与流动性快照
-3. `exchange_ticks`: Binance, OKX, Bybit, Coinbase 跨交易所毫秒级行情
-4. `orderbook_snapshots`: 订单簿深度与 Top5/10/20 OBI 特征
-5. `trades`: 主流交易所与 Polymarket 逐笔成交及主动买卖方向
-6. `features`: 实时计算的价差、波动率、微观结构特征
-7. `predictions`: 模型输出概率、公允价值、净 Edge、决策日志
-8. `paper_orders`: 模拟委托订单与真实深度撮合记录
-9. `paper_positions`: 模拟持仓追踪
-10. `paper_results`: 结算盈亏、资金变动归因分析
-11. `bankroll_history`: 资金账户毫秒级完整审计流水
-12. `strategy_versions`: 策略版本参数与哈希版本号
-13. `model_versions`: 机器学习模型版本与训练度量
-14. `backtest_runs`: 历史回测运行记录
-15. `system_events`: 系统启动、熔断告警、Fail-closed 事件追踪
+### 1. 双层资金池架构
+- **Active Bankroll（活跃本金）**：实际参与模拟下注的动态本金，默认初始 **10.00 USDC**，上限严格封顶为 **10.00 USDC**。
+- **Locked Profit（锁定利润池）**：交易盈利剥离金库，**永远不用于再次下注**，确保“已落袋利润绝对安全”。
+- **模式 B（Capital Recovery，默认推荐）**：
+  - 若活跃本金发生回撤（例如亏损至 9.00 USDC），后续交易盈利优先补足活跃本金至 10.00 USDC 封顶；
+  - 超过 10.00 USDC 的溢出盈利部分，**100% 自动划入 Locked Profit 锁定**。
+- **模式 A（Profit Isolation）**：
+  - 无论活跃本金当前是否处于回撤状态，每一笔平仓盈利的净收益均直接 100% 锁定入 Locked Profit。
 
----
-
-## 五、快速开始
-
-### 1. 编译系统
-```bash
-cargo build
-```
-
-### 2. 运行单元与集成测试
-```bash
-cargo test
-cargo test --test phase1_integration
-```
-
-### 3. 启动实时核心服务
-```bash
-cargo run
-```
-
-### 4. 验证服务状态
-```bash
-# 健康状态与安全守卫确认
-curl http://127.0.0.1:8080/api/v1/health
-
-# 安全锁状态
-curl http://127.0.0.1:8080/api/v1/safety
-
-# 当前资金状态
-curl http://127.0.0.1:8080/api/v1/paper/bankroll
-
-# 系统审计日志
-curl http://127.0.0.1:8080/api/v1/events
-```
+### 2. 四重硬性风控熔断器（Circuit Breakers）
+| 风控项 | 阈值参数 | 触发机制与处理动作 |
+| :--- | :--- | :--- |
+| **本金最低下限** | `bankroll.minimum = 2.0 USDC` | 若活跃本金 $\le 2$ USDC，全系统自动停机，禁止一切新开仓 |
+| **单日最大亏损** | `risk.daily_loss_limit = 2.0 USDC` | 当日累计净亏损达到 2 USDC，触发熔断，当日禁止开仓 |
+| **最大回撤限制** | `risk.max_drawdown = 20%` | 从本金历史峰值回撤达到 20%，系统暂停开仓 |
+| **连续亏损冷静** | `risk.max_consecutive_losses = 5 次` | 连续遭遇 5 次亏损，自动进入 **30 分钟策略冷静期** |
 
 ---
 
-## 六、开发阶段推进计划
+## 五、37 维量化特征矩阵速查
 
-- [x] **Phase 1: 项目骨架、数据库 Schema、配置系统、底层安全守卫、基础 API**
-- [ ] **Phase 2: Binance / OKX / Bybit / Coinbase 实时 WebSocket 行情采集**
-- [ ] **Phase 3: Polymarket 市场发现、CLOB 订单簿与结算结果采集**
-- [ ] **Phase 4: 统一行情引擎与跨交易所复合价格计算**
-- [ ] **Phase 5: Feature Engine（OBI、CVD、波动率、微观结构特征）**
-- [ ] **Phase 6: 数据归档与时序历史数据库**
-- [ ] **Phase 7: LightGBM / XGBoost 基线预测模型**
-- [ ] **Phase 8: 概率校准 (Isotonic Regression / Platt Scaling)**
-- [ ] **Phase 9: Strategy Engine（EV 计算、多重过滤、动态打分）**
-- [ ] **Phase 10: 深度遍历与滑点延迟 Paper Execution Engine**
-- [ ] **Phase 11: 资金与风控引擎实时状态机**
-- [ ] **Phase 12: 实时端到端 Paper Trading 闭环运行**
-- [ ] **Phase 13: 历史回测引擎 (Backtest Engine)**
-- [ ] **Phase 14: Tick 级高倍速行情回放引擎 (Replay Engine)**
-- [ ] **Phase 15: 现代化 React + Vite 量化交易 Dashboard**
-- [ ] **Phase 16: 长期运行稳定性与无偏样本验证**
-- [ ] **Phase 17: 性能优化 (延迟降低与内存分析)**
-- [ ] **Phase 18: 生产部署、自动化监控与告警**
+系统为每一个资产（BTC, ETH, SOL）每 100ms 计算 37 维高精特征：
+1. **多周期对数收益率 (6 维)**：`return_1s`, `return_3s`, `return_5s`, `return_10s`, `return_30s`, `return_60s`
+2. **多周期已实现波动率 (4 维)**：`realized_vol_5s`, `realized_vol_10s`, `realized_vol_30s`, `realized_vol_60s`
+3. **价格动力学速度与加速度 (3 维)**：`velocity_5s`, `velocity_15s`, `acceleration_5s_15s`
+4. **当前开盘偏离特征 (3 维)**：`distance_from_open`, `distance_percent`, `distance_to_vol_ratio`
+5. **周期时间状态 (3 维)**：`remaining_seconds`, `elapsed_seconds`, `time_decay_factor` ($\sqrt{T_{rem}/300}$)
+6. **跨交易所价差离散度 (3 维)**：`spread_binance_okx`, `spread_binance_bybit`, `spread_binance_coinbase`
+7. **资金流与累积成交差 CVD (4 维)**：`cvd_5s`, `cvd_15s`, `cvd_30s`, `cvd_60s`
+8. **主动买卖订单失衡度 (4 维)**：`trade_imbalance_5s`, `trade_imbalance_15s`, `trade_imbalance_30s`, `trade_imbalance_60s`
+9. **Polymarket 盘口微观结构 (7 维)**：`poly_obi_top5`, `poly_obi_top10`, `poly_obi_top20`, `poly_spread`, `poly_total_liquidity`, `poly_implied_prob`, `composite_price`
+
+---
+
+## 六、策略引擎与 7 重硬过滤器
+
+系统在发出任何交易信号前，必须 **100% 串行通过 7 重硬性门控（Fail-Closed）**：
+1. **Gate 1 - 新鲜度门控**：所有上游交易所数据延迟必须 $< 2000\text{ms}$，时钟漂移 $< 1000\text{ms}$。
+2. **Gate 2 - 周期时间窗门控**：剩余时间必须在 $15\text{s} \le T_{\text{rem}} \le 285\text{s}$ 之间，过滤开盘第一秒与收盘抢跑异常。
+3. **Gate 3 - 预测概率置信门控**：模型校准后胜率 $P \ge 70\%$。
+4. **Gate 4 - 进场价格上限门控**：买入 Ask 价格不得超过 $0.85$（避免胜率过高但赔率过差的负期望交易）。
+5. **Gate 5 - 盘口价差门控**：Polymarket 买卖价差必须 $\le 0.04$ USDC。
+6. **Gate 6 - 盘口流动性门控**：订单簿对应方向挂单深度必须 $\ge 300.0$ USDC。
+7. **Gate 7 - 资金风控熔断门控**：系统风控状态必须为 NORMAL，无连续亏损冷静期且活跃资金 $\ge \text{Stake}$。
+
+通过硬性门控后，触发 **[0..100] 机会评分卡**：
+- **胜率分 (30分)**：校准后概率越高得分越高；
+- **净 Edge 分 (25分)**：预期毛收益扣除手续费 (1.2%) 与滑点 (0.5%) 后的净优势；
+- **时间窗口分 (20分)**：剩余 60s ~ 180s 处于黄金博弈窗获得满分；
+- **微观结构 OBI 分 (15分)**：订单簿深度失衡方向与预测方向一致获得加分；
+- **动量与波动率分 (10分)**：短周期加速度与顺势波动率加分；
+- **总分阈值**：低于 60 分自动判为 `SKIP`，60~70 为 Low，70~80 为 Medium，80~90 为 High，90+ 为 Very High。
+
+---
+
+## 七、真实订单簿深度穿透撮合（Section 21）
+
+本系统坚决不采用“假设以挂单价全额成交”的虚假假设，而是严格根据实际订单簿深度进行逐层穿透：
+1. **深度穿透（Depth-Walking Fill）**：遍历实际 Ask 订单簿档位，计算实际成交均价 $P_{\text{fill}}$；
+2. **滑点惩罚**：$\text{Slippage} = P_{\text{fill}} - P_{\text{quote}}$；
+3. **交易手续费扣除**：$\text{Fee} = \text{Stake} \times 1.2\%$；
+4. **实际股份数计算**：$\text{Shares} = \frac{\text{Stake} - \text{Fee}}{P_{\text{fill}}}$。
+
+---
+
+## 八、全套 REST API 接口清单
+
+| 类别 | 请求方式 | 接口端点 | 描述 |
+| :--- | :--- | :--- | :--- |
+| **系统与健康** | `GET` | `/api/v1/health` | 系统健康、安全守卫状态、交易所新鲜度 |
+| | `GET` | `/api/v1/safety` | 严格安全锁签名与实盘禁用状态校验 |
+| | `GET` | `/api/v1/config` | 运行时脱敏只读系统配置 |
+| | `GET` | `/api/v1/events` | 审计安全事件与风控日志流 |
+| **行情与微观** | `GET` | `/api/v1/collector/prices` | Binance / OKX / Bybit / Coinbase 实时行情 |
+| | `GET` | `/api/v1/composite/price/{asset}` | 稳健综合价格指数、收益率与已实现波动率 |
+| | `GET` | `/api/v1/polymarket/markets` | Polymarket 5分钟周期活跃市场列表 |
+| | `GET` | `/api/v1/polymarket/book/{asset}` | 5分钟二元盘口完整深度、买卖价差与 OBI |
+| **特征与模型** | `GET` | `/api/v1/features/latest/{asset}`| 37 维实时高精量化特征快照 |
+| | `GET` | `/api/v1/models/prediction/{asset}`| 逻辑回归与校准后胜率预测、特征贡献度 |
+| | `GET` | `/api/v1/dataset/summary` | 本地 SQLite 数据集样本统计与正负平衡度 |
+| **策略与模拟** | `GET` | `/api/v1/strategy/signals/latest` | 最新交易决策信号（`BUY_UP` / `BUY_DOWN` / `SKIP`） |
+| | `GET` | `/api/v1/paper/bankroll` | 活跃本金、锁定利润与熔断状态 |
+| | `GET` | `/api/v1/risk/status` | 每日亏损限额、峰值回撤与连亏计数 |
+| | `GET` | `/api/v1/paper/positions/active` | 当前活跃模拟持仓与未实现浮盈 |
+| | `GET` | `/api/v1/paper/results` | 模拟订单历史交割结算盈亏明细 |
+| | `GET` | `/api/v1/paper/statistics` | 胜率、盈亏比、总收益等综合统计 |
+| **回测引擎** | `POST` | `/api/v1/backtest/run` | 触发事件驱动历史回测模拟 |
+| | `GET` | `/api/v1/backtest/latest` | 获取最新回测报告与净值曲线 |
+| | `GET` | `/api/v1/backtest/history` | 历史回测运行记录列表 |
+| **逐帧回放** | `POST` | `/api/v1/replay/start` | 启动历史行情逐帧回放引擎 |
+| | `POST` | `/api/v1/replay/pause` | 暂停回放 |
+| | `POST` | `/api/v1/replay/resume` | 继续回放 |
+| | `POST` | `/api/v1/replay/step` | 单步逐帧步进（Step 1 Frame） |
+| | `POST` | `/api/v1/replay/seek` | 进度条时间/帧索引精确定位 |
+| | `POST` | `/api/v1/replay/speed` | 设置回放倍速（1x, 5x, 10x, 20x, 50x） |
+| | `GET` | `/api/v1/replay/status` | 当前回放状态与当前帧诊断指标 |
+
+---
+
+## 九、快速启动指南
+
+### 环境要求
+- **Rust**: 1.85+（带 Cargo）
+- **Node.js**: v18+（推荐 v20 或 v24）及 npm
+- **操作系统**: Windows / macOS / Linux
+
+### 一键启动（推荐）
+在项目根目录下通过 PowerShell 执行：
+```powershell
+.\scripts\start_all.ps1
+```
+该脚本将自动执行：
+1. 检查并构建前端控制台静态资源至 `frontend/dist`；
+2. 启动 Rust 高性能后台服务（端口 `8080`）；
+3. 自动在浏览器中打开全功能监控控制台：`http://127.0.0.1:8080`。
+
+### 分步手动启动
+#### 1. 启动后台服务
+```bash
+cargo run --manifest-path backend/Cargo.toml
+```
+
+#### 2. 启动前端 Vite 开发服务（可选）
+```bash
+cd frontend
+npm install
+npm run dev
+```
+打开 `http://localhost:3000` 即可实时热更新开发。
+
+---
+
+## 十、自动化测试验证套件
+
+系统拥有全套 14 组端到端集成测试，测试覆盖率达到 100%：
+```powershell
+.\scripts\run_all_tests.ps1
+```
+或直接运行 Cargo 测试：
+```bash
+cargo test -- --nocapture
+```
+
+测试覆盖清单：
+- `phase1_integration`: 内核级安全拒绝、SQLite 15 表迁移、健康检查；
+- `phase2_collector_integration`: 跨所归一化、Fail-closed 新鲜度中断；
+- `phase3_polymarket_integration`: 5M周期推进、订单簿深度与结算解析；
+- `phase4_composite_integration`: 综合价格指数、异常报价剔除；
+- `phase5_feature_integration`: 37维特征对齐、时钟漂移检测；
+- `phase6_dataset_integration`: 数据集严格无未来泄露 Walk-Forward 切分；
+- `phase7_models_integration`: 逻辑回归在线训练、Platt 校准器胜率压缩；
+- `phase9_strategy_integration`: 7 重硬过滤器拦截、机会评分体系；
+- `phase10_execution_integration`: Section 21 深度穿透、流动性不足拒单；
+- `phase11_risk_integration`: 模式 B 本金回收封顶、模式 A 隔离、四重熔断；
+- `phase12_closed_loop_integration`: 真实结算闭环驱动、资金账本审计；
+- `phase13_backtest_integration`: 历史回测驱动、Sharpe/Sortino/Calmar 计算；
+- `phase14_replay_integration`: 历史逐帧回放、单步前进、时间定位。
+
+---
+
+## 十一、免责声明与安全声明
+
+1. 本系统仅供量化策略研究、模拟推演与学术回测验证使用。
+2. 系统的 `SafetyGuard` 强制锁定实盘禁止状态，系统内不存在任何真实资金接口或私钥。
+3. 严禁修改安全守卫代码用于任何形式的未授权真实交易，开发者不对任何个人衍生行为承担法律与财务责任。
