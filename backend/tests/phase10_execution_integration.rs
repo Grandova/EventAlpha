@@ -127,6 +127,11 @@ async fn setup_execution_test_app() -> (
         db.clone(),
         models.clone(),
     ));
+    let replay = Arc::new(poly_quant_backend::replay::ReplayEngine::new(
+        db.clone(),
+        models.clone(),
+        strategy.clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -140,6 +145,7 @@ async fn setup_execution_test_app() -> (
         execution: execution.clone(),
         risk,
         backtest,
+        replay,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

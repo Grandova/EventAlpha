@@ -119,6 +119,11 @@ async fn setup_risk_test_app() -> (axum::Router, Arc<RiskManager>, Arc<Database>
         db.clone(),
         models.clone(),
     ));
+    let replay = Arc::new(poly_quant_backend::replay::ReplayEngine::new(
+        db.clone(),
+        models.clone(),
+        strategy.clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -132,6 +137,7 @@ async fn setup_risk_test_app() -> (axum::Router, Arc<RiskManager>, Arc<Database>
         execution,
         risk: risk.clone(),
         backtest,
+        replay,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

@@ -15,6 +15,9 @@ use tower_http::trace::TraceLayer;
 use crate::backtest::{BacktestEngine, BacktestRequest, BacktestResult};
 use crate::collector::freshness::FreshnessReport;
 use crate::collector::{CollectorManager, PriceSummary};
+use crate::replay::{
+    ReplayConfig, ReplayEngine, ReplayFrame, ReplayStateResponse, SeekRequest, SpeedRequest,
+};
 use crate::composite::{CompositePriceEngine, CompositePriceSnapshot};
 use crate::config::AppConfig;
 use crate::dataset::{DatasetExporter, DatasetSummary};
@@ -47,6 +50,7 @@ pub struct AppState {
     pub execution: Arc<PaperExecutionEngine>,
     pub risk: Arc<RiskManager>,
     pub backtest: Arc<BacktestEngine>,
+    pub replay: Arc<ReplayEngine>,
     pub start_time_ms: i64,
 }
 
@@ -113,6 +117,15 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/backtest/run", post(handle_backtest_run))
         .route("/api/v1/backtest/latest", get(handle_backtest_latest))
         .route("/api/v1/backtest/history", get(handle_backtest_history))
+        .route("/api/v1/replay/start", post(handle_replay_start))
+        .route("/api/v1/replay/pause", post(handle_replay_pause))
+        .route("/api/v1/replay/resume", post(handle_replay_resume))
+        .route("/api/v1/replay/step", post(handle_replay_step))
+        .route("/api/v1/replay/seek", post(handle_replay_seek))
+        .route("/api/v1/replay/speed", post(handle_replay_speed))
+        .route("/api/v1/replay/stop", post(handle_replay_stop))
+        .route("/api/v1/replay/status", get(handle_replay_status))
+        .route("/api/v1/replay/frames", get(handle_replay_frames))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -440,6 +453,69 @@ async fn handle_backtest_history(
     Json(state.backtest.get_backtest_history(limit).await)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct FramesQuery {
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+}
+
+async fn handle_replay_start(
+    State(state): State<AppState>,
+    Json(config): Json<ReplayConfig>,
+) -> Result<Json<ReplayStateResponse>, (StatusCode, String)> {
+    match state.replay.start(config).await {
+        Ok(res) => Ok(Json(res)),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
+    }
+}
+
+async fn handle_replay_pause(State(state): State<AppState>) -> Json<ReplayStateResponse> {
+    Json(state.replay.pause().await)
+}
+
+async fn handle_replay_resume(State(state): State<AppState>) -> Json<ReplayStateResponse> {
+    Json(state.replay.resume().await)
+}
+
+async fn handle_replay_step(State(state): State<AppState>) -> (StatusCode, Json<Option<ReplayFrame>>) {
+    let frame = state.replay.step().await;
+    (StatusCode::OK, Json(frame))
+}
+
+async fn handle_replay_seek(
+    State(state): State<AppState>,
+    Json(req): Json<SeekRequest>,
+) -> (StatusCode, Json<Option<ReplayFrame>>) {
+    let frame = state.replay.seek(req).await;
+    (StatusCode::OK, Json(frame))
+}
+
+async fn handle_replay_speed(
+    State(state): State<AppState>,
+    Json(req): Json<SpeedRequest>,
+) -> Json<serde_json::Value> {
+    let speed = state.replay.set_speed(req.speed_multiplier).await;
+    Json(serde_json::json!({ "speed_multiplier": speed }))
+}
+
+async fn handle_replay_stop(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.replay.stop().await;
+    Json(serde_json::json!({ "status": "stopped" }))
+}
+
+async fn handle_replay_status(State(state): State<AppState>) -> Json<ReplayStateResponse> {
+    Json(state.replay.get_state().await)
+}
+
+async fn handle_replay_frames(
+    State(state): State<AppState>,
+    Query(q): Query<FramesQuery>,
+) -> Json<Vec<ReplayFrame>> {
+    let offset = q.offset.unwrap_or(0);
+    let limit = q.limit.unwrap_or(100);
+    Json(state.replay.get_frames(offset, limit).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -540,6 +616,7 @@ assets: ["BTC", "ETH", "SOL"]
         ));
 
         let backtest = Arc::new(BacktestEngine::new(db.clone(), models.clone()));
+        let replay = Arc::new(ReplayEngine::new(db.clone(), models.clone(), strategy.clone()));
 
         AppState {
             config,
@@ -553,6 +630,7 @@ assets: ["BTC", "ETH", "SOL"]
             execution,
             risk,
             backtest,
+            replay,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

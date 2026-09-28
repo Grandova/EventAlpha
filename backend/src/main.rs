@@ -140,6 +140,13 @@ async fn main() -> Result<()> {
         models.clone(),
     ));
 
+    // 17. Initialize Historical Replay Engine
+    let replay = Arc::new(poly_quant_backend::replay::ReplayEngine::new(
+        db.clone(),
+        models.clone(),
+        strategy.clone(),
+    ));
+
     let start_time_ms = Utc::now().timestamp_millis();
     let state = AppState {
         config: config.clone(),
@@ -153,6 +160,7 @@ async fn main() -> Result<()> {
         execution: execution.clone(),
         risk: risk.clone(),
         backtest,
+        replay,
         start_time_ms,
     };
 

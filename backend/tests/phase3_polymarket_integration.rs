@@ -114,6 +114,11 @@ async fn setup_phase3_app() -> (axum::Router, Arc<PolymarketManager>, Arc<Databa
         db.clone(),
         models.clone(),
     ));
+    let replay = Arc::new(poly_quant_backend::replay::ReplayEngine::new(
+        db.clone(),
+        models.clone(),
+        strategy.clone(),
+    ));
 
     let state = AppState {
         config: config.clone(),
@@ -127,6 +132,7 @@ async fn setup_phase3_app() -> (axum::Router, Arc<PolymarketManager>, Arc<Databa
         execution,
         risk,
         backtest,
+        replay,
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);
