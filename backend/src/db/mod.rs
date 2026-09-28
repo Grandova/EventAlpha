@@ -37,7 +37,10 @@ impl Database {
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
             .busy_timeout(std::time::Duration::from_millis(5000))
-            .foreign_keys(true);
+            .foreign_keys(true)
+            .pragma("cache_size", "-16000")
+            .pragma("temp_store", "memory")
+            .pragma("mmap_size", "268435456");
 
         let pool = SqlitePoolOptions::new()
             .max_connections(config.database.max_connections)

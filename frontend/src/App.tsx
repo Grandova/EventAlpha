@@ -11,6 +11,7 @@ import { ReplayConsole } from './components/ReplayConsole';
 import { EventLogViewer } from './components/EventLogViewer';
 import { OrderbookVisualizer } from './components/OrderbookVisualizer';
 import { StrategyTuner } from './components/StrategyTuner';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { api } from './services/api';
 import { wsClient } from './services/ws';
 import {
@@ -205,68 +206,70 @@ export const App: React.FC = () => {
 
       {/* Main Tab Views */}
       <main>
-        {activeTab === 'dashboard' && (
-          <div className="space-y-4">
-            {/* Top row: Polymarket 5M Round & AI Opportunity Center */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-6">
-                <PolymarketRoundCard market={market} book={book} prediction={prediction} />
+        <ErrorBoundary fallbackTitle="Module Render Error">
+          {activeTab === 'dashboard' && (
+            <div className="space-y-4">
+              {/* Top row: Polymarket 5M Round & AI Opportunity Center */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-6">
+                  <PolymarketRoundCard market={market} book={book} prediction={prediction} />
+                </div>
+                <div className="lg:col-span-6">
+                  <OpportunityCenter signal={signal} prediction={prediction} />
+                </div>
               </div>
-              <div className="lg:col-span-6">
-                <OpportunityCenter signal={signal} prediction={prediction} />
-              </div>
+
+              {/* Orderbook Depth Ladder */}
+              <OrderbookVisualizer
+                asset={activeAsset}
+                book={book}
+                onRefresh={() => api.getPolymarketBook(activeAsset).then(setBook)}
+              />
+
+              {/* Middle row: Bankroll & Risk Management */}
+              <BankrollRiskMonitor bankroll={bankroll} risk={risk} />
+
+              {/* Bottom row: Paper Trading Blotter */}
+              <TradingBlotter
+                activePositions={activePositions}
+                recentOrders={recentOrders}
+                settledResults={settledResults}
+                statistics={statistics}
+              />
             </div>
+          )}
 
-            {/* Orderbook Depth Ladder */}
-            <OrderbookVisualizer
-              asset={activeAsset}
-              book={book}
-              onRefresh={() => api.getPolymarketBook(activeAsset).then(setBook)}
-            />
+          {activeTab === 'microstructure' && (
+            <div className="space-y-4">
+              <OrderbookVisualizer
+                asset={activeAsset}
+                book={book}
+                onRefresh={() => api.getPolymarketBook(activeAsset).then(setBook)}
+              />
+              <FeatureMonitor asset={activeAsset} features={features} />
+            </div>
+          )}
 
-            {/* Middle row: Bankroll & Risk Management */}
-            <BankrollRiskMonitor bankroll={bankroll} risk={risk} />
-
-            {/* Bottom row: Paper Trading Blotter */}
-            <TradingBlotter
-              activePositions={activePositions}
-              recentOrders={recentOrders}
-              settledResults={settledResults}
-              statistics={statistics}
-            />
-          </div>
-        )}
-
-        {activeTab === 'microstructure' && (
-          <div className="space-y-4">
-            <OrderbookVisualizer
-              asset={activeAsset}
-              book={book}
-              onRefresh={() => api.getPolymarketBook(activeAsset).then(setBook)}
-            />
+          {activeTab === 'features' && (
             <FeatureMonitor asset={activeAsset} features={features} />
-          </div>
-        )}
+          )}
 
-        {activeTab === 'features' && (
-          <FeatureMonitor asset={activeAsset} features={features} />
-        )}
+          {activeTab === 'tuning' && (
+            <StrategyTuner />
+          )}
 
-        {activeTab === 'tuning' && (
-          <StrategyTuner />
-        )}
+          {activeTab === 'backtest' && (
+            <BacktestConsole defaultAsset={activeAsset} />
+          )}
 
-        {activeTab === 'backtest' && (
-          <BacktestConsole defaultAsset={activeAsset} />
-        )}
+          {activeTab === 'replay' && (
+            <ReplayConsole defaultAsset={activeAsset} />
+          )}
 
-        {activeTab === 'replay' && (
-          <ReplayConsole defaultAsset={activeAsset} />
-        )}
-
-        {activeTab === 'events' && (
-          <EventLogViewer />
-        )}
+          {activeTab === 'events' && (
+            <EventLogViewer />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Footer / Safety Lock Legal Invariant */}

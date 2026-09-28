@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS markets (
 );
 CREATE INDEX IF NOT EXISTS idx_markets_asset_status ON markets(asset, status);
 CREATE INDEX IF NOT EXISTS idx_markets_end_time ON markets(end_time);
+CREATE INDEX IF NOT EXISTS idx_markets_start_end ON markets(start_time, end_time);
 
 -- 2. Market Ticks (Polymarket orderbook & pricing ticks)
 CREATE TABLE IF NOT EXISTS market_ticks (
@@ -122,6 +123,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     FOREIGN KEY(market_id) REFERENCES markets(id)
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_mid_ts ON predictions(market_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_predictions_asset_ts ON predictions(asset, timestamp);
+CREATE INDEX IF NOT EXISTS idx_predictions_action ON predictions(recommended_action, timestamp);
 
 -- 8. Paper Orders
 CREATE TABLE IF NOT EXISTS paper_orders (
@@ -142,6 +145,7 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     FOREIGN KEY(market_id) REFERENCES markets(id)
 );
 CREATE INDEX IF NOT EXISTS idx_paper_orders_mid ON paper_orders(market_id);
+CREATE INDEX IF NOT EXISTS idx_paper_orders_status ON paper_orders(status, created_at);
 
 -- 9. Paper Positions
 CREATE TABLE IF NOT EXISTS paper_positions (
@@ -159,6 +163,8 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     created_at INTEGER NOT NULL,
     FOREIGN KEY(market_id) REFERENCES markets(id)
 );
+CREATE INDEX IF NOT EXISTS idx_paper_positions_status_mid ON paper_positions(status, market_id);
+CREATE INDEX IF NOT EXISTS idx_paper_positions_asset ON paper_positions(asset);
 
 -- 10. Paper Results (Settled trades with complete ledger balance attribution)
 CREATE TABLE IF NOT EXISTS paper_results (

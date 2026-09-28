@@ -11,6 +11,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
@@ -166,6 +167,7 @@ pub fn create_router(state: AppState) -> Router {
 
     router
         .layer(cors)
+        .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

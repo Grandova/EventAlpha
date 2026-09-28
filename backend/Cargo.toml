@@ -10,7 +10,7 @@ tokio = { version = "1.43", features = ["full"] }
 # Web API framework
 axum = { version = "0.8", features = ["ws"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs", "compression-full"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

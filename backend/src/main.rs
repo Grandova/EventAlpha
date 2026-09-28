@@ -242,4 +242,10 @@ async fn shutdown_signal(db: Arc<Database>) {
     {
         error!("Failed to record shutdown event: {:?}", e);
     }
+
+    // Flush SQLite WAL buffer completely into main database file
+    info!("Flushing SQLite WAL checkpoint to disk...");
+    let _ = sqlx::raw_sql("PRAGMA wal_checkpoint(TRUNCATE);")
+        .execute(db.pool())
+        .await;
 }
