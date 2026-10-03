@@ -196,6 +196,13 @@ impl ModelManager {
         self.logistic.read().config.clone()
     }
 
+    pub fn update_logistic_weights_and_bias(&self, weights: Vec<f64>, bias: f64, version: String) {
+        let mut model = self.logistic.write();
+        model.config.weights = weights;
+        model.config.bias = bias;
+        model.config.version = version;
+    }
+
     pub fn get_latest_prediction(&self, asset: Asset) -> Option<ModelPrediction> {
         self.latest_predictions.get(&asset).map(|p| p.clone())
     }

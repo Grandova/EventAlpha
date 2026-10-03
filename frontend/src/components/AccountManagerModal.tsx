@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   AlertTriangle,
   Lock,
-  ExternalLink,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { PolymarketAccountPublic, CreateAccountRequest } from '../types';
@@ -165,26 +164,26 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl shadow-cyan-950/40 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-white dark:bg-[#202528] text-[#363949] dark:text-[#edeffd] rounded-3xl shadow-[0_2rem_3rem_rgba(132,139,200,0.3)] dark:shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800 bg-[#f6f6f9]/60 dark:bg-[#181a1e]/60">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 text-cyan-400 border border-cyan-500/30">
+            <div className="p-2.5 rounded-2xl bg-[#6c9bcf]/15 text-[#6c9bcf] border border-[#6c9bcf]/30">
               <Wallet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-white tracking-wide flex items-center gap-2">
-                Polymarket 账户与实盘授权
+              <h3 className="text-base font-extrabold text-[#363949] dark:text-white tracking-wide">
+                Polymarket 账户授权与资金管理
               </h3>
-              <p className="text-xs text-slate-400">
-                管理已绑定的 Polygon L2 CLOB 交易账户及资金状态
+              <p className="text-xs text-[#7d8da1] dark:text-slate-400">
+                Polygon L2 CLOB 交易账户凭据与链上余额
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+            className="p-2 rounded-xl text-[#7d8da1] hover:text-[#363949] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -192,42 +191,41 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
         {/* Content Area */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
-          {/* Notifications */}
           {error && (
-            <div className="flex items-center gap-2 p-3 rounded-2xl bg-rose-950/50 border border-rose-800/60 text-rose-300 text-xs font-mono">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-[#ff0060]/10 border border-[#ff0060]/20 text-[#ff0060] text-xs font-mono">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 p-3 rounded-2xl bg-emerald-950/50 border border-emerald-800/60 text-emerald-300 text-xs font-mono">
-              <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+            <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-[#1b9c85]/10 border border-[#1b9c85]/20 text-[#1b9c85] text-xs font-mono">
+              <CheckCircle className="w-4 h-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
           )}
 
           {/* Security Notice */}
-          <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-800/40 text-xs text-slate-300 space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-cyan-400">
+          <div className="p-4 rounded-2xl bg-[#6c9bcf]/10 border border-[#6c9bcf]/20 text-xs text-[#363949] dark:text-slate-300 space-y-1">
+            <div className="flex items-center gap-2 font-bold text-[#6c9bcf]">
               <Lock className="w-4 h-4" />
-              <span>安全隔离与本地私钥保护机制</span>
+              <span>本地凭据隔离与 HMAC-SHA256 签名保护</span>
             </div>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              API Secret 与 Passphrase 仅存储于宿主机本地 SQLite 数据库中，用于计算 Polymarket CLOB HMAC-SHA256 签名，前台展示自动掩码掩盖。
+            <p className="text-[11px] text-[#7d8da1] dark:text-slate-400 leading-relaxed">
+              API Secret 与 Passphrase 仅存储于本地 SQLite 数据库中，用于执行 Polymarket CLOB 请求签名，前端展示已全面脱敏掩码。
             </p>
           </div>
 
           {/* Account List */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-[#7d8da1] font-mono">
                 已绑定账户 ({accounts.length})
               </span>
               {!showAddForm && (
                 <button
                   onClick={() => setShowAddForm(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 text-white text-xs font-bold hover:brightness-110 shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#6c9bcf] text-white text-xs font-bold hover:brightness-105 shadow-md shadow-[#6c9bcf]/20 transition-all cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>添加新账户</span>
@@ -236,18 +234,18 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             </div>
 
             {accounts.length === 0 && !showAddForm ? (
-              <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40">
-                <Wallet className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-300">尚未添加任何 Polymarket 账户</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  实盘交易必须至少绑定一个具有 Polygon USDC 余额的账户方可解锁。
+              <div className="text-center py-10 px-4 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-[#f6f6f9]/50 dark:bg-[#181a1e]/50">
+                <Wallet className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                <p className="text-sm font-bold text-[#363949] dark:text-white">尚未绑定任何 Polymarket 账户</p>
+                <p className="text-xs text-[#7d8da1] mt-1 max-w-sm mx-auto">
+                  实盘交易必须至少绑定一个具有 Polygon USDC 余额的账户。
                 </p>
                 <button
                   onClick={() => setShowAddForm(true)}
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-white text-xs font-bold hover:bg-cyan-400 transition-all cursor-pointer"
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6c9bcf] text-white text-xs font-bold hover:bg-[#5b89be] transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>立即添加 Polymarket 账户</span>
+                  <span>立即添加账户</span>
                 </button>
               </div>
             ) : (
@@ -257,57 +255,48 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                     key={acc.id}
                     className={`p-4 rounded-2xl border transition-all duration-200 ${
                       acc.is_active
-                        ? 'bg-slate-900/90 border-cyan-500/50 shadow-lg shadow-cyan-950/30 ring-1 ring-cyan-500/30'
-                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                        ? 'bg-[#6c9bcf]/5 border-[#6c9bcf] shadow-sm'
+                        : 'bg-[#f6f6f9] dark:bg-[#181a1e] border-slate-200 dark:border-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2.5">
-                          <h4 className="text-sm font-bold text-white tracking-wide">
+                          <h4 className="text-sm font-extrabold text-[#363949] dark:text-white">
                             {acc.label}
                           </h4>
                           {acc.is_active ? (
-                            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-mono">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#1b9c85]/15 text-[#1b9c85] font-mono">
                               当前活跃
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 font-mono">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200 dark:bg-slate-700 text-[#7d8da1] font-mono">
                               待命
                             </span>
                           )}
                         </div>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-mono text-slate-400">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs font-mono text-[#7d8da1]">
                           <div>
-                            <span className="text-slate-500">钱包:</span>{' '}
-                            <span className="text-slate-300">
+                            <span>钱包:</span>{' '}
+                            <span className="text-[#363949] dark:text-slate-300 font-bold">
                               {acc.wallet_address.slice(0, 6)}...{acc.wallet_address.slice(-4)}
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-500">API Key:</span>{' '}
-                            <span className="text-slate-300">{acc.api_key_masked}</span>
+                            <span>API Key:</span>{' '}
+                            <span className="text-[#363949] dark:text-slate-300">{acc.api_key_masked}</span>
                           </div>
-                          {acc.proxy_wallet_address && (
-                            <div>
-                              <span className="text-slate-500">代理:</span>{' '}
-                              <span className="text-slate-300">
-                                {acc.proxy_wallet_address.slice(0, 6)}...
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
 
                       {/* Right: Balance & Actions */}
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <div className="text-[10px] text-slate-500 uppercase font-mono">
+                          <div className="text-[10px] text-[#7d8da1] uppercase font-mono">
                             Polygon USDC
                           </div>
-                          <div className="text-sm font-bold font-mono text-cyan-400">
+                          <div className="text-base font-extrabold font-mono text-[#1b9c85]">
                             ${acc.balance_usdc.toFixed(2)}
                           </div>
                         </div>
@@ -317,11 +306,11 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                             title="刷新链上余额"
                             disabled={refreshingId === acc.id}
                             onClick={() => handleRefreshBalance(acc.id)}
-                            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer disabled:opacity-50"
+                            className="p-2 rounded-xl bg-white dark:bg-[#202528] shadow-sm hover:bg-slate-50 text-[#7d8da1] hover:text-[#363949] dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
                           >
                             <RefreshCw
                               className={`w-3.5 h-3.5 ${
-                                refreshingId === acc.id ? 'animate-spin text-cyan-400' : ''
+                                refreshingId === acc.id ? 'animate-spin text-[#6c9bcf]' : ''
                               }`}
                             />
                           </button>
@@ -329,7 +318,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                           {!acc.is_active && (
                             <button
                               onClick={() => handleActivate(acc.id)}
-                              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-400 border border-slate-700 hover:border-cyan-500/40 text-xs font-bold transition-all cursor-pointer"
+                              className="px-3 py-1.5 rounded-xl bg-[#6c9bcf] text-white text-xs font-bold hover:brightness-105 transition-all cursor-pointer"
                             >
                               激活
                             </button>
@@ -338,7 +327,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                           <button
                             title="删除账户"
                             onClick={() => handleDelete(acc.id, acc.label)}
-                            className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700/60 hover:border-rose-800/50 transition-all cursor-pointer"
+                            className="p-2 rounded-xl bg-white dark:bg-[#202528] shadow-sm hover:bg-[#ff0060]/10 text-[#7d8da1] hover:text-[#ff0060] transition-all cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -353,16 +342,16 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
           {/* Add Account Form */}
           {showAddForm && (
-            <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-700/80 space-y-4 animate-slideDown">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Key className="w-4 h-4 text-cyan-400" />
+            <div className="p-5 rounded-3xl bg-[#f6f6f9] dark:bg-[#181a1e] border border-slate-200 dark:border-slate-800 space-y-4 animate-slideDown">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h4 className="text-sm font-bold text-[#363949] dark:text-white flex items-center gap-2">
+                  <Key className="w-4 h-4 text-[#6c9bcf]" />
                   <span>绑定 Polymarket CLOB 凭据</span>
                 </h4>
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="text-xs text-slate-400 hover:text-white"
+                  className="text-xs text-[#7d8da1] hover:text-[#363949] dark:hover:text-white"
                 >
                   取消
                 </button>
@@ -370,7 +359,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
               <form onSubmit={handleFormSubmit} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
                     账户别名 / 标签 *
                   </label>
                   <input
@@ -379,13 +368,13 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                     placeholder="例: Polymarket 主力实盘账户 01"
                     value={formData.label}
                     onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
                       Polygon 钱包地址 (0x) *
                     </label>
                     <input
@@ -396,12 +385,12 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                       onChange={(e) =>
                         setFormData({ ...formData, wallet_address: e.target.value })
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
                       Proxy 代理钱包 (可选)
                     </label>
                     <input
@@ -411,14 +400,14 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                       onChange={(e) =>
                         setFormData({ ...formData, proxy_wallet_address: e.target.value })
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-3 pt-1">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
                       Polymarket CLOB API Key *
                     </label>
                     <input
@@ -427,13 +416,13 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                       value={formData.api_key}
                       onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1">
+                      <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
                         API Secret (Base64) *
                       </label>
                       <input
@@ -444,12 +433,12 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                         onChange={(e) =>
                           setFormData({ ...formData, api_secret: e.target.value })
                         }
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1">
+                      <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
                         API Passphrase *
                       </label>
                       <input
@@ -460,7 +449,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                         onChange={(e) =>
                           setFormData({ ...formData, api_passphrase: e.target.value })
                         }
-                        className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700/80 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                       />
                     </div>
                   </div>
@@ -470,17 +459,17 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAddForm(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-[#363949] dark:text-white text-xs font-semibold transition-colors cursor-pointer"
                   >
                     取消
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-500 text-white text-xs font-bold hover:brightness-110 shadow-lg shadow-cyan-500/25 transition-all cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#6c9bcf] text-white text-xs font-bold hover:brightness-105 shadow-md shadow-[#6c9bcf]/20 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <ShieldCheck className="w-4 h-4" />
-                    <span>{loading ? '验证并加密保存中...' : '确认安全添加'}</span>
+                    <span>{loading ? '保存中...' : '确认安全绑定'}</span>
                   </button>
                 </div>
               </form>
@@ -489,14 +478,14 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-500 font-mono">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-[#f6f6f9]/60 dark:bg-[#181a1e]/60 flex items-center justify-between text-xs text-[#7d8da1] font-mono">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>POLYGON NETWORK MAINNET</span>
+            <span className="w-2 h-2 rounded-full bg-[#1b9c85]"></span>
+            <span>POLYGON MAINNET</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-[#6c9bcf] text-white text-xs font-bold transition-all cursor-pointer"
           >
             完成
           </button>

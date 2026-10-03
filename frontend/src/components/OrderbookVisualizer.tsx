@@ -40,19 +40,19 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
   return (
     <div className="asmr-card p-6">
       {/* Title & Selector */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--color-light)]">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-cyan-950 border border-cyan-800/80 rounded">
-            <Layers className="h-4 w-4 text-cyan-400" />
+          <div className="p-2 bg-blue-50 dark:bg-cyan-950/60 border border-blue-200 dark:border-cyan-800/80 rounded-xl">
+            <Layers className="h-4 w-4 text-[var(--color-primary)]" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <h3 className="text-sm font-bold text-[var(--color-dark)] flex items-center gap-2">
               CLOB Orderbook Depth Ladder
-              <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/60">
+              <span className="text-[10px] text-[var(--color-primary)] font-mono bg-blue-50 dark:bg-cyan-950/60 px-2 py-0.5 rounded-full border border-blue-200 dark:border-cyan-800/60">
                 {asset} 5M
               </span>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--color-info-dark)]">
               Live Polymarket L2 Depth, Spreads & Orderbook Imbalance (OBI)
             </p>
           </div>
@@ -60,13 +60,13 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
 
         <div className="flex items-center gap-2">
           {/* UP / DOWN Token Selector */}
-          <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+          <div className="flex bg-[var(--color-background)] border border-[var(--color-light)] rounded-xl p-0.5">
             <button
               onClick={() => setActiveSide('UP')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
                 activeSide === 'UP'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#1b9c85] text-white shadow-sm'
+                  : 'text-[var(--color-info-dark)] hover:text-[var(--color-dark)]'
               }`}
             >
               <ArrowUp className="h-3 w-3" />
@@ -74,10 +74,10 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
             </button>
             <button
               onClick={() => setActiveSide('DOWN')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
                 activeSide === 'DOWN'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-[#ff0060] text-white shadow-sm'
+                  : 'text-[var(--color-info-dark)] hover:text-[var(--color-dark)]'
               }`}
             >
               <ArrowDown className="h-3 w-3" />
@@ -88,7 +88,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
           {onRefresh && (
             <button
               onClick={onRefresh}
-              className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-400 hover:text-cyan-400 transition-colors"
+              className="p-1.5 bg-[var(--color-background)] hover:bg-[var(--color-light)] border border-[var(--color-light)] rounded-xl text-[var(--color-info-dark)] hover:text-[var(--color-dark)] transition-colors"
               title="Refresh orderbook"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -98,56 +98,56 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
       </div>
 
       {/* Summary Metrics Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        <div className="bg-slate-900/80 border border-slate-800/80 p-2.5 rounded-lg">
-          <div className="text-[10px] text-slate-400 font-semibold mb-0.5">BEST BID / ASK</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+        <div className="asmr-subcard p-3">
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">BEST BID / ASK</div>
           <div className="text-xs font-mono font-bold flex items-center gap-1">
-            <span className="text-emerald-400">${bestBid.toFixed(3)}</span>
-            <span className="text-slate-600">/</span>
-            <span className="text-rose-400">${bestAsk.toFixed(3)}</span>
+            <span className="text-[#1b9c85]">${bestBid.toFixed(3)}</span>
+            <span className="text-[var(--color-info-dark)]">/</span>
+            <span className="text-[#ff0060]">${bestAsk.toFixed(3)}</span>
           </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800/80 p-2.5 rounded-lg">
-          <div className="text-[10px] text-slate-400 font-semibold mb-0.5">MID & SPREAD</div>
-          <div className="text-xs font-mono font-bold text-white flex items-center justify-between">
+        <div className="asmr-subcard p-3">
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">MID & SPREAD</div>
+          <div className="text-xs font-mono font-bold text-[var(--color-dark)] flex items-center justify-between">
             <span>${mid.toFixed(3)}</span>
-            <span className="text-amber-400 text-[11px]">
+            <span className="text-amber-500 text-[11px] font-semibold">
               +{(spread * 100).toFixed(1)}¢
             </span>
           </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800/80 p-2.5 rounded-lg">
-          <div className="text-[10px] text-slate-400 font-semibold mb-0.5">OBI (TOP 5 / 10 / 20)</div>
+        <div className="asmr-subcard p-3">
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">OBI (TOP 5 / 10 / 20)</div>
           <div className="text-xs font-mono font-bold flex items-center gap-1.5">
-            <span className={obi5 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+            <span className={obi5 >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
               {obi5 >= 0 ? '+' : ''}{(obi5 * 100).toFixed(0)}%
             </span>
-            <span className="text-slate-600">|</span>
-            <span className={obi10 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+            <span className="text-[var(--color-info-dark)]">|</span>
+            <span className={obi10 >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
               {obi10 >= 0 ? '+' : ''}{(obi10 * 100).toFixed(0)}%
             </span>
-            <span className="text-slate-600">|</span>
-            <span className={obi20 >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+            <span className="text-[var(--color-info-dark)]">|</span>
+            <span className={obi20 >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
               {obi20 >= 0 ? '+' : ''}{(obi20 * 100).toFixed(0)}%
             </span>
           </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800/80 p-2.5 rounded-lg">
-          <div className="text-[10px] text-slate-400 font-semibold mb-0.5">TOTAL DEPTH (BID/ASK)</div>
-          <div className="text-xs font-mono font-bold text-slate-300">
+        <div className="asmr-subcard p-3">
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">TOTAL DEPTH (BID/ASK)</div>
+          <div className="text-xs font-mono font-bold text-[var(--color-dark)]">
             ${totalBidDepth.toFixed(0)} / ${totalAskDepth.toFixed(0)} USDC
           </div>
         </div>
       </div>
 
       {/* Two-Column Depth Ladder */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 font-mono text-xs">
         {/* Bids Ladder (Buy orders, green depth bars) */}
-        <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-          <div className="flex items-center justify-between text-[11px] font-bold text-emerald-400 pb-1.5 mb-1.5 border-b border-slate-800">
+        <div className="asmr-subcard p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-[#1b9c85] pb-2 mb-2 border-b border-[var(--color-light)]">
             <span>BIDS (BUY)</span>
             <span>SIZE (SHARES)</span>
             <span>TOTAL ($)</span>
@@ -155,7 +155,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
 
           <div className="space-y-1">
             {bids.length === 0 ? (
-              <div className="text-center py-6 text-slate-600 italic text-[11px]">
+              <div className="text-center py-6 text-[var(--color-info-dark)] italic text-[11px]">
                 No active bids in orderbook
               </div>
             ) : (
@@ -163,18 +163,18 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
                 const fillPct = Math.min(100, (level.size / maxSize) * 100);
                 const totalUsd = level.price * level.size;
                 return (
-                  <div key={`bid-${idx}`} className="relative flex items-center justify-between py-0.5 px-1 rounded overflow-hidden">
+                  <div key={`bid-${idx}`} className="relative flex items-center justify-between py-1 px-1.5 rounded-lg overflow-hidden">
                     <div
-                      className="absolute right-0 top-0 bottom-0 bg-emerald-950/40 rounded pointer-events-none"
+                      className="absolute right-0 top-0 bottom-0 bg-[#1b9c85]/15 rounded pointer-events-none"
                       style={{ width: `${fillPct}%` }}
                     />
-                    <span className="relative font-bold text-emerald-400 z-10">
+                    <span className="relative font-bold text-[#1b9c85] z-10">
                       ${level.price.toFixed(3)}
                     </span>
-                    <span className="relative text-slate-300 z-10">
+                    <span className="relative text-[var(--color-dark)] font-medium z-10">
                       {level.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
-                    <span className="relative text-slate-500 z-10 text-[10px]">
+                    <span className="relative text-[var(--color-info-dark)] z-10 text-[10px]">
                       ${totalUsd.toFixed(1)}
                     </span>
                   </div>
@@ -185,8 +185,8 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
         </div>
 
         {/* Asks Ladder (Sell orders, red depth bars) */}
-        <div className="bg-slate-950/70 border border-slate-800/80 rounded-lg p-2.5">
-          <div className="flex items-center justify-between text-[11px] font-bold text-rose-400 pb-1.5 mb-1.5 border-b border-slate-800">
+        <div className="asmr-subcard p-3.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-[#ff0060] pb-2 mb-2 border-b border-[var(--color-light)]">
             <span>ASKS (SELL)</span>
             <span>SIZE (SHARES)</span>
             <span>TOTAL ($)</span>
@@ -194,7 +194,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
 
           <div className="space-y-1">
             {asks.length === 0 ? (
-              <div className="text-center py-6 text-slate-600 italic text-[11px]">
+              <div className="text-center py-6 text-[var(--color-info-dark)] italic text-[11px]">
                 No active asks in orderbook
               </div>
             ) : (
@@ -202,18 +202,18 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
                 const fillPct = Math.min(100, (level.size / maxSize) * 100);
                 const totalUsd = level.price * level.size;
                 return (
-                  <div key={`ask-${idx}`} className="relative flex items-center justify-between py-0.5 px-1 rounded overflow-hidden">
+                  <div key={`ask-${idx}`} className="relative flex items-center justify-between py-1 px-1.5 rounded-lg overflow-hidden">
                     <div
-                      className="absolute right-0 top-0 bottom-0 bg-rose-950/40 rounded pointer-events-none"
+                      className="absolute right-0 top-0 bottom-0 bg-[#ff0060]/15 rounded pointer-events-none"
                       style={{ width: `${fillPct}%` }}
                     />
-                    <span className="relative font-bold text-rose-400 z-10">
+                    <span className="relative font-bold text-[#ff0060] z-10">
                       ${level.price.toFixed(3)}
                     </span>
-                    <span className="relative text-slate-300 z-10">
+                    <span className="relative text-[var(--color-dark)] font-medium z-10">
                       {level.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
-                    <span className="relative text-slate-500 z-10 text-[10px]">
+                    <span className="relative text-[var(--color-info-dark)] z-10 text-[10px]">
                       ${totalUsd.toFixed(1)}
                     </span>
                   </div>

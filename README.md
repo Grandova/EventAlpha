@@ -38,39 +38,42 @@
 - **全历史断点续传**：学习所得的模型权重、偏差与校准参数实时保存在 SQLite 数据库中，跨服务重启自愈继承，经验永不丢失。
 - **一键全量历史重训练**：支持基于历史所有结算盘面进行全样本 SGD 批量重训演化。
 
-### 3. AsmrProg-YT 现代微拟物与玻璃拟态 UI 控制台
-深度汲取 **[AsmrProg-YT Dashboard Designs](https://github.com/AsmrProg-YT/Dashboard-Designs)** 的视觉语言：
-- **黑曜石深色背景与半透明毛玻璃层**：`#090d16` 暗夜基底与 `backdrop-filter: blur(16px)`。
-- **SVG 环形动态进度指示器 (Circular Progress Rings)**：实时展现本金利用率、策略胜率与 5M 盘面倒计时。
-- **动态特征权重排行榜 (Top Feature Importance Ladder)**：可视化展示自学习过程中被模型动态增强或抑制的核心特征。
-- **全息微观盘口阶梯与双向深度图 (OrderBook Depth)**：实时渲染买卖五档、加权中价与 20 档失衡度 (OBI)。
+### 3. AsmrProg-YT 经典三栏式 Responsive Dashboard UI 控制台
+深度复刻 **[AsmrProg-YT Dashboard-Designs](https://github.com/AsmrProg-YT/Dashboard-Designs)** 的代表作设计语言：
+- **经典三栏式栅格布局 (3-Column Layout)**：
+  - **左侧导航栏 (Left Sidebar)**：带有经典红黑双环 AP 标识 (Double-Ring AP Logo)，激活状态配备标志性的左侧圆角竖条指示器 (Active Pill Indicator)；
+  - **中央主看板 (Main Analytics Area)**：顶部 Analytics 标题与日夜模式切换器，下接经典 SVG 环形进度指标卡片 (Circular Progress Rings)、活跃币种头像流 (Active Markets Row) 与精致 Recent Orders 订单流水表；
+  - **右侧多功能区 (Right Profile & Reminders)**：顶部 Profile 身份徽章卡片与活跃 Polymarket 账户状态，中下部配置实时行情策略备忘提醒 (Reminders) 以及虚线「+ Add Account」快速开户入口。
+- **日间白昼 (Light) 与深色暗夜 (Dark) 完美双模**：
+  - **日间模式**：`#f6f6f9` 浅灰极简底色，搭配纯白 `#ffffff` 圆角卡片与弥散柔和投影 `0 1.5rem 2rem rgba(132, 139, 200, 0.18)`；
+  - **深色模式**：`#181a1e` 暗夜底色与 `#202528` 高质感深灰卡片，通过顶部 Sun/Moon 按钮一键平滑切换，状态持久化至本地存储。
+- **SVG 动态环形进度圆环 (Circular Progress Rings)**：在活跃本金卡、策略胜率卡、模型自学习卡中展示高精度 SVG 圆环与居中百分比，实时映射盘面状态。
+- **内存级在线增量自学习 (In-Memory Online SGD)**：每次 5 分钟盘面结算后，SGD 权重梯度直接原子写入运行中的模型管理中枢 (`ModelManager.logistic.write()`)，免重启即刻赋能下一轮推演。
 
 ---
 
-## 💻 控制台视图概览
+## 💻 控制台视图概览 (AsmrProg 3-Column Responsive Grid)
 
 ```
 +-------------------------------------------------------------------------------------------------------------------------+
-|  EVENTALPHA 5M QUANT                [模拟盘 | 实盘]  [账户: Main MM ($48.5U)]  [BTC] [ETH] [SOL]  Latency: 42ms | WS: LIVE|
-+---------------------+---------------------------------------------------------------------------------------------------+
-|  [Sidebar Navigation|                                                                                                   |
-|  * 实时看板         |  +----------------+  +----------------+  +----------------+  +----------------+                 |
-|  * 自主学习与进化   |  | Active Bankroll|  | Locked Profit  |  | Win Rate       |  | 5M Implied P   |                 |
-|  * 实盘订单监控     |  |  [SVG Ring 85%]|  |   +$4.85 USDC  |  |  [SVG Ring 73%]|  |  [SVG Ring 68%]|                 |
-|  * 账户与凭据管理   |  |   $8.50 / $10  |  |   100% 隔离保护|  |   19W - 7L     |  |   P(UP) 68.4%  |                 |
-|  * 深度订单簿       |  +----------------+  +----------------+  +----------------+  +----------------+                 |
-|  * 特征工程中心     |                                                                                                   |
-|  * 动态调参         |  +--------------------------------------------------+  +----------------------------------------+ |
-|  * 历史回测         |  | Polymarket 5M 实时二元期权盘口与多所比价         |  | 策略信号与机会评分卡                   | |
-|  * 逐帧复盘         |  | * 剩余时间: 02:45 (倒计时动态进度条)              |  | * 推荐操作: BUY UP                     | |
-|  * 审计日志         |  | * 币安/OKX/Bybit/Coinbase 综合指数: $68,450.2     |  | * 预期胜率: 78.4% (高置信)             | |
-|                     |  | * 当前偏离度: +$142.50 (+0.16%)                  |  | * 净 Edge: +12.72% (扣费)              | |
-|  -----------------  |  +--------------------------------------------------+  +----------------------------------------+ |
-|  [System Status]    |                                                                                                   |
-|  Engine: ONLINE     |  +----------------------------------------------------------------------------------------------+ |
-|  Learn: AUTO-SGD    |  | 在线自学习特征权重演化 (Feature Importance Ranking)                                            | |
-|  Mode: PAPER/LIVE   |  | #1 poly_obi_top5 [推升 UP +0.4821]  | #2 distance_to_vol_ratio [推升 UP +0.3952]            | |
-+---------------------+---------------------------------------------------------------------------------------------------+
+| [AP] EventAlpha       |  Analytics  [☀️/🌙]  [模拟盘|实盘] [KILL SWITCH]          | [Profile] Admin / Polymarket MM     |
++-----------------------+-------------------------------------------------------------+-----------------------------------+
+|  [Left Sidebar]       |  [Stat Cards with SVG Circular Progress Rings]              |  [Right Profile & Reminders]      |
+|  * Dashboard (Active) |  +----------------+  +----------------+  +----------------+ |  +-----------------------------+  |
+|  * Real-Time Trading  |  | Active Bankroll|  | Online Learning|  | Strategy Win-R | |  | Active: Main MM (0x8f21)   |  |
+|  * Self-Learning AI   |  |   [SVG Ring]   |  |   [SVG Ring]   |  |   [SVG Ring]   | |  | Balance: $48.50 USDC       |  |
+|  * Live CLOB Orders   |  |      81%       |  |      48%       |  |      73%       | |  +-----------------------------+  |
+|  * Account Auth       |  |  $8.50 / $10   |  |  SGD 1,280 Rds |  |    19W - 7L    | |                                   |
+|  * OrderBook Ladder   |  +----------------+  +----------------+  +----------------+ |  [Reminders & Alerts]             |
+|  * Feature Center     |                                                             |  * [BTC] High OBI Imbalance (+0.6)|  |
+|  * Settings           |  [Active Markets Row: BTC | ETH | SOL]                      |  * [ETH] Volatility Spike Alert   |  |
+|                       |                                                             |                                   |
+|                       |  [Recent Orders Table with Colored Status]                  |  +-----------------------------+  |
+|                       |  Asset | Time  | Side | Price | Shares | Mode | Status      |  | [+ Add Polymarket Account]  |  |
+|                       |  BTC   | 03:25 | BUY  | 0.520 | 16.3   | LIVE | Active      |  +-----------------------------+  |
+|                       |  ETH   | 03:20 | BUY  | 0.480 | 10.4   | LIVE | Declined    |                                   |
+|                       |  SOL   | 03:15 | SELL | 0.510 | 20.0   | PAPR | Pending     |                                   |
++-----------------------+-------------------------------------------------------------+-----------------------------------+
 ```
 
 ---

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Briefcase, CheckCircle2, XCircle, Clock, Award, TrendingUp, Percent } from 'lucide-react';
+import React, { useState } from 'react';
 import { PaperOrder, PaperPosition, PaperResult, TradeStatistics } from '../types';
 
 interface TradingBlotterProps {
@@ -15,256 +14,250 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
   settledResults,
   statistics,
 }) => {
-  const [activeTab, setActiveTab] = React.useState<'positions' | 'results' | 'orders'>('positions');
+  const [activeTab, setActiveTab] = useState<'positions' | 'results' | 'orders'>('positions');
+  const [showAll, setShowAll] = useState(false);
 
-  const winRate = statistics?.win_rate ?? 0.0;
-  const totalTrades = statistics?.total_trades ?? 0;
-  const netPnl = statistics?.net_pnl ?? 0.0;
-  const profitFactor = statistics?.profit_factor ?? 0.0;
+  const displayPositions = showAll ? activePositions : activePositions.slice(0, 5);
+  const displayResults = showAll ? settledResults : settledResults.slice(0, 5);
+  const displayOrders = showAll ? recentOrders : recentOrders.slice(0, 5);
 
   return (
-    <div className="asmr-card p-6">
-      {/* Header & Mini Stats Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <Briefcase className="h-4 w-4 text-cyan-400" />
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Paper Trading Blotter & Performance Statistics
+    <div className="asmr-card p-6 lg:p-8 space-y-4">
+      {/* Header (Matches screenshot "Recent Orders" title) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-[#363949] dark:text-white tracking-tight">
+            Recent Orders
           </h2>
+          <p className="text-xs text-[#7d8da1] dark:text-slate-400 mt-0.5">
+            Polymarket 5M 交易执行与结算审计
+          </p>
         </div>
 
-        {/* 4 Mini Stats */}
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <div className="bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
-            <span className="text-slate-500 mr-1.5">Win Rate:</span>
-            <strong className="text-emerald-400 font-mono-num">{winRate.toFixed(1)}%</strong>
-          </div>
-          <div className="bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
-            <span className="text-slate-500 mr-1.5">Trades:</span>
-            <strong className="text-white font-mono-num">{totalTrades}</strong>
-          </div>
-          <div className="bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
-            <span className="text-slate-500 mr-1.5">Net PnL:</span>
-            <strong className={`font-mono-num ${netPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}
-            </strong>
-          </div>
-          <div className="bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
-            <span className="text-slate-500 mr-1.5">Profit Factor:</span>
-            <strong className="text-cyan-400 font-mono-num">{profitFactor.toFixed(2)}</strong>
-          </div>
+        {/* Tab Switchers styled as AsmrProg pills */}
+        <div className="flex items-center p-1 rounded-2xl bg-[#f6f6f9] dark:bg-[#181a1e]">
+          <button
+            onClick={() => setActiveTab('positions')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'positions'
+                ? 'bg-white dark:bg-[#202528] text-[#363949] dark:text-white shadow-sm'
+                : 'text-[#7d8da1] hover:text-[#363949]'
+            }`}
+          >
+            Active Positions ({activePositions.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('results')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'results'
+                ? 'bg-white dark:bg-[#202528] text-[#363949] dark:text-white shadow-sm'
+                : 'text-[#7d8da1] hover:text-[#363949]'
+            }`}
+          >
+            Settled ({settledResults.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'orders'
+                ? 'bg-white dark:bg-[#202528] text-[#363949] dark:text-white shadow-sm'
+                : 'text-[#7d8da1] hover:text-[#363949]'
+            }`}
+          >
+            All Orders ({recentOrders.length})
+          </button>
         </div>
       </div>
 
-      {/* Blotter Tabs */}
-      <div className="flex items-center gap-2 mb-3 border-b border-slate-800 pb-2">
-        <button
-          onClick={() => setActiveTab('positions')}
-          className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-            activeTab === 'positions'
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Active Positions ({activePositions.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('results')}
-          className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-            activeTab === 'results'
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Settled Results ({settledResults.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('orders')}
-          className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-            activeTab === 'orders'
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Recent Orders ({recentOrders.length})
-        </button>
+      {/* Table Content (Matches screenshot exact columns & text styling) */}
+      <div className="overflow-x-auto">
+        {activeTab === 'positions' && (
+          <table className="w-full text-center text-xs">
+            <thead>
+              <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
+                <th className="pb-3 text-left pl-3">Asset & Side</th>
+                <th className="pb-3 font-mono">Order Number</th>
+                <th className="pb-3 font-mono">Stake / Fill</th>
+                <th className="pb-3">Status</th>
+                <th className="pb-3 text-right pr-3">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+              {displayPositions.length > 0 ? (
+                displayPositions.map((pos) => (
+                  <tr key={pos.position_id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3.5 text-left pl-3 font-bold text-[#363949] dark:text-white">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#1b9c85]" />
+                        <span>{pos.asset}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                            pos.side === 'UP' ? 'bg-[#1b9c85]/15 text-[#1b9c85]' : 'bg-[#ff0060]/15 text-[#ff0060]'
+                          }`}
+                        >
+                          {pos.side}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
+                      {pos.position_id.slice(0, 10)}
+                    </td>
+                    <td className="py-3.5 font-mono font-bold text-[#363949] dark:text-white">
+                      ${pos.stake.toFixed(2)} @ ${pos.entry_price.toFixed(3)}
+                    </td>
+                    <td className="py-3.5">
+                      <span className="text-[#1b9c85] font-extrabold text-xs">
+                        Active
+                      </span>
+                    </td>
+                    <td className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer">
+                      Details
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
+                    No active positions currently running.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {activeTab === 'results' && (
+          <table className="w-full text-center text-xs">
+            <thead>
+              <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
+                <th className="pb-3 text-left pl-3">Asset & Side</th>
+                <th className="pb-3 font-mono">Result ID</th>
+                <th className="pb-3 font-mono">PnL / Stake</th>
+                <th className="pb-3">Status</th>
+                <th className="pb-3 text-right pr-3">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+              {displayResults.length > 0 ? (
+                displayResults.map((res) => {
+                  const isWin = res.outcome === 'WIN';
+                  return (
+                    <tr key={res.result_id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3.5 text-left pl-3 font-bold text-[#363949] dark:text-white">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${isWin ? 'bg-[#1b9c85]' : 'bg-[#ff0060]'}`}
+                          />
+                          <span>{res.asset}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                              res.side === 'UP' ? 'bg-[#1b9c85]/15 text-[#1b9c85]' : 'bg-[#ff0060]/15 text-[#ff0060]'
+                            }`}
+                          >
+                            {res.side}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
+                        {res.result_id.slice(0, 10)}
+                      </td>
+                      <td className="py-3.5 font-mono font-bold">
+                        <span className={res.pnl >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
+                          {res.pnl >= 0 ? '+' : ''}${res.pnl.toFixed(2)}
+                        </span>
+                        <span className="text-[#7d8da1] text-[10px] ml-1">(${res.stake.toFixed(2)})</span>
+                      </td>
+                      <td className="py-3.5">
+                        <span
+                          className={`font-extrabold text-xs ${
+                            isWin ? 'text-[#1b9c85]' : 'text-[#ff0060]'
+                          }`}
+                        >
+                          {isWin ? 'Active' : 'Declined'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer">
+                        Details
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
+                    No settled results yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {activeTab === 'orders' && (
+          <table className="w-full text-center text-xs">
+            <thead>
+              <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
+                <th className="pb-3 text-left pl-3">Asset & Side</th>
+                <th className="pb-3 font-mono">Order Number</th>
+                <th className="pb-3 font-mono">Payment / Fill</th>
+                <th className="pb-3">Status</th>
+                <th className="pb-3 text-right pr-3">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+              {displayOrders.length > 0 ? (
+                displayOrders.map((ord) => (
+                  <tr key={ord.order_id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3.5 text-left pl-3 font-bold text-[#363949] dark:text-white">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#6c9bcf]" />
+                        <span>{ord.asset}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                            ord.side === 'UP' ? 'bg-[#1b9c85]/15 text-[#1b9c85]' : 'bg-[#ff0060]/15 text-[#ff0060]'
+                          }`}
+                        >
+                          {ord.side}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
+                      {ord.order_id.slice(0, 10)}
+                    </td>
+                    <td className="py-3.5 font-mono font-bold text-[#363949] dark:text-white">
+                      ${ord.stake.toFixed(2)} (${ord.fill_price.toFixed(3)})
+                    </td>
+                    <td className="py-3.5">
+                      <span className="text-[#f7d154] font-extrabold text-xs">
+                        {ord.status}
+                      </span>
+                    </td>
+                    <td className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer">
+                      Details
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
+                    No orders recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Tab 1: Active Open Positions */}
-      {activeTab === 'positions' && (
-        <div className="overflow-x-auto">
-          {activePositions.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500 font-mono">
-              No active open positions. System is evaluating next 5-minute opportunities.
-            </div>
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead className="text-[10px] text-slate-500 uppercase border-b border-slate-800">
-                <tr>
-                  <th className="py-2 px-3">Position ID</th>
-                  <th className="py-2 px-3">Asset</th>
-                  <th className="py-2 px-3">Side</th>
-                  <th className="py-2 px-3">Fill Price</th>
-                  <th className="py-2 px-3">Stake</th>
-                  <th className="py-2 px-3">Shares</th>
-                  <th className="py-2 px-3">Status</th>
-                  <th className="py-2 px-3">Entry Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
-                {activePositions.map((pos) => (
-                  <tr key={pos.position_id} className="hover:bg-slate-900/50">
-                    <td className="py-2 px-3 text-cyan-400">{pos.position_id}</td>
-                    <td className="py-2 px-3 font-bold text-white">{pos.asset}</td>
-                    <td className="py-2 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          pos.side === 'UP' ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'
-                        }`}
-                      >
-                        {pos.side}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-slate-300 font-mono-num">${pos.entry_price.toFixed(3)}</td>
-                    <td className="py-2 px-3 text-slate-300 font-mono-num">${pos.stake.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-slate-300 font-mono-num">{pos.shares.toFixed(2)}</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800/60">
-                        {pos.status}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-slate-500 text-[11px]">
-                      {new Date(pos.entry_time_ms).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Tab 2: Settled Results */}
-      {activeTab === 'results' && (
-        <div className="overflow-x-auto">
-          {settledResults.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500 font-mono">
-              No settled trade results yet. Settlements execute automatically upon round resolution.
-            </div>
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead className="text-[10px] text-slate-500 uppercase border-b border-slate-800">
-                <tr>
-                  <th className="py-2 px-3">Result ID</th>
-                  <th className="py-2 px-3">Asset</th>
-                  <th className="py-2 px-3">Side</th>
-                  <th className="py-2 px-3">Outcome</th>
-                  <th className="py-2 px-3">Fill / Stake</th>
-                  <th className="py-2 px-3">Net PnL</th>
-                  <th className="py-2 px-3">Bankroll After</th>
-                  <th className="py-2 px-3">Locked Profit After</th>
-                  <th className="py-2 px-3">Settled At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
-                {settledResults.map((res) => (
-                  <tr key={res.result_id} className="hover:bg-slate-900/50">
-                    <td className="py-2 px-3 text-slate-400">{res.result_id.slice(0, 16)}...</td>
-                    <td className="py-2 px-3 font-bold text-white">{res.asset}</td>
-                    <td className="py-2 px-3">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          res.side === 'UP' ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'
-                        }`}
-                      >
-                        {res.side}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                          res.outcome === 'WIN'
-                            ? 'bg-emerald-500 text-slate-950'
-                            : res.outcome === 'LOSS'
-                            ? 'bg-rose-500 text-white'
-                            : 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {res.outcome}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-slate-300 font-mono-num">
-                      ${res.fill_price.toFixed(3)} / ${res.stake.toFixed(2)}
-                    </td>
-                    <td
-                      className={`py-2 px-3 font-mono-num font-bold ${
-                        res.pnl > 0 ? 'text-emerald-400' : res.pnl < 0 ? 'text-rose-400' : 'text-slate-400'
-                      }`}
-                    >
-                      {res.pnl > 0 ? '+' : ''}${res.pnl.toFixed(2)}
-                    </td>
-                    <td className="py-2 px-3 text-cyan-400 font-mono-num">${res.bankroll_after.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-emerald-400 font-mono-num">${res.locked_profit_after.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-slate-500 text-[11px]">
-                      {new Date(res.created_at_ms).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Tab 3: Recent Orders */}
-      {activeTab === 'orders' && (
-        <div className="overflow-x-auto">
-          {recentOrders.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500 font-mono">
-              No paper orders recorded yet.
-            </div>
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead className="text-[10px] text-slate-500 uppercase border-b border-slate-800">
-                <tr>
-                  <th className="py-2 px-3">Order ID</th>
-                  <th className="py-2 px-3">Asset</th>
-                  <th className="py-2 px-3">Side</th>
-                  <th className="py-2 px-3">Stake</th>
-                  <th className="py-2 px-3">Quote / Fill</th>
-                  <th className="py-2 px-3">Slippage</th>
-                  <th className="py-2 px-3">Fee</th>
-                  <th className="py-2 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
-                {recentOrders.map((ord) => (
-                  <tr key={ord.order_id} className="hover:bg-slate-900/50">
-                    <td className="py-2 px-3 text-slate-400">{ord.order_id.slice(0, 16)}...</td>
-                    <td className="py-2 px-3 font-bold text-white">{ord.asset}</td>
-                    <td className="py-2 px-3">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          ord.side === 'UP' ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'
-                        }`}
-                      >
-                        {ord.side}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-slate-300 font-mono-num">${ord.stake.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-slate-300 font-mono-num">
-                      ${ord.quote_price.toFixed(3)} &rarr; ${ord.fill_price.toFixed(3)}
-                    </td>
-                    <td className="py-2 px-3 text-slate-400 font-mono-num">${ord.slippage.toFixed(4)}</td>
-                    <td className="py-2 px-3 text-slate-400 font-mono-num">${ord.fee.toFixed(4)}</td>
-                    <td className="py-2 px-3 text-emerald-400 font-semibold">{ord.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+      {/* AsmrProg Iconic "Show All" Link at bottom (Exact screenshot!) */}
+      <div className="pt-2 text-center">
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="text-xs font-bold text-[#6c9bcf] hover:underline cursor-pointer transition-colors"
+        >
+          {showAll ? 'Show Less' : 'Show All'}
+        </button>
+      </div>
     </div>
   );
 };

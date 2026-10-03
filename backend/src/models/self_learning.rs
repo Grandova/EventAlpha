@@ -15,11 +15,14 @@ use crate::types::{Asset, LearningHistoryEntry, LearningState, Resolution};
 pub struct LearningStatusResponse {
     pub auto_learning_enabled: bool,
     pub total_samples_learned: u64,
+    pub total_samples_trained: u64,
     pub rolling_accuracy: f64,
     pub rolling_brier_score: f64,
     pub learning_rate: f64,
     pub active_model_version: String,
+    pub version: String,
     pub top_boosted_features: Vec<(String, f64)>,
+    pub top_features: Vec<(String, f64)>,
     pub last_evolution_time_ms: Option<i64>,
 }
 
@@ -61,13 +64,10 @@ impl SelfLearningEngine {
                 );
 
                 // Update model manager weights
-                let mut config = self.model_manager.get_logistic_config();
+                let config = self.model_manager.get_logistic_config();
                 if state.weights.len() == config.weights.len() {
-                    config.weights = state.weights;
-                    config.bias = state.bias;
-                    config.version = format!("v{}-restored-learned", state.version);
-                    // Reassign
-                    let _ = self.model_manager.train_logistic(&[], 0, 0.0, 0.0); // No-op, just ensure active
+                    let version = format!("v{}-restored-learned", state.version);
+                    self.model_manager.update_logistic_weights_and_bias(state.weights, state.bias, version);
                 }
 
                 self.total_samples.store(state.total_samples_trained as u64, Ordering::Relaxed);
@@ -175,7 +175,15 @@ impl SelfLearningEngine {
             total, asset, target_y, pred_p, error, weights_delta_norm, *r_acc * 100.0, *r_brier
         );
 
-        // 4. Compute top features
+        // 4. Update in-memory model immediately for sub-millisecond continuous inference
+        let new_model_version = format!("v{}-online-sgd", total);
+        self.model_manager.update_logistic_weights_and_bias(
+            config.weights.clone(),
+            config.bias,
+            new_model_version,
+        );
+
+        // 5. Compute top features
         let mut top_features: Vec<(String, f64)> = FEATURE_NAMES
             .iter()
             .enumerate()
@@ -183,7 +191,7 @@ impl SelfLearningEngine {
             .collect();
         top_features.sort_by(|a, b| b.1.abs().partial_cmp(&a.1.abs()).unwrap_or(std::cmp::Ordering::Equal));
 
-        // 5. Persist updated learning state to SQLite
+        // 6. Persist updated learning state to SQLite
         let state = LearningState {
             id: Uuid::new_v4().to_string(),
             asset,
@@ -278,14 +286,20 @@ impl SelfLearningEngine {
             .collect();
         top.sort_by(|a, b| b.1.abs().partial_cmp(&a.1.abs()).unwrap_or(std::cmp::Ordering::Equal));
 
+        let top_list: Vec<(String, f64)> = top.into_iter().take(8).collect();
+        let total_samples = self.total_samples.load(Ordering::Relaxed);
+
         LearningStatusResponse {
             auto_learning_enabled: self.is_enabled(),
-            total_samples_learned: self.total_samples.load(Ordering::Relaxed),
+            total_samples_learned: total_samples,
+            total_samples_trained: total_samples,
             rolling_accuracy: *self.rolling_accuracy.read().await,
             rolling_brier_score: *self.rolling_brier_score.read().await,
             learning_rate: self.learning_rate,
-            active_model_version: config.version,
-            top_boosted_features: top.into_iter().take(8).collect(),
+            active_model_version: config.version.clone(),
+            version: config.version,
+            top_boosted_features: top_list.clone(),
+            top_features: top_list,
             last_evolution_time_ms: *self.last_update_ms.read().await,
         }
     }

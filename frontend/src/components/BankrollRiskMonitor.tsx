@@ -32,30 +32,37 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
 
   return (
     <div className="asmr-card p-6">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-[var(--color-light)]">
         <div className="flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-emerald-400" />
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Capital Management & Risk Circuit Breakers
-          </h2>
+          <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-xl">
+            <DollarSign className="h-4 w-4 text-[#1b9c85]" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-[var(--color-dark)]">
+              Capital Management & Risk Circuit Breakers
+            </h2>
+            <p className="text-xs text-[var(--color-info-dark)]">
+              Real-time drawdown, consecutive loss limiters & bankroll locks
+            </p>
+          </div>
         </div>
 
         {/* Circuit Breaker Status Badge */}
         <div className="flex items-center gap-2">
           {isHalted ? (
-            <span className="flex items-center gap-1 text-xs font-bold font-mono px-2.5 py-1 rounded bg-rose-950 text-rose-400 border border-rose-800">
+            <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-950 text-[#ff0060] border border-rose-300 dark:border-rose-800">
               <ShieldAlert className="h-3.5 w-3.5" /> CIRCUIT BREAKER: HALTED
             </span>
           ) : isInCooldown ? (
-            <span className="flex items-center gap-1 text-xs font-bold font-mono px-2.5 py-1 rounded bg-amber-950 text-amber-400 border border-amber-800">
+            <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
               <AlertOctagon className="h-3.5 w-3.5" /> LOSS COOLDOWN ACTIVE
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-xs font-bold font-mono px-2.5 py-1 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/80">
+            <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-[#1b9c85] border border-emerald-300 dark:border-emerald-800/80">
               <CheckCircle2 className="h-3.5 w-3.5" /> RISK STATUS: NORMAL
             </span>
           )}
-          <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-1 rounded font-mono uppercase">
+          <span className="text-[10px] text-[var(--color-info-dark)] bg-[var(--color-background)] px-2.5 py-1 rounded-full font-mono uppercase border border-[var(--color-light)]">
             Mode: {mode === 'capital_recovery' ? 'Mode B (Capital Recovery)' : 'Mode A (Profit Isolation)'}
           </span>
         </div>
@@ -64,66 +71,66 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
       {/* 4 Financial Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {/* 1. Active Bankroll (Mode B Cap $10) */}
-        <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <div className="asmr-subcard p-3.5">
+          <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
             <span>Active Bankroll</span>
-            <span className="font-mono text-cyan-400">Cap: ${bankrollCap.toFixed(2)}</span>
+            <span className="font-mono text-[var(--color-primary)] font-semibold">Cap: ${bankrollCap.toFixed(2)}</span>
           </div>
-          <div className="text-xl font-black text-white font-mono-num">
-            ${activeBankroll.toFixed(2)} <span className="text-xs text-slate-500 font-normal">USDC</span>
+          <div className="text-xl font-black text-[var(--color-dark)] font-mono-num">
+            ${activeBankroll.toFixed(2)} <span className="text-xs text-[var(--color-info-dark)] font-normal">USDC</span>
           </div>
-          <div className="h-1.5 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
+          <div className="h-1.5 w-full bg-[var(--color-light)] rounded-full mt-2 overflow-hidden">
             <div
-              className="h-full bg-cyan-400"
+              className="h-full bg-[var(--color-primary)] rounded-full"
               style={{ width: `${Math.min(100, (activeBankroll / bankrollCap) * 100)}%` }}
             />
           </div>
         </div>
 
         {/* 2. Locked Profits Vault */}
-        <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <div className="asmr-subcard p-3.5">
+          <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
             <span className="flex items-center gap-1">
-              <Lock className="h-3 w-3 text-emerald-400" /> Locked Profit Vault
+              <Lock className="h-3 w-3 text-[#1b9c85]" /> Locked Profit Vault
             </span>
-            <span className="font-mono text-emerald-400">100% Risk Free</span>
+            <span className="font-mono text-[#1b9c85] font-semibold">100% Risk Free</span>
           </div>
-          <div className="text-xl font-black text-emerald-400 font-mono-num">
-            +${lockedProfit.toFixed(2)} <span className="text-xs text-emerald-500/70 font-normal">USDC</span>
+          <div className="text-xl font-black text-[#1b9c85] font-mono-num">
+            +${lockedProfit.toFixed(2)} <span className="text-xs text-[#1b9c85]/70 font-normal">USDC</span>
           </div>
-          <p className="text-[10px] text-slate-500 mt-2 font-mono">Excess gains above $10 cap</p>
+          <p className="text-[10px] text-[var(--color-info-dark)] mt-2 font-mono">Excess gains above $10 cap</p>
         </div>
 
         {/* 3. Total Portfolio Equity */}
-        <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <div className="asmr-subcard p-3.5">
+          <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
             <span>Total Equity</span>
-            <span className="font-mono text-slate-300">Active + Locked</span>
+            <span className="font-mono text-[var(--color-info-dark)]">Active + Locked</span>
           </div>
-          <div className="text-xl font-black text-white font-mono-num">
-            ${totalEquity.toFixed(2)} <span className="text-xs text-slate-500 font-normal">USDC</span>
+          <div className="text-xl font-black text-[var(--color-dark)] font-mono-num">
+            ${totalEquity.toFixed(2)} <span className="text-xs text-[var(--color-info-dark)] font-normal">USDC</span>
           </div>
-          <div className="text-[10px] text-slate-500 mt-2 font-mono">
+          <div className="text-[10px] text-[var(--color-info-dark)] mt-2 font-mono">
             Return:{' '}
-            <strong className={totalEquity >= 10.0 ? 'text-emerald-400' : 'text-rose-400'}>
+            <strong className={totalEquity >= 10.0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
               {(((totalEquity - 10.0) / 10.0) * 100).toFixed(1)}%
             </strong>
           </div>
         </div>
 
         {/* 4. Daily Loss & Circuit Breaker */}
-        <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+        <div className="asmr-subcard p-3.5">
+          <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
             <span>Daily Loss Limit</span>
-            <span className="font-mono text-rose-400">Max ${dailyLossLimit.toFixed(2)}</span>
+            <span className="font-mono text-[#ff0060] font-semibold">Max ${dailyLossLimit.toFixed(2)}</span>
           </div>
-          <div className="text-xl font-black text-slate-200 font-mono-num">
+          <div className="text-xl font-black text-[var(--color-dark)] font-mono-num">
             ${dailyLoss.toFixed(2)}{' '}
-            <span className="text-xs text-slate-500 font-normal">/ ${dailyLossLimit.toFixed(2)}</span>
+            <span className="text-xs text-[var(--color-info-dark)] font-normal">/ ${dailyLossLimit.toFixed(2)}</span>
           </div>
-          <div className="h-1.5 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
+          <div className="h-1.5 w-full bg-[var(--color-light)] rounded-full mt-2 overflow-hidden">
             <div
-              className={`h-full ${dailyLossPct >= 80 ? 'bg-rose-500' : 'bg-amber-400'}`}
+              className={`h-full rounded-full ${dailyLossPct >= 80 ? 'bg-[#ff0060]' : 'bg-[#f7d154]'}`}
               style={{ width: `${dailyLossPct}%` }}
             />
           </div>
@@ -131,24 +138,24 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
       </div>
 
       {/* Circuit Breaker Detailed Gauges */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-800/80 text-xs">
-        <div className="bg-slate-950/40 p-2.5 rounded border border-slate-800/60 flex items-center justify-between">
-          <span className="text-slate-400">Consecutive Losses:</span>
-          <span className="font-mono-num font-bold text-white">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-[var(--color-light)] text-xs">
+        <div className="asmr-subcard p-2.5 flex items-center justify-between">
+          <span className="text-[var(--color-info-dark)]">Consecutive Losses:</span>
+          <span className="font-mono-num font-bold text-[var(--color-dark)]">
             {consecutiveLosses} / {maxConsecutiveLosses} trades
           </span>
         </div>
 
-        <div className="bg-slate-950/40 p-2.5 rounded border border-slate-800/60 flex items-center justify-between">
-          <span className="text-slate-400">Peak-to-Trough Drawdown:</span>
-          <span className={`font-mono-num font-bold ${maxDrawdownPct > 15 ? 'text-rose-400' : 'text-slate-300'}`}>
+        <div className="asmr-subcard p-2.5 flex items-center justify-between">
+          <span className="text-[var(--color-info-dark)]">Peak-to-Trough Drawdown:</span>
+          <span className={`font-mono-num font-bold ${maxDrawdownPct > 15 ? 'text-[#ff0060]' : 'text-[var(--color-dark)]'}`}>
             {maxDrawdownPct.toFixed(1)}% / max {maxDrawdownLimit.toFixed(0)}%
           </span>
         </div>
 
-        <div className="bg-slate-950/40 p-2.5 rounded border border-slate-800/60 flex items-center justify-between">
-          <span className="text-slate-400">Minimum Bankroll Floor:</span>
-          <span className="font-mono-num font-bold text-slate-300">$2.00 USDC</span>
+        <div className="asmr-subcard p-2.5 flex items-center justify-between">
+          <span className="text-[var(--color-info-dark)]">Minimum Bankroll Floor:</span>
+          <span className="font-mono-num font-bold text-[var(--color-dark)]">$2.00 USDC</span>
         </div>
       </div>
     </div>

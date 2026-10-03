@@ -1,5 +1,5 @@
 import React from 'react';
-import { Timer, ArrowUpRight, ArrowDownRight, BarChart2, Shield } from 'lucide-react';
+import { Timer, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { MarketDisplayInfo, MarketBookSummary, ModelPrediction } from '../types';
 
 interface PolymarketRoundCardProps {
@@ -40,50 +40,48 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800/80 px-2 py-0.5 rounded uppercase">
-              Polymarket 5M Round
+            <span className="text-[10px] font-extrabold bg-[#6c9bcf]/15 text-[#6c9bcf] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
+              Polymarket 5M
             </span>
-            <span className="text-xs text-slate-500 font-mono">ID: {market?.id ?? 'Awaiting Discovery...'}</span>
+            <span className="text-xs text-[#7d8da1] dark:text-slate-400 font-mono">
+              ID: {market?.id ? market.id.slice(0, 16) : 'Awaiting...'}
+            </span>
           </div>
-          <h3 className="text-base font-bold text-white mt-1">
+          <h3 className="text-base font-extrabold text-[#363949] dark:text-white mt-1 tracking-tight">
             {market?.question ?? 'Active 5-Minute Crypto Up/Down Contract'}
           </h3>
         </div>
 
         {/* 5-Minute Round Countdown */}
-        <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-lg min-w-[200px]">
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-slate-400 font-semibold flex items-center gap-1.5">
-              <Timer className="h-3.5 w-3.5 text-cyan-400" />
-              Round Closes In:
+        <div className="bg-[#f6f6f9] dark:bg-[#181a1e] p-3 rounded-2xl min-w-[190px] border border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between text-xs mb-1.5 font-semibold">
+            <span className="text-[#7d8da1] dark:text-slate-400 flex items-center gap-1.5">
+              <Timer className="h-3.5 w-3.5 text-[#6c9bcf]" />
+              Window:
             </span>
             <span
               className={`font-mono-num font-black text-sm ${
                 remainingSecs <= 30
-                  ? 'text-rose-400 animate-pulse'
+                  ? 'text-[#ff0060] animate-pulse'
                   : remainingSecs <= 60
-                  ? 'text-amber-400'
-                  : 'text-cyan-400'
+                  ? 'text-[#f7d154]'
+                  : 'text-[#1b9c85]'
               }`}
             >
               {timerStr}
             </span>
           </div>
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-1000 ${
                 remainingSecs <= 30
-                  ? 'bg-rose-500'
+                  ? 'bg-[#ff0060]'
                   : remainingSecs <= 60
-                  ? 'bg-amber-500'
-                  : 'bg-gradient-to-r from-cyan-500 to-emerald-400'
+                  ? 'bg-[#f7d154]'
+                  : 'bg-[#1b9c85]'
               }`}
               style={{ width: `${progressPct}%` }}
             />
-          </div>
-          <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-1">
-            <span>Elapsed: {300 - remainingSecs}s</span>
-            <span>Window: 300s</span>
           </div>
         </div>
       </div>
@@ -91,121 +89,98 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       {/* Main Orderbook Prices & Microstructure Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* UP Side Book */}
-        <div className="p-3.5 rounded-lg border border-emerald-500/20 bg-emerald-950/10">
+        <div className="p-4 rounded-2xl border border-[#1b9c85]/20 bg-[#1b9c85]/5">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 uppercase tracking-wider">
+            <span className="text-xs font-extrabold text-[#1b9c85] flex items-center gap-1 uppercase tracking-wider">
               <ArrowUpRight className="h-4 w-4" /> UP Outcome
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              Implied: <strong className="text-emerald-400">{impliedUp.toFixed(1)}%</strong>
+            <span className="text-[11px] text-[#7d8da1] font-mono">
+              Implied: <strong className="text-[#1b9c85]">{impliedUp.toFixed(1)}%</strong>
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-slate-900/80 p-2 rounded border border-emerald-500/30">
-              <span className="text-[10px] text-slate-500 block">Best Bid (Buy)</span>
-              <span className="text-lg font-mono-num font-bold text-emerald-400">
+          <div className="grid grid-cols-2 gap-2.5 mb-3">
+            <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Bid</span>
+              <span className="text-base font-mono-num font-extrabold text-[#1b9c85]">
                 ${upBid.toFixed(3)}
               </span>
             </div>
-            <div className="bg-slate-900/80 p-2 rounded border border-emerald-500/30">
-              <span className="text-[10px] text-slate-500 block">Best Ask (Sell)</span>
-              <span className="text-lg font-mono-num font-bold text-emerald-300">
+            <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Ask</span>
+              <span className="text-base font-mono-num font-extrabold text-[#363949] dark:text-white">
                 ${upAsk.toFixed(3)}
               </span>
             </div>
           </div>
 
-          {/* Model Calibrated vs Market Implied Comparison */}
-          <div className="text-xs space-y-1">
-            <div className="flex justify-between text-slate-400">
-              <span>Model Predicted P(Up):</span>
-              <span className="font-mono-num font-bold text-white">{modelUp.toFixed(1)}%</span>
+          <div className="text-xs space-y-1 font-medium">
+            <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
+              <span>Model P(Up):</span>
+              <span className="font-mono-num font-bold text-[#363949] dark:text-white">{modelUp.toFixed(1)}%</span>
             </div>
-            <div className="flex justify-between text-slate-400">
-              <span>Gross Edge (Up):</span>
+            <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
+              <span>Net Edge:</span>
               <span
                 className={`font-mono-num font-bold ${
-                  modelUp / 100 - upAsk >= 0.05 ? 'text-emerald-400' : 'text-slate-400'
+                  modelUp / 100 - upAsk >= 0.05 ? 'text-[#1b9c85]' : 'text-[#7d8da1]'
                 }`}
               >
                 {((modelUp / 100 - upAsk) * 100).toFixed(1)}%
-              </span>
-            </div>
-            <div className="flex justify-between text-slate-400">
-              <span>OBI Top 10 (Up):</span>
-              <span className="font-mono-num font-semibold text-slate-300">
-                {(book?.up_book?.obi_top10 ?? 0).toFixed(3)}
               </span>
             </div>
           </div>
         </div>
 
         {/* DOWN Side Book */}
-        <div className="p-3.5 rounded-lg border border-rose-500/20 bg-rose-950/10">
+        <div className="p-4 rounded-2xl border border-[#ff0060]/20 bg-[#ff0060]/5">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-rose-400 flex items-center gap-1 uppercase tracking-wider">
+            <span className="text-xs font-extrabold text-[#ff0060] flex items-center gap-1 uppercase tracking-wider">
               <ArrowDownRight className="h-4 w-4" /> DOWN Outcome
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              Implied: <strong className="text-rose-400">{impliedDown.toFixed(1)}%</strong>
+            <span className="text-[11px] text-[#7d8da1] font-mono">
+              Implied: <strong className="text-[#ff0060]">{impliedDown.toFixed(1)}%</strong>
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-slate-900/80 p-2 rounded border border-rose-500/30">
-              <span className="text-[10px] text-slate-500 block">Best Bid (Buy)</span>
-              <span className="text-lg font-mono-num font-bold text-rose-400">
+          <div className="grid grid-cols-2 gap-2.5 mb-3">
+            <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Bid</span>
+              <span className="text-base font-mono-num font-extrabold text-[#ff0060]">
                 ${downBid.toFixed(3)}
               </span>
             </div>
-            <div className="bg-slate-900/80 p-2 rounded border border-rose-500/30">
-              <span className="text-[10px] text-slate-500 block">Best Ask (Sell)</span>
-              <span className="text-lg font-mono-num font-bold text-rose-300">
+            <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Ask</span>
+              <span className="text-base font-mono-num font-extrabold text-[#363949] dark:text-white">
                 ${downAsk.toFixed(3)}
               </span>
             </div>
           </div>
 
-          {/* Model Calibrated vs Market Implied Comparison */}
-          <div className="text-xs space-y-1">
-            <div className="flex justify-between text-slate-400">
-              <span>Model Predicted P(Down):</span>
-              <span className="font-mono-num font-bold text-white">{modelDown.toFixed(1)}%</span>
+          <div className="text-xs space-y-1 font-medium">
+            <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
+              <span>Model P(Down):</span>
+              <span className="font-mono-num font-bold text-[#363949] dark:text-white">{modelDown.toFixed(1)}%</span>
             </div>
-            <div className="flex justify-between text-slate-400">
-              <span>Gross Edge (Down):</span>
+            <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
+              <span>Net Edge:</span>
               <span
                 className={`font-mono-num font-bold ${
-                  modelDown / 100 - downAsk >= 0.05 ? 'text-emerald-400' : 'text-slate-400'
+                  modelDown / 100 - downAsk >= 0.05 ? 'text-[#1b9c85]' : 'text-[#7d8da1]'
                 }`}
               >
                 {((modelDown / 100 - downAsk) * 100).toFixed(1)}%
-              </span>
-            </div>
-            <div className="flex justify-between text-slate-400">
-              <span>OBI Top 10 (Down):</span>
-              <span className="font-mono-num font-semibold text-slate-300">
-                {(book?.down_book?.obi_top10 ?? 0).toFixed(3)}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Book Microstructure Metadata Footer */}
-      <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
-        <div className="flex items-center gap-4">
-          <span>
-            Spread: <strong className="font-mono-num text-slate-200">${spreadUp.toFixed(3)}</strong>
-          </span>
-          <span>
-            Book Liquidity: <strong className="font-mono-num text-slate-200">${totalLiquidity.toFixed(0)} USDC</strong>
-          </span>
-        </div>
-        <div className="text-[11px] text-slate-500 font-mono">
-          Settlement Rule: Binary 1.00 USDC on WIN / 0.00 on LOSS (Orderbook Depth Fill Enabled)
-        </div>
+      {/* Footer */}
+      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-[#7d8da1] font-mono">
+        <span>Spread: ${spreadUp.toFixed(3)}</span>
+        <span>Liquidity: ${totalLiquidity.toFixed(0)} USDC</span>
       </div>
     </div>
   );

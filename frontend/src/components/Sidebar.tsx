@@ -1,19 +1,17 @@
 import React from 'react';
 import {
   LayoutDashboard,
+  Brain,
+  ShieldAlert,
+  Wallet,
   Layers,
   Cpu,
   Sliders,
   FlaskConical,
   PlayCircle,
   FileText,
-  ShieldCheck,
-  ShieldAlert,
+  LogOut,
   TrendingUp,
-  Activity,
-  Zap,
-  Brain,
-  Wallet,
 } from 'lucide-react';
 import { TradingMode } from '../types';
 
@@ -29,7 +27,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onSelectTab,
   activePositionsCount = 0,
-  isLive = true,
   tradingMode = 'paper',
 }) => {
   const isPaper = tradingMode === 'paper';
@@ -38,195 +35,160 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'dashboard',
       label: 'Dashboard',
-      sublabel: '实时盘面与信号',
       icon: LayoutDashboard,
-      badge: activePositionsCount > 0 ? `${activePositionsCount} 活跃仓位` : undefined,
+      badge: activePositionsCount > 0 ? `${activePositionsCount}` : undefined,
     },
     {
       id: 'self-learning',
-      label: 'Auto-Learning',
-      sublabel: '在线单轮增量自进化',
+      label: 'Analytics & AI',
       icon: Brain,
-      badge: '自主学习',
+      badge: 'Auto',
     },
     {
       id: 'live-orders',
       label: 'Live Orders',
-      sublabel: 'Polymarket 实盘监控',
       icon: ShieldAlert,
       badge: !isPaper ? 'LIVE' : undefined,
     },
     {
       id: 'accounts',
-      label: 'Accounts',
-      sublabel: '钱包与 API 凭据',
+      label: 'Wallets & Keys',
       icon: Wallet,
     },
     {
       id: 'microstructure',
       label: 'OrderBook L2',
-      sublabel: '深度与微观失衡',
       icon: Layers,
     },
     {
       id: 'features',
-      label: 'Feature Engine',
-      sublabel: '37维多尺度特征',
+      label: 'Feature Matrix',
       icon: Cpu,
     },
     {
       id: 'tuning',
-      label: 'Strategy & Train',
-      sublabel: '动态调参与模型训练',
+      label: 'Strategy Tuner',
       icon: Sliders,
     },
     {
       id: 'backtest',
-      label: 'Backtest Engine',
-      sublabel: '资金隔离回测检验',
+      label: 'Backtest Lab',
       icon: FlaskConical,
     },
     {
       id: 'replay',
       label: 'Replay Console',
-      sublabel: '历史逐帧全息复盘',
       icon: PlayCircle,
     },
     {
       id: 'events',
-      label: 'Audit & Risk Logs',
-      sublabel: '熔断事件与风控审计',
+      label: 'Risk & Audit',
       icon: FileText,
     },
   ];
 
   return (
-    <aside className="w-full lg:w-64 shrink-0 flex flex-col justify-between bg-slate-950/70 border-r border-slate-800/80 p-4 lg:p-6 backdrop-blur-2xl">
-      {/* Top Logo & App Brand */}
+    <aside className="w-full lg:w-60 shrink-0 flex flex-col justify-between bg-white dark:bg-[#202528] rounded-3xl lg:m-4 p-5 shadow-[0_1.5rem_2rem_rgba(132,139,200,0.18)] dark:shadow-none transition-all duration-300">
+      {/* Top Logo (AsmrProg Iconic Circular Double Ring Badge) */}
       <div>
-        <div className="flex items-center gap-3 px-2 mb-8">
-          <div className="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-emerald-400 p-0.5 shadow-lg shadow-cyan-950/50">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-cyan-400" />
+        <div className="flex items-center gap-3 px-3 py-2 mb-6">
+          <div className="relative flex items-center justify-center w-11 h-11 rounded-full border-2 border-[#ff0060] p-1 bg-white dark:bg-[#202528] shadow-sm">
+            <div className="w-full h-full rounded-full border-2 border-[#ff0060] flex items-center justify-center">
+              <span className="font-extrabold text-[#ff0060] text-sm tracking-tighter">
+                AP
+              </span>
             </div>
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </span>
           </div>
-
           <div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="font-extrabold text-base tracking-wide text-white font-sans">
-                POLYQUANT<span className="text-cyan-400">.5M</span>
-              </h1>
-            </div>
-            <p className="text-[11px] font-medium text-slate-400">Crypto Quant & Self-Learning</p>
+            <h2 className="font-extrabold text-base tracking-tight text-[#363949] dark:text-white flex items-center">
+              AsmrProg<span className="text-[#ff0060] text-xs ml-1 font-mono">.Quant</span>
+            </h2>
+            <p className="text-[10px] text-[#7d8da1] dark:text-slate-400 font-medium">
+              Polymarket 5M Engine
+            </p>
           </div>
         </div>
 
-        {/* Navigation Section */}
-        <div className="space-y-1">
-          <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
-            Navigation Menu
-          </p>
+        {/* Navigation Items (Exact AsmrProg Left Blue Pill Accent) */}
+        <nav className="space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
 
-          <nav className="space-y-1.5">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onSelectTab(item.id)}
+                className={`relative w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? 'text-[#6c9bcf] bg-[#f6f6f9] dark:bg-[#181a1e] font-bold shadow-sm'
+                    : 'text-[#7d8da1] hover:text-[#363949] dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                {/* Left Active Accent Pill Bar */}
+                {isActive && (
+                  <span className="absolute left-0 top-2 bottom-2 w-1.5 bg-[#6c9bcf] rounded-r-full shadow-md shadow-[#6c9bcf]/50" />
+                )}
 
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectTab(item.id)}
-                  className={`w-full group relative flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-left transition-all duration-200 cursor-pointer ${
-                    isActive
-                      ? 'bg-gradient-to-r from-cyan-500/15 via-indigo-500/10 to-transparent text-cyan-400 shadow-md shadow-cyan-950/20 font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 font-medium'
-                  }`}
-                >
-                  {/* Left Active Glow Indicator */}
-                  {isActive && (
-                    <div className="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-cyan-400 to-indigo-500 rounded-r-full shadow-[0_0_8px_#38bdf8]" />
-                  )}
+                <div className="flex items-center gap-3.5 min-w-0 ml-1">
+                  <Icon
+                    className={`w-4 h-4 shrink-0 transition-transform ${
+                      isActive ? 'text-[#6c9bcf] scale-110' : 'text-[#7d8da1]'
+                    }`}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </div>
 
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`p-2 rounded-xl transition-all ${
-                        isActive
-                          ? 'bg-cyan-500/20 text-cyan-400 shadow-inner'
-                          : 'bg-slate-900/80 text-slate-400 group-hover:text-slate-200 group-hover:bg-slate-800'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="truncate">
-                      <div className="text-xs tracking-tight">{item.label}</div>
-                      <div className="text-[10px] text-slate-500 truncate group-hover:text-slate-400">
-                        {item.sublabel}
-                      </div>
-                    </div>
-                  </div>
-
-                  {item.badge && (
-                    <span
-                      className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full border font-mono ${
-                        item.badge === 'LIVE'
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 animate-pulse'
-                          : item.badge === '自主学习'
-                          ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
-                          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+                {item.badge && (
+                  <span
+                    className={`shrink-0 px-2 py-0.5 text-[10px] font-extrabold rounded-full font-mono ${
+                      item.badge === 'LIVE'
+                        ? 'bg-[#ff0060] text-white animate-pulse'
+                        : item.badge === 'Auto'
+                        ? 'bg-[#1b9c85] text-white'
+                        : 'bg-[#ff0060] text-white'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Bottom Safety & System Status Card */}
-      <div className="mt-8 pt-4 border-t border-slate-800/80 space-y-3">
-        {/* Safety Lock Card */}
+      {/* Bottom Mode Status & Logout */}
+      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        {/* Status Indicator Pill */}
         <div
-          className={`rounded-2xl p-3.5 border shadow-lg transition-all ${
+          className={`p-3 rounded-2xl text-xs font-medium border flex items-center justify-between transition-all ${
             isPaper
-              ? 'bg-gradient-to-b from-slate-900/90 to-slate-950 border-emerald-500/30'
-              : 'bg-gradient-to-b from-rose-950/40 to-slate-950 border-rose-500/40 shadow-rose-950/20'
+              ? 'bg-[#1b9c85]/10 border-[#1b9c85]/20 text-[#1b9c85]'
+              : 'bg-[#ff0060]/10 border-[#ff0060]/20 text-[#ff0060]'
           }`}
         >
-          <div
-            className={`flex items-center gap-2 text-xs font-bold mb-1 ${
-              isPaper ? 'text-emerald-400' : 'text-rose-400'
-            }`}
-          >
-            {isPaper ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4 animate-pulse" />}
-            <span>{isPaper ? 'PAPER TRADING ONLY' : 'LIVE TRADING ACTIVE'}</span>
-          </div>
-          <p className="text-[10px] text-slate-400 leading-relaxed">
-            {isPaper
-              ? '模拟盘防线生效中：严禁向 Polymarket 提交真实订单，资金隔离 Mode B 已激活。'
-              : '实盘撮合模式中：真实订单直连 Polymarket CLOB，单笔受 $10 资金硬顶保护。'}
-          </p>
-
-          <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] font-mono">
-            <span className="text-slate-500">ENGINE FEED</span>
-            <span className="inline-flex items-center gap-1 text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              {isLive ? '100ms LIVE WS' : 'POLLING'}
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isPaper ? 'bg-[#1b9c85]' : 'bg-[#ff0060] animate-ping'
+              }`}
+            />
+            <span className="font-bold uppercase tracking-wider text-[11px]">
+              {isPaper ? 'Simulation' : 'CLOB Live'}
             </span>
           </div>
+          <span className="text-[10px] font-mono opacity-80">v0.2.1</span>
         </div>
 
-        {/* System Version Footnote */}
-        <div className="flex items-center justify-between px-2 text-[10px] text-slate-500 font-mono">
-          <span>EVENT ALPHA</span>
-          <span>v0.2.0-LANDING</span>
-        </div>
+        {/* Logout / Reset Button */}
+        <button
+          onClick={() => onSelectTab('dashboard')}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-xs font-semibold text-[#7d8da1] hover:text-[#ff0060] hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Exit Session</span>
+        </button>
       </div>
     </aside>
   );
