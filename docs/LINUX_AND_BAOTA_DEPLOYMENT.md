@@ -40,9 +40,9 @@
 # 进入安装工作区
 cd /root
 
-# 拉取仓库（若使用压缩包上传，解压后进入目录即可）
-git clone <您的仓库URL> Poly量化
-cd Poly量化
+# 拉取仓库
+git clone https://github.com/Grandova/EventAlpha.git
+cd EventAlpha
 ```
 
 ### 2. 执行一键安装脚本
@@ -81,8 +81,8 @@ WebSocket 接口: ws://127.0.0.1:8080/api/v1/ws
 2. 在终端中直接运行：
    ```bash
    cd /root
-   git clone <您的仓库URL> Poly量化
-   cd Poly量化
+   git clone https://github.com/Grandova/EventAlpha.git
+   cd EventAlpha
    sudo bash install.sh
    ```
    脚本会自动检测到宝塔环境，自动编译前后端，部署至 `/opt/polyquant`，并在系统后台以守护进程运行。

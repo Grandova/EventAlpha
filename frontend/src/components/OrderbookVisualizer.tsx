@@ -38,7 +38,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
   const totalAskDepth = selectedBook?.total_ask_depth_usdc ?? 0;
 
   return (
-    <div className="quant-card p-4">
+    <div className="asmr-card p-6">
       {/* Title & Selector */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
         <div className="flex items-center gap-2">

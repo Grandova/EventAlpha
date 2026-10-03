@@ -203,7 +203,7 @@ SYSTEMD_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 cat > "$SYSTEMD_FILE" <<EOF
 [Unit]
 Description=Polymarket 5-Minute Crypto Up/Down Quant Simulation Engine
-Documentation=https://github.com/PolyQuant
+Documentation=https://github.com/Grandova/EventAlpha
 After=network.target network-online.target
 Wants=network-online.target
 

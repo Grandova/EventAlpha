@@ -23,7 +23,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
   const profitFactor = statistics?.profit_factor ?? 0.0;
 
   return (
-    <div className="quant-card p-4 mb-4">
+    <div className="asmr-card p-6">
       {/* Header & Mini Stats Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">

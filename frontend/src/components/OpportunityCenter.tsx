@@ -44,7 +44,7 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
   };
 
   return (
-    <div className="quant-card p-4 mb-4">
+    <div className="asmr-card p-6 h-full flex flex-col justify-between">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-cyan-400" />

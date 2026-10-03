@@ -31,7 +31,7 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
   const isInCooldown = risk?.is_in_cooldown ?? false;
 
   return (
-    <div className="quant-card p-4 mb-4">
+    <div className="asmr-card p-6">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <DollarSign className="h-4 w-4 text-emerald-400" />

@@ -35,7 +35,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   const totalLiquidity = (book?.up_book?.total_bid_depth_usdc ?? 500) + (book?.down_book?.total_bid_depth_usdc ?? 500);
 
   return (
-    <div className="quant-card p-4 mb-4">
+    <div className="asmr-card p-6 h-full flex flex-col justify-between">
       {/* Header: Market Question & 5M Countdown Timer */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
