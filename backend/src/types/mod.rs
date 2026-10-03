@@ -375,3 +375,128 @@ pub struct SystemEvent {
     pub payload_json: Option<String>,
     pub timestamp_ms: i64,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TradingMode {
+    Paper,
+    Live,
+}
+
+impl Default for TradingMode {
+    fn default() -> Self {
+        TradingMode::Paper
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PolymarketAccount {
+    pub id: String,
+    pub label: String,
+    pub api_key: String,
+    pub api_secret: String,
+    pub api_passphrase: String,
+    pub wallet_address: String,
+    pub proxy_wallet_address: Option<String>,
+    pub is_active: bool,
+    pub balance_usdc: f64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PolymarketAccountPublic {
+    pub id: String,
+    pub label: String,
+    pub api_key_masked: String,
+    pub wallet_address: String,
+    pub proxy_wallet_address: Option<String>,
+    pub is_active: bool,
+    pub balance_usdc: f64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<&PolymarketAccount> for PolymarketAccountPublic {
+    fn from(acc: &PolymarketAccount) -> Self {
+        let masked_key = if acc.api_key.len() > 8 {
+            format!("{}...{}", &acc.api_key[..4], &acc.api_key[acc.api_key.len()-4..])
+        } else {
+            "****".to_string()
+        };
+        Self {
+            id: acc.id.clone(),
+            label: acc.label.clone(),
+            api_key_masked: masked_key,
+            wallet_address: acc.wallet_address.clone(),
+            proxy_wallet_address: acc.proxy_wallet_address.clone(),
+            is_active: acc.is_active,
+            balance_usdc: acc.balance_usdc,
+            created_at: acc.created_at,
+            updated_at: acc.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateAccountRequest {
+    pub label: String,
+    pub api_key: String,
+    pub api_secret: String,
+    pub api_passphrase: String,
+    pub wallet_address: String,
+    pub proxy_wallet_address: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RealOrder {
+    pub id: String,
+    pub account_id: String,
+    pub clob_order_id: Option<String>,
+    pub market_id: String,
+    pub token_id: String,
+    pub asset: Asset,
+    pub side: String,
+    pub outcome: String,
+    pub order_type: String,
+    pub price: f64,
+    pub size: f64,
+    pub filled_size: f64,
+    pub status: String,
+    pub fee: f64,
+    pub pnl: Option<f64>,
+    pub error_message: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearningState {
+    pub id: String,
+    pub asset: Asset,
+    pub version: i64,
+    pub weights: Vec<f64>,
+    pub bias: f64,
+    pub platt_a: f64,
+    pub platt_b: f64,
+    pub learning_rate: f64,
+    pub total_samples_trained: i64,
+    pub rolling_accuracy: f64,
+    pub rolling_brier_score: f64,
+    pub top_features: Vec<(String, f64)>,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearningHistoryEntry {
+    pub id: i64,
+    pub asset: Asset,
+    pub round_id: String,
+    pub predicted_prob: f64,
+    pub actual_outcome: i64,
+    pub loss: f64,
+    pub weights_delta_norm: f64,
+    pub brier_score: f64,
+    pub timestamp: i64,
+}
+

@@ -8,16 +8,21 @@ import {
   PlayCircle,
   FileText,
   ShieldCheck,
+  ShieldAlert,
   TrendingUp,
   Activity,
   Zap,
+  Brain,
+  Wallet,
 } from 'lucide-react';
+import { TradingMode } from '../types';
 
 interface SidebarProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
   activePositionsCount?: number;
   isLive?: boolean;
+  tradingMode?: TradingMode;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,7 +30,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   activePositionsCount = 0,
   isLive = true,
+  tradingMode = 'paper',
 }) => {
+  const isPaper = tradingMode === 'paper';
+
   const navItems = [
     {
       id: 'dashboard',
@@ -33,6 +41,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
       sublabel: '实时盘面与信号',
       icon: LayoutDashboard,
       badge: activePositionsCount > 0 ? `${activePositionsCount} 活跃仓位` : undefined,
+    },
+    {
+      id: 'self-learning',
+      label: 'Auto-Learning',
+      sublabel: '在线单轮增量自进化',
+      icon: Brain,
+      badge: '自主学习',
+    },
+    {
+      id: 'live-orders',
+      label: 'Live Orders',
+      sublabel: 'Polymarket 实盘监控',
+      icon: ShieldAlert,
+      badge: !isPaper ? 'LIVE' : undefined,
+    },
+    {
+      id: 'accounts',
+      label: 'Accounts',
+      sublabel: '钱包与 API 凭据',
+      icon: Wallet,
     },
     {
       id: 'microstructure',
@@ -93,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 POLYQUANT<span className="text-cyan-400">.5M</span>
               </h1>
             </div>
-            <p className="text-[11px] font-medium text-slate-400">Crypto Quant & Simulator</p>
+            <p className="text-[11px] font-medium text-slate-400">Crypto Quant & Self-Learning</p>
           </div>
         </div>
 
@@ -112,7 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => onSelectTab(item.id)}
-                  className={`w-full group relative flex items-center justify-between px-3.5 py-3 rounded-2xl text-left transition-all duration-200 cursor-pointer ${
+                  className={`w-full group relative flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-left transition-all duration-200 cursor-pointer ${
                     isActive
                       ? 'bg-gradient-to-r from-cyan-500/15 via-indigo-500/10 to-transparent text-cyan-400 shadow-md shadow-cyan-950/20 font-semibold'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 font-medium'
@@ -142,7 +170,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
 
                   {item.badge && (
-                    <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
+                    <span
+                      className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-full border font-mono ${
+                        item.badge === 'LIVE'
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 animate-pulse'
+                          : item.badge === '自主学习'
+                          ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+                          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      }`}
+                    >
                       {item.badge}
                     </span>
                   )}
@@ -156,13 +192,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Bottom Safety & System Status Card */}
       <div className="mt-8 pt-4 border-t border-slate-800/80 space-y-3">
         {/* Safety Lock Card */}
-        <div className="rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-950 p-3.5 border border-emerald-500/30 shadow-lg">
-          <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold mb-1">
-            <ShieldCheck className="w-4 h-4" />
-            <span>PAPER TRADING ONLY</span>
+        <div
+          className={`rounded-2xl p-3.5 border shadow-lg transition-all ${
+            isPaper
+              ? 'bg-gradient-to-b from-slate-900/90 to-slate-950 border-emerald-500/30'
+              : 'bg-gradient-to-b from-rose-950/40 to-slate-950 border-rose-500/40 shadow-rose-950/20'
+          }`}
+        >
+          <div
+            className={`flex items-center gap-2 text-xs font-bold mb-1 ${
+              isPaper ? 'text-emerald-400' : 'text-rose-400'
+            }`}
+          >
+            {isPaper ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4 animate-pulse" />}
+            <span>{isPaper ? 'PAPER TRADING ONLY' : 'LIVE TRADING ACTIVE'}</span>
           </div>
           <p className="text-[10px] text-slate-400 leading-relaxed">
-            硬性防线生效中：严禁向 Polymarket 提交真实订单，资金隔离 Mode B 已激活。
+            {isPaper
+              ? '模拟盘防线生效中：严禁向 Polymarket 提交真实订单，资金隔离 Mode B 已激活。'
+              : '实盘撮合模式中：真实订单直连 Polymarket CLOB，单笔受 $10 资金硬顶保护。'}
           </p>
 
           <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] font-mono">
@@ -177,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* System Version Footnote */}
         <div className="flex items-center justify-between px-2 text-[10px] text-slate-500 font-mono">
           <span>EVENT ALPHA</span>
-          <span>v0.1.0-STABLE</span>
+          <span>v0.2.0-LANDING</span>
         </div>
       </div>
     </aside>

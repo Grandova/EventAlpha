@@ -52,10 +52,51 @@ pub struct AppState {
     pub models: Arc<ModelManager>,
     pub strategy: Arc<StrategyEngine>,
     pub execution: Arc<PaperExecutionEngine>,
+    pub live_execution: Arc<crate::execution::LiveExecutionEngine>,
+    pub self_learning: Arc<crate::models::SelfLearningEngine>,
     pub risk: Arc<RiskManager>,
     pub backtest: Arc<BacktestEngine>,
     pub replay: Arc<ReplayEngine>,
     pub start_time_ms: i64,
+}
+
+impl AppState {
+    pub fn new(
+        config: Arc<AppConfig>,
+        db: Arc<Database>,
+        collector: Arc<CollectorManager>,
+        polymarket: Arc<PolymarketManager>,
+        composite: Arc<CompositePriceEngine>,
+        features: Arc<FeatureEngine>,
+        models: Arc<ModelManager>,
+        strategy: Arc<StrategyEngine>,
+        execution: Arc<PaperExecutionEngine>,
+        risk: Arc<RiskManager>,
+        backtest: Arc<BacktestEngine>,
+        replay: Arc<ReplayEngine>,
+        start_time_ms: i64,
+    ) -> Self {
+        let clob_http = Arc::new(crate::polymarket::PolymarketClobHttpClient::default());
+        let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
+        let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
+        Self {
+            config,
+            db,
+            collector,
+            polymarket,
+            composite,
+            features,
+            models,
+            strategy,
+            execution,
+            live_execution,
+            self_learning,
+            risk,
+            backtest,
+            replay,
+            start_time_ms,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,7 +175,20 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/strategy/config", get(handle_strategy_config_get).post(handle_strategy_config_update))
         .route("/api/v1/models/config", get(handle_model_config))
         .route("/api/v1/models/train", post(handle_model_train))
-        .route("/api/v1/dataset/generate_synthetic", post(handle_dataset_generate_synthetic));
+        .route("/api/v1/dataset/generate_synthetic", post(handle_dataset_generate_synthetic))
+        // Polymarket Accounts & Live Trading
+        .route("/api/v1/trading/mode", get(handle_trading_mode_get).post(handle_trading_mode_set))
+        .route("/api/v1/accounts", get(handle_accounts_get).post(handle_accounts_create))
+        .route("/api/v1/accounts/{id}/activate", post(handle_account_activate))
+        .route("/api/v1/accounts/{id}", axum::routing::delete(handle_account_delete))
+        .route("/api/v1/accounts/{id}/balance", get(handle_account_balance))
+        .route("/api/v1/real/orders", get(handle_real_orders_get))
+        .route("/api/v1/real/emergency_halt", post(handle_real_emergency_halt))
+        // Self-Learning & Auto-Evolution
+        .route("/api/v1/learning/status", get(handle_learning_status))
+        .route("/api/v1/learning/toggle", post(handle_learning_toggle))
+        .route("/api/v1/learning/retrain", post(handle_learning_retrain))
+        .route("/api/v1/learning/history", get(handle_learning_history));
 
     let candidates = [
         std::env::var("FRONTEND_DIST_PATH").ok(),
@@ -618,6 +672,190 @@ async fn handle_dataset_generate_synthetic(
     })))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SetTradingModeRequest {
+    pub mode: String, // "paper" or "live"
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RetrainRequest {
+    pub asset: Option<String>,
+    pub epochs: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToggleLearningRequest {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AssetQuery {
+    pub asset: Option<String>,
+    pub limit: Option<i64>,
+}
+
+async fn handle_trading_mode_get(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mode = state.live_execution.get_mode().await;
+    Json(serde_json::json!({
+        "mode": format!("{:?}", mode).to_lowercase(),
+        "is_live": mode == crate::types::TradingMode::Live
+    }))
+}
+
+async fn handle_trading_mode_set(
+    State(state): State<AppState>,
+    Json(payload): Json<SetTradingModeRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let new_mode = match payload.mode.to_lowercase().as_str() {
+        "live" => crate::types::TradingMode::Live,
+        _ => crate::types::TradingMode::Paper,
+    };
+
+    match state.live_execution.set_mode(new_mode).await {
+        Ok(mode) => Ok(Json(serde_json::json!({
+            "success": true,
+            "mode": format!("{:?}", mode).to_lowercase()
+        }))),
+        Err(err) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": err
+            })),
+        )),
+    }
+}
+
+async fn handle_accounts_get(State(state): State<AppState>) -> Json<Vec<crate::types::PolymarketAccountPublic>> {
+    let accs = state.db.get_accounts().await.unwrap_or_default();
+    let public_accs: Vec<_> = accs.iter().map(crate::types::PolymarketAccountPublic::from).collect();
+    Json(public_accs)
+}
+
+async fn handle_accounts_create(
+    State(state): State<AppState>,
+    Json(req): Json<crate::types::CreateAccountRequest>,
+) -> Result<Json<crate::types::PolymarketAccountPublic>, (StatusCode, String)> {
+    let now = Utc::now().timestamp_millis();
+    let id = uuid::Uuid::new_v4().to_string();
+
+    let account = crate::types::PolymarketAccount {
+        id,
+        label: req.label,
+        api_key: req.api_key,
+        api_secret: req.api_secret,
+        api_passphrase: req.api_passphrase,
+        wallet_address: req.wallet_address,
+        proxy_wallet_address: req.proxy_wallet_address,
+        is_active: true,
+        balance_usdc: 0.0,
+        created_at: now,
+        updated_at: now,
+    };
+
+    // If active, deactivate others
+    let _ = state.db.set_active_account(&account.id).await;
+
+    if let Err(e) = state.db.insert_account(&account).await {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save account: {:?}", e)));
+    }
+
+    Ok(Json(crate::types::PolymarketAccountPublic::from(&account)))
+}
+
+async fn handle_account_activate(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    let success = state.db.set_active_account(&id).await.is_ok();
+    Json(serde_json::json!({ "success": success }))
+}
+
+async fn handle_account_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    let success = state.db.delete_account(&id).await.is_ok();
+    Json(serde_json::json!({ "success": success }))
+}
+
+async fn handle_account_balance(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let accounts = state.db.get_accounts().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let account = accounts.into_iter().find(|a| a.id == id).ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    let balance = state.live_execution.clob_client().fetch_balance(&account).await.unwrap_or(account.balance_usdc);
+    let _ = state.db.update_account_balance(&account.id, balance).await;
+
+    Ok(Json(serde_json::json!({
+        "account_id": id,
+        "balance_usdc": balance
+    })))
+}
+
+async fn handle_real_orders_get(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Json<Vec<crate::types::RealOrder>> {
+    let limit = query.limit.unwrap_or(100);
+    let orders = state.db.get_real_orders(limit).await.unwrap_or_default();
+    Json(orders)
+}
+
+async fn handle_real_emergency_halt(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let res = state.live_execution.emergency_halt().await;
+    Json(serde_json::json!({
+        "success": res.is_ok(),
+        "mode": "paper",
+        "message": "Emergency halt triggered. Real trading halted immediately."
+    }))
+}
+
+async fn handle_learning_status(
+    State(state): State<AppState>,
+    Query(query): Query<AssetQuery>,
+) -> Json<crate::models::LearningStatusResponse> {
+    let asset = query.asset.and_then(|a| a.parse().ok()).unwrap_or(Asset::BTC);
+    let status = state.self_learning.get_status(asset).await;
+    Json(status)
+}
+
+async fn handle_learning_toggle(
+    State(state): State<AppState>,
+    Json(req): Json<ToggleLearningRequest>,
+) -> Json<serde_json::Value> {
+    state.self_learning.set_enabled(req.enabled);
+    Json(serde_json::json!({
+        "success": true,
+        "auto_learning_enabled": req.enabled
+    }))
+}
+
+async fn handle_learning_retrain(
+    State(state): State<AppState>,
+    Json(req): Json<RetrainRequest>,
+) -> Json<serde_json::Value> {
+    let asset = req.asset.and_then(|a| a.parse().ok()).unwrap_or(Asset::BTC);
+    let epochs = req.epochs.unwrap_or(15);
+    let res = state.self_learning.trigger_batch_retrain(asset, epochs).await;
+    Json(serde_json::json!({
+        "success": res.is_some(),
+        "result": res
+    }))
+}
+
+async fn handle_learning_history(
+    State(state): State<AppState>,
+    Query(query): Query<AssetQuery>,
+) -> Json<Vec<crate::types::LearningHistoryEntry>> {
+    let asset = query.asset.and_then(|a| a.parse().ok());
+    let limit = query.limit.unwrap_or(50);
+    let history = state.db.get_learning_history(asset, limit).await.unwrap_or_default();
+    Json(history)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -720,6 +958,10 @@ assets: ["BTC", "ETH", "SOL"]
         let backtest = Arc::new(BacktestEngine::new(db.clone(), models.clone()));
         let replay = Arc::new(ReplayEngine::new(db.clone(), models.clone(), strategy.clone()));
 
+        let clob_http = Arc::new(crate::polymarket::PolymarketClobHttpClient::default());
+        let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
+        let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
+
         AppState {
             config,
             db,
@@ -730,6 +972,8 @@ assets: ["BTC", "ETH", "SOL"]
             models,
             strategy,
             execution,
+            live_execution,
+            self_learning,
             risk,
             backtest,
             replay,

@@ -507,3 +507,80 @@ export type WsMessage =
   | { type: 'resolution'; data: { event: any } }
   | { type: 'bankroll'; data: { active: number; locked: number; total: number } };
 
+export type TradingMode = 'paper' | 'live';
+
+export interface TradingModeStatus {
+  mode: TradingMode;
+  active_account: PolymarketAccountPublic | null;
+}
+
+export interface PolymarketAccountPublic {
+  id: string;
+  label: string;
+  api_key_masked: string;
+  wallet_address: string;
+  proxy_wallet_address?: string;
+  is_active: boolean;
+  balance_usdc: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CreateAccountRequest {
+  label: string;
+  api_key: string;
+  api_secret: string;
+  api_passphrase: string;
+  wallet_address: string;
+  proxy_wallet_address?: string;
+}
+
+export interface RealOrder {
+  id: string;
+  account_id: string;
+  clob_order_id?: string;
+  market_id: string;
+  token_id: string;
+  asset: Asset;
+  side: string;
+  outcome: string;
+  order_type: string;
+  price: number;
+  size: number;
+  filled_size: number;
+  status: string;
+  fee: number;
+  pnl?: number;
+  error_message?: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface LearningState {
+  id: string;
+  asset: Asset;
+  version: number;
+  weights: number[];
+  bias: number;
+  platt_a: number;
+  platt_b: number;
+  learning_rate: number;
+  total_samples_trained: number;
+  rolling_accuracy: number;
+  rolling_brier_score: number;
+  top_features: [string, number][];
+  updated_at: number;
+}
+
+export interface LearningHistoryEntry {
+  id: number;
+  asset: Asset;
+  round_id: string;
+  predicted_prob: number;
+  actual_outcome: number;
+  loss: number;
+  weights_delta_norm: number;
+  brier_score: number;
+  timestamp: number;
+}
+

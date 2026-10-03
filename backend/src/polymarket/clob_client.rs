@@ -187,4 +187,280 @@ mod tests {
         assert_eq!(summary.up_book.best_ask, Some(0.65));
         assert_eq!(summary.implied_prob_up, 0.645);
     }
+
+    #[test]
+    fn test_clob_hmac_signature_generation() {
+        let client = PolymarketClobHttpClient::new("https://clob.polymarket.com");
+        let secret = "bXktc2VjcmV0LWtleS0xMjM0NQ=="; // base64 encoded
+        let headers = client.generate_auth_headers(
+            "test-api-key",
+            secret,
+            "test-passphrase",
+            1710000000,
+            "GET",
+            "/balance-allowance",
+            None,
+        );
+        assert!(headers.is_ok());
+        let h = headers.unwrap();
+        assert_eq!(h.get("poly-api-key").unwrap(), "test-api-key");
+        assert_eq!(h.get("poly-timestamp").unwrap(), "1710000000");
+        assert_eq!(h.get("poly-passphrase").unwrap(), "test-passphrase");
+        assert!(h.contains_key("poly-signature"));
+    }
 }
+
+// =============================================================================
+// Polymarket CLOB HTTP Client for Real Live Trading
+// =============================================================================
+
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
+use hmac::{Hmac, Mac};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ClobOrderResponse {
+    pub success: bool,
+    pub order_id: Option<String>,
+    pub status: String,
+    pub filled_size: Option<f64>,
+    pub avg_price: Option<f64>,
+    pub error_msg: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct PolymarketClobHttpClient {
+    base_url: String,
+    http_client: reqwest::Client,
+}
+
+impl Default for PolymarketClobHttpClient {
+    fn default() -> Self {
+        Self::new("https://clob.polymarket.com")
+    }
+}
+
+impl PolymarketClobHttpClient {
+    pub fn new(base_url: &str) -> Self {
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .unwrap_or_default(),
+        }
+    }
+
+    /// Generate Polymarket L2 HMAC-SHA256 signature headers
+    pub fn generate_auth_headers(
+        &self,
+        api_key: &str,
+        api_secret: &str,
+        api_passphrase: &str,
+        timestamp: u64,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+    ) -> Result<HeaderMap, String> {
+        // Decode secret: try base64, fallback to raw bytes
+        let secret_bytes = BASE64.decode(api_secret).unwrap_or_else(|_| api_secret.as_bytes().to_vec());
+
+        let mut mac = HmacSha256::new_from_slice(&secret_bytes)
+            .map_err(|e| format!("Invalid HMAC key length: {:?}", e))?;
+
+        // Payload format: timestamp + method + path + body
+        let payload = format!("{}{}{}{}", timestamp, method.to_uppercase(), path, body.unwrap_or(""));
+        mac.update(payload.as_bytes());
+        let signature = BASE64.encode(mac.finalize().into_bytes());
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_static("poly-api-key"),
+            HeaderValue::from_str(api_key).map_err(|e| e.to_string())?,
+        );
+        headers.insert(
+            HeaderName::from_static("poly-signature"),
+            HeaderValue::from_str(&signature).map_err(|e| e.to_string())?,
+        );
+        headers.insert(
+            HeaderName::from_static("poly-timestamp"),
+            HeaderValue::from_str(&timestamp.to_string()).map_err(|e| e.to_string())?,
+        );
+        headers.insert(
+            HeaderName::from_static("poly-passphrase"),
+            HeaderValue::from_str(api_passphrase).map_err(|e| e.to_string())?,
+        );
+
+        Ok(headers)
+    }
+
+    /// Fetch USDC Balance on Polygon for account
+    pub async fn fetch_balance(&self, account: &crate::types::PolymarketAccount) -> Result<f64, String> {
+        let path = "/balance-allowance?asset_type=COLLATERAL";
+        let url = format!("{}{}", self.base_url, path);
+        let timestamp = Utc::now().timestamp() as u64;
+
+        let headers = self.generate_auth_headers(
+            &account.api_key,
+            &account.api_secret,
+            &account.api_passphrase,
+            timestamp,
+            "GET",
+            path,
+            None,
+        )?;
+
+        let resp = self
+            .http_client
+            .get(&url)
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|e| format!("Network request failed: {:?}", e))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("Polymarket CLOB API error ({}): {}", status, text));
+        }
+
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse response JSON: {:?}", e))?;
+
+        // Polymarket returns collateral balance
+        let balance_str = json.get("balance").and_then(|b| b.as_str()).unwrap_or("0.0");
+        let balance = balance_str.parse::<f64>().unwrap_or(0.0);
+        Ok(balance)
+    }
+
+    /// Place a real order on Polymarket CLOB
+    pub async fn place_order(
+        &self,
+        account: &crate::types::PolymarketAccount,
+        token_id: &str,
+        side: &str, // BUY or SELL
+        price: f64,
+        size: f64,
+        order_type: &str, // FOK, GTC, IOC
+    ) -> Result<ClobOrderResponse, String> {
+        let path = "/order";
+        let url = format!("{}{}", self.base_url, path);
+        let timestamp = Utc::now().timestamp() as u64;
+
+        let order_payload = serde_json::json!({
+            "tokenID": token_id,
+            "price": format!("{:.3}", price),
+            "size": format!("{:.2}", size),
+            "side": side.to_uppercase(),
+            "orderType": order_type.to_uppercase(),
+            "user": account.wallet_address,
+        });
+        let body_str = order_payload.to_string();
+
+        let headers = self.generate_auth_headers(
+            &account.api_key,
+            &account.api_secret,
+            &account.api_passphrase,
+            timestamp,
+            "POST",
+            path,
+            Some(&body_str),
+        )?;
+
+        let resp = self
+            .http_client
+            .post(&url)
+            .headers(headers)
+            .header("Content-Type", "application/json")
+            .body(body_str)
+            .send()
+            .await
+            .map_err(|e| format!("Order submission failed: {:?}", e))?;
+
+        let status_code = resp.status();
+        let resp_json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse CLOB order response: {:?}", e))?;
+
+        if !status_code.is_success() {
+            let error_msg = resp_json
+                .get("errorMsg")
+                .or_else(|| resp_json.get("message"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("Unknown CLOB rejection")
+                .to_string();
+            return Ok(ClobOrderResponse {
+                success: false,
+                order_id: None,
+                status: "FAILED".to_string(),
+                filled_size: None,
+                avg_price: None,
+                error_msg: Some(error_msg),
+            });
+        }
+
+        let order_id = resp_json
+            .get("orderID")
+            .or_else(|| resp_json.get("id"))
+            .and_then(|id| id.as_str())
+            .map(|s| s.to_string());
+
+        let status = resp_json
+            .get("status")
+            .and_then(|s| s.as_str())
+            .unwrap_or("FILLED")
+            .to_string();
+
+        Ok(ClobOrderResponse {
+            success: true,
+            order_id,
+            status,
+            filled_size: Some(size),
+            avg_price: Some(price),
+            error_msg: None,
+        })
+    }
+
+    /// Cancel a real open order on Polymarket CLOB
+    pub async fn cancel_order(
+        &self,
+        account: &crate::types::PolymarketAccount,
+        order_id: &str,
+    ) -> Result<bool, String> {
+        let path = "/order";
+        let url = format!("{}{}", self.base_url, path);
+        let timestamp = Utc::now().timestamp() as u64;
+
+        let payload = serde_json::json!({ "orderID": order_id }).to_string();
+
+        let headers = self.generate_auth_headers(
+            &account.api_key,
+            &account.api_secret,
+            &account.api_passphrase,
+            timestamp,
+            "DELETE",
+            path,
+            Some(&payload),
+        )?;
+
+        let resp = self
+            .http_client
+            .delete(&url)
+            .headers(headers)
+            .header("Content-Type", "application/json")
+            .body(payload)
+            .send()
+            .await
+            .map_err(|e| format!("Cancel order failed: {:?}", e))?;
+
+        Ok(resp.status().is_success())
+    }
+}
+

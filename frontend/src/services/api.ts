@@ -25,6 +25,13 @@ import {
   ModelTrainRequest,
   ModelTrainResult,
   GenerateSyntheticResponse,
+  TradingMode,
+  TradingModeStatus,
+  PolymarketAccountPublic,
+  CreateAccountRequest,
+  RealOrder,
+  LearningState,
+  LearningHistoryEntry,
 } from '../types';
 
 const BASE_URL = '';
@@ -154,4 +161,59 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rounds }),
     }),
+
+  // Trading Mode & Real Accounts
+  getTradingMode: () => fetchJson<TradingModeStatus>('/api/v1/trading/mode'),
+  setTradingMode: (mode: TradingMode) =>
+    fetchJson<{ mode: string; status: string }>('/api/v1/trading/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    }),
+  getAccounts: () => fetchJson<PolymarketAccountPublic[]>('/api/v1/accounts'),
+  createAccount: (req: CreateAccountRequest) =>
+    fetchJson<PolymarketAccountPublic>('/api/v1/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }),
+  activateAccount: (id: string) =>
+    fetchJson<{ status: string; account_id: string }>(`/api/v1/accounts/${id}/activate`, {
+      method: 'POST',
+    }),
+  deleteAccount: (id: string) =>
+    fetchJson<{ status: string; deleted: boolean }>(`/api/v1/accounts/${id}`, {
+      method: 'DELETE',
+    }),
+  getAccountBalance: (id: string) =>
+    fetchJson<{ account_id: string; balance_usdc: number }>(`/api/v1/accounts/${id}/balance`),
+
+  // Real CLOB Trading & Emergency Halt
+  getRealOrders: (limit = 20) => fetchJson<RealOrder[]>(`/api/v1/real/orders?limit=${limit}`),
+  emergencyHalt: () =>
+    fetchJson<{ status: string; mode: string; message: string }>('/api/v1/real/emergency_halt', {
+      method: 'POST',
+    }),
+
+  // Continuous Self-Learning Engine
+  getLearningStatus: (asset: Asset) =>
+    fetchJson<LearningState>(`/api/v1/learning/status?asset=${asset}`),
+  toggleLearning: (enabled: boolean) =>
+    fetchJson<{ auto_learning_enabled: boolean }>('/api/v1/learning/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }),
+  retrainLearning: (asset: Asset) =>
+    fetchJson<{ status: string; asset: string; samples: number; accuracy: number; brier_score: number }>(
+      '/api/v1/learning/retrain',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset }),
+      }
+    ),
+  getLearningHistory: (asset: Asset, limit = 50) =>
+    fetchJson<LearningHistoryEntry[]>(`/api/v1/learning/history?asset=${asset}&limit=${limit}`),
 };
+

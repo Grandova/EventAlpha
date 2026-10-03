@@ -1,58 +1,77 @@
 # EventAlpha - Polymarket 5-Minute Crypto Up/Down Quant System
-### 工业级高精度量化预测、概率校准、真实深度模拟撮合与逐帧回放系统
+### 工业级高精度量化预测、概率校准、模拟盘与实盘双模式、自主在线学习与自进化量化交易系统
 
-![Mode](https://img.shields.io/badge/Trading%20Mode-Strictly%20Paper%20Only-brightgreen)
-![Safety](https://img.shields.io/badge/Safety%20Lock-Kernel%20Panic%20Enforced-red)
+![Mode](https://img.shields.io/badge/Trading%20Mode-Paper%20%7C%20Live%20CLOB-brightgreen)
+![Safety](https://img.shields.io/badge/Safety%20Lock-Mode%20B%20%2410%20Cap%20%26%20Emergency%20Halt-red)
 ![UI Style](https://img.shields.io/badge/UI%20Style-AsmrProg--YT%20Dashboard%20Designs-cyan)
 ![Rust](https://img.shields.io/badge/Rust-1.85+-orange)
 ![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite%206%20%7C%20Tailwind-blue)
-![Database](https://img.shields.io/badge/Database-SQLite%20WAL%20(15%20Tables)-purple)
-![Tests](https://img.shields.io/badge/Tests-15%20Suites%20%7C%2089%20Passed%20(100%25)-success)
+![Database](https://img.shields.io/badge/Database-SQLite%20WAL%20(19%20Tables)-purple)
+![Self-Learning](https://img.shields.io/badge/AI%20Engine-Online%20SGD%20Incremental%20Learning-blueviolet)
+![Tests](https://img.shields.io/badge/Tests-16%20Suites%20%7C%2092%20Passed%20(100%25)-success)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
 
 ## 🌟 核心亮点与系统定位
 
-**EventAlpha** 是一套专为 **Polymarket** 上的 **BTC / ETH / SOL 5 分钟 Up/Down 二元期权预测市场** 打造的工业级量化策略研究、实时预测与真实盘口深度模拟撮合系统。
+**EventAlpha** 是一套专为 **Polymarket** 上的 **BTC / ETH / SOL 5 分钟 Up/Down 二元期权预测市场** 打造的工业级量化策略研发、自主在线学习自进化、模拟盘推演与 Polymarket CLOB 实盘撮合落地系统。
 
-系统坚决摒弃“玩具 Demo”与过度简化的假设，全链路遵循高频量化与预测市场微观结构规范，以 **“真实可运行、数据零泄漏、严格时间箭头、真实盘口撮合、长期可持续验证”** 为最高准则。
-
-### 🛡️ 核心安全铁律（Zero Real Money Risk Invariant）
-1. **内核级禁止实盘**：系统底层 `SafetyGuard` 在启动最前置阶段执行硬断言，配置 `real_trading_enabled` 必须恒为 `false`。任何试图开启实盘的配置均会直接触发内核 `panic!` 终止进程，杜绝任何误触或配置失误。
-2. **私钥绝对隔离**：系统中不存在任何私钥存储、助记词导入或链上交易签名模块，从物理与逻辑层面彻底杜绝任何资金损失风险。
-3. **Fail-Closed 保护**：跨所数据延迟超过 2000ms、本地时钟漂移超过 1000ms、盘口可用深度不足 $300 时，系统自动触发软熔断并阻断一切模拟下单。
+系统坚决摒弃“玩具 Demo”与过度简化的假设，全链路遵循高频量化与预测市场微观结构规范，以 **“真实可运行、数据零泄漏、严格时间箭头、持续自主学习越来越强、真实盘口撮合、严格风控熔断”** 为最高准则。
 
 ---
 
-## 🎨 现代化控制台 UI（采用 AsmrProg-YT Dashboard Designs 风格）
+## 🚀 核心功能矩阵
 
-系统前端控制台全面重构，深度汲取并融合了 **[AsmrProg-YT Dashboard Designs](https://github.com/AsmrProg-YT/Dashboard-Designs)** 的顶级现代深色微拟物与玻璃拟态（Glassmorphic）设计语言：
+### 1. 模拟盘 (Paper Trading) 与 实盘 (Live Trading) 双模无缝切换
+- **模拟盘 (Paper)**：采用真实订单簿 Section 21 深度穿透撮合（Depth-Walking Fill），扣除真实滑点与手续费，零本金风险验证策略。
+- **实盘 (Live)**：支持绑定真实的 Polymarket 账户凭据（API Key / Secret / Passphrase / Polygon 钱包地址），通过 Polymarket L2 HMAC-SHA256 签名协议直连真实订单簿撮合。
+- **实盘安全防线（Hard Protection）**：
+  - 未绑定/激活账户时强制阻断切换实盘；
+  - 严格限制单笔最大下注与资金硬顶（Mode B 封顶 $10.00 USDC）；
+  - 配备前台全局 **一键紧急熔断 (KILL SWITCH)**：毫秒级撤销全部在途委托并强制安全切回模拟盘。
+
+### 2. 自主在线学习与持续自进化引擎 (Continuous Online Self-Learning)
+- **让量化系统越跑越强**：系统配备专门的在线自学习演化中枢。
+- **在线单轮增量 SGD 更新**：每当一个 5 分钟盘面结算（UP 或 DOWN）后，自学习引擎自动将该轮收集的 37 维微观特征、预测概率与实际胜负结果进行损失计算，毫秒级步进更新权重：$w \leftarrow w - \eta (p - y)x$。
+- **动态 Platt 概率校准**：自适应修正 Logistic 回归输出概率偏差，使长期置信度真实对应大数定律胜率。
+- **全历史断点续传**：学习所得的模型权重、偏差与校准参数实时保存在 SQLite 数据库中，跨服务重启自愈继承，经验永不丢失。
+- **一键全量历史重训练**：支持基于历史所有结算盘面进行全样本 SGD 批量重训演化。
+
+### 3. AsmrProg-YT 现代微拟物与玻璃拟态 UI 控制台
+深度汲取 **[AsmrProg-YT Dashboard Designs](https://github.com/AsmrProg-YT/Dashboard-Designs)** 的视觉语言：
+- **黑曜石深色背景与半透明毛玻璃层**：`#090d16` 暗夜基底与 `backdrop-filter: blur(16px)`。
+- **SVG 环形动态进度指示器 (Circular Progress Rings)**：实时展现本金利用率、策略胜率与 5M 盘面倒计时。
+- **动态特征权重排行榜 (Top Feature Importance Ladder)**：可视化展示自学习过程中被模型动态增强或抑制的核心特征。
+- **全息微观盘口阶梯与双向深度图 (OrderBook Depth)**：实时渲染买卖五档、加权中价与 20 档失衡度 (OBI)。
+
+---
+
+## 💻 控制台视图概览
 
 ```
-+-------------------------------------------------------------------------------------------------------+
-|  EVENTALPHA 5M QUANT                [BTC/USDT] [ETH/USDT] [SOL/USDT]      Latency: 42ms | WS: LIVE     |
-+---------------------+---------------------------------------------------------------------------------+
-|  [Sidebar Navigation|                                                                                 |
-|  * 实时行情盘       |  +----------------+  +----------------+  +----------------+  +----------------+ |
-|  * 机会雷达         |  | Active Bankroll|  | Locked Profit  |  | Win Rate       |  | 5M Implied P   | |
-|  * 资金风控         |  |  [SVG Ring 85%]|  |   +$4.85 USDC  |  |  [SVG Ring 73%]|  |  [SVG Ring 68%]| |
-|  * 交易日志         |  |   $8.50 / $10  |  |   100% 隔离保护|  |   19W - 7L     |  |   P(UP) 68.4%  | |
-|  * 深度订单簿       |  +----------------+  +----------------+  +----------------+  +----------------+ |
-|  * 历史回测         |                                                                                 |
-|  * 逐帧回放         |  +--------------------------------------------+  +----------------------------+ |
-|                     |  | Polymarket 5M 实时二元期权盘口与多所比价   |  | 策略信号与机会评分卡       | |
-|  -----------------  |  | * 剩余时间: 02:45 (倒计时动态进度条)        |  | * 推荐操作: BUY UP         | |
-|  [System Status]    |  | * 币安/OKX/Bybit/Coinbase 综合指数         |  | * 预期胜率: 78.4% (高置信) | |
-|  Engine: ONLINE     |  | * 当前偏离度: +$142.50 (+0.16%)            |  | * 净 Edge: +12.72% (扣费)  | |
-|  Paper Mode: LOCKED |  +--------------------------------------------+  +----------------------------+ |
-+---------------------+---------------------------------------------------------------------------------+
++-------------------------------------------------------------------------------------------------------------------------+
+|  EVENTALPHA 5M QUANT                [模拟盘 | 实盘]  [账户: Main MM ($48.5U)]  [BTC] [ETH] [SOL]  Latency: 42ms | WS: LIVE|
++---------------------+---------------------------------------------------------------------------------------------------+
+|  [Sidebar Navigation|                                                                                                   |
+|  * 实时看板         |  +----------------+  +----------------+  +----------------+  +----------------+                 |
+|  * 自主学习与进化   |  | Active Bankroll|  | Locked Profit  |  | Win Rate       |  | 5M Implied P   |                 |
+|  * 实盘订单监控     |  |  [SVG Ring 85%]|  |   +$4.85 USDC  |  |  [SVG Ring 73%]|  |  [SVG Ring 68%]|                 |
+|  * 账户与凭据管理   |  |   $8.50 / $10  |  |   100% 隔离保护|  |   19W - 7L     |  |   P(UP) 68.4%  |                 |
+|  * 深度订单簿       |  +----------------+  +----------------+  +----------------+  +----------------+                 |
+|  * 特征工程中心     |                                                                                                   |
+|  * 动态调参         |  +--------------------------------------------------+  +----------------------------------------+ |
+|  * 历史回测         |  | Polymarket 5M 实时二元期权盘口与多所比价         |  | 策略信号与机会评分卡                   | |
+|  * 逐帧复盘         |  | * 剩余时间: 02:45 (倒计时动态进度条)              |  | * 推荐操作: BUY UP                     | |
+|  * 审计日志         |  | * 币安/OKX/Bybit/Coinbase 综合指数: $68,450.2     |  | * 预期胜率: 78.4% (高置信)             | |
+|                     |  | * 当前偏离度: +$142.50 (+0.16%)                  |  | * 净 Edge: +12.72% (扣费)              | |
+|  -----------------  |  +--------------------------------------------------+  +----------------------------------------+ |
+|  [System Status]    |                                                                                                   |
+|  Engine: ONLINE     |  +----------------------------------------------------------------------------------------------+ |
+|  Learn: AUTO-SGD    |  | 在线自学习特征权重演化 (Feature Importance Ranking)                                            | |
+|  Mode: PAPER/LIVE   |  | #1 poly_obi_top5 [推升 UP +0.4821]  | #2 distance_to_vol_ratio [推升 UP +0.3952]            | |
++---------------------+---------------------------------------------------------------------------------------------------+
 ```
-
-- **深邃黑曜石背景与流光层次**：采用 `#090d16` 暗夜基底与 `backdrop-filter: blur(16px)` 半透明多层磨砂玻璃质感。
-- **AsmrProg 经典环形进度指示器 (Circular Progress Rings)**：基于 SVG `stroke-dasharray` / `dashoffset` 动态计算，直观展现活跃本金占用率、策略胜率、盘口隐含概率。
-- **专属左侧纵向发光导航栏 (Sidebar)**：集成霓虹流光活动指示器、实时模拟持仓角标、系统 Fail-Closed 保护状态徽章。
-- **高对比度微观盘口梯形图 (OrderBook Depth)**：实时渲染 Polymarket CLOB 买卖五档深度、加权中价与 20 档订单失衡度 (OBI)。
 
 ---
 
@@ -90,7 +109,7 @@ sudo bash install.sh
 
 ```bash
 polyquant status   # 查看服务实时运行状态、内存占用、PID 与健康指标
-polyquant log      # 实时追踪行情采集、特征计算、策略决策与模拟撮合日志 (按 Ctrl+C 退出)
+polyquant log      # 实时追踪行情采集、特征计算、自学习更新与撮合日志 (按 Ctrl+C 退出)
 polyquant restart  # 一键重启量化服务
 polyquant stop     # 停止量化服务
 polyquant config   # 快速编辑量化参数与风控阈值 (保存后自动生效)
@@ -119,82 +138,46 @@ polyquant update   # 一键从 GitHub 拉取最新代码并热重编译更新
      proxy_set_header Connection "upgrade";
      ```
 
-3. **宝塔进程守护管理器托管（备选）**：
-   - 如果习惯宝塔面板可视化管理进程，可在宝塔软件商店安装「进程守护管理器」，导入 [`deploy/baota/supervisor_polyquant.ini`](deploy/baota/supervisor_polyquant.ini)。
+---
+
+## 🔑 Polymarket 账户配置与实盘接入指南
+
+系统支持在前端直接添加与管理 Polymarket 账户：
+
+1. 打开前端控制台右上角 **「账户授权」** 或点击左侧导航栏 **「Accounts」**；
+2. 点击 **「添加新账户」**，输入：
+   - **账户别名**（如：主力实盘账户 01）
+   - **Polygon 钱包地址**（0x 开头的私钥派生公钥地址）
+   - **Polymarket CLOB API Key**
+   - **API Secret (Base64)**
+   - **API Passphrase**
+3. 点击 **「确认安全添加」**：
+   - 凭据仅保存于本地宿主机的 SQLite 数据库；
+   - 前台展示自动进行密钥掩码处理（如 `a1b2...c3d4`）；
+   - 点击 **「刷新」** 即可实时查询链上 Polygon USDC 余额；
+4. 点击顶部模式切换器中的 **「实盘」**，阅读风险确认提示后即可开始全自动或半自动交易！
+5. 如遇任何异常行情，可随时点击顶部红色的 **「紧急熔断 (KILL SWITCH)」** 一键回退至模拟盘。
 
 ---
 
-## 💻 Windows 本地开发者模式启动
+## 🧠 自进化在线学习与模型演进
 
-### 一键启动
-在项目根目录下通过 PowerShell 运行：
-```powershell
-.\scripts\start_all.ps1
-```
-脚本将自动构建前端并启动后端，随后自动在浏览器中弹出 `http://127.0.0.1:8080`。
-
-### 分步启动
-```bash
-# 启动后端
-cargo run --manifest-path backend/Cargo.toml
-
-# 启动前端热重载开发服务器（可选）
-cd frontend
-npm install
-npm run dev
-```
-
----
-
-## 🏛️ 系统架构设计与数据流向
-
-```mermaid
-flowchart TD
-    subgraph Data Layer [数据采集与新鲜度追踪]
-        B[Binance L2 & Ticks] --> C[Collector Engine]
-        O[OKX L2 & Ticks] --> C
-        BY[Bybit L2 & Ticks] --> C
-        CB[Coinbase L2 & Ticks] --> C
-        P_CLOB[Polymarket CLOB & Discovery] --> PM[Polymarket Engine]
-        C --> FRESH[Freshness Tracker <2000ms]
-    end
-
-    subgraph Core Quant Engine [核心量化与特征计算]
-        C --> COMP[Composite Price Engine]
-        COMP --> FEAT[37-Dim Real-Time Feature Matrix]
-        PM --> FEAT
-        FEAT --> ML[ML Logistic & Platt Calibrator & Ensemble]
-    end
-
-    subgraph Strategy & Risk [策略门控与风控]
-        ML --> STRAT[Strategy Engine: 7 Hard Filter Gates]
-        FEAT --> STRAT
-        STRAT --> SCORE[Opportunity Scoring: 0-100 Rubric]
-        SCORE --> RISK[Risk Manager: Mode B $10 Cap & Mode A]
-    end
-
-    subgraph Execution & Simulation [真实深度撮合与回测]
-        RISK --> EXEC[Paper Execution: Section 21 Depth-Walking Fill]
-        PM --> EXEC
-        EXEC --> DB[(SQLite WAL Database: 15 Tables)]
-        DB --> SETTLE[Closed-Loop Resolution Listener]
-        SETTLE --> RISK
-    end
-
-    subgraph Diagnostic & UI [回放与前端控制台]
-        DB --> BT[High-Performance Backtest Engine]
-        DB --> REPLAY[Historical Replay Engine: 1x-50x / Step]
-        DB --> API[Axum REST & WebSocket Server :8080]
-        API --> UI[React 18 + AsmrProg Glassmorphic Web Console]
-    end
-```
+1. **单轮在线演进（Auto-Learning）**：
+   - 默认开启；
+   - 每次 5 分钟盘面结算时，系统自动捕捉微观订单簿、CVD 与多周期波动率等 37 维特征与胜负标签；
+   - 计算交叉熵梯度损失并即时更新权重向量与 Platt 参数；
+   - 在前端 **「Auto-Learning」** 面板可实时查看特征重要性柱状图梯级。
+2. **全量历史批量重训练（Batch Retrain）**：
+   - 点击面板上的 **「全量历史回放自学习」**；
+   - 引擎将回放数据库中沉淀的成百上千轮历史 5 分钟盘面；
+   - 采用带动量项的 SGD 进行多 Epoch 拟合，大幅提升样本外泛化能力与 Brier Score 分数。
 
 ---
 
 ## 📊 资金管理模式与四重风控熔断
 
 ### 1. 资金双池隔离机制
-- **Active Bankroll（活跃本金池）**：实际参与模拟下注的动态本金，默认初始 **10.00 USDC**，上限严格封顶为 **10.00 USDC**。
+- **Active Bankroll（活跃本金池）**：实际参与下注的动态本金，默认初始 **10.00 USDC**，上限严格封顶为 **10.00 USDC**。
 - **Locked Profit（锁定利润池）**：交易盈利剥离金库，**永远不用于再次下注**，确保“已落袋利润绝对安全”。
 - **模式 B（Capital Recovery，默认推荐模式）**：
   - 若活跃本金发生回撤（例如亏损至 9.00 USDC），后续交易盈利优先补足活跃本金至 10.00 USDC 封顶；
@@ -212,82 +195,40 @@ flowchart TD
 
 ---
 
-## 🔬 37 维高精微观结构特征矩阵
-
-系统为每一个资产（BTC, ETH, SOL）每 100ms 实时流式计算 37 维高精微观特征：
-1. **多周期对数收益率 (6 维)**：`return_1s`, `return_3s`, `return_5s`, `return_10s`, `return_30s`, `return_60s`
-2. **多周期已实现波动率 (4 维)**：`realized_vol_5s`, `realized_vol_10s`, `realized_vol_30s`, `realized_vol_60s`
-3. **价格动力学速度与加速度 (3 维)**：`velocity_5s`, `velocity_15s`, `acceleration_5s_15s`
-4. **当前开盘偏离特征 (3 维)**：`distance_from_open`, `distance_percent`, `distance_to_vol_ratio`
-5. **周期时间状态 (3 维)**：`remaining_seconds`, `elapsed_seconds`, `time_decay_factor` ($\sqrt{T_{rem}/300}$)
-6. **跨交易所价差离散度 (3 维)**：`spread_binance_okx`, `spread_binance_bybit`, `spread_binance_coinbase`
-7. **资金流与累积成交差 CVD (4 维)**：`cvd_5s`, `cvd_15s`, `cvd_30s`, `cvd_60s`
-8. **主动买卖订单失衡度 (4 维)**：`trade_imbalance_5s`, `trade_imbalance_15s`, `trade_imbalance_30s`, `trade_imbalance_60s`
-9. **Polymarket 盘口微观结构 (7 维)**：`poly_obi_top5`, `poly_obi_top10`, `poly_obi_top20`, `poly_spread`, `poly_total_liquidity`, `poly_implied_prob`, `composite_price`
-
----
-
-## 🚦 策略引擎与 7 重硬过滤器（Fail-Closed）
-
-系统在发出任何交易信号前，必须 **100% 串行通过 7 重硬性门控**：
-1. **Gate 1 - 新鲜度门控**：所有上游交易所数据延迟必须 $< 2000\text{ms}$，本地时钟漂移 $< 1000\text{ms}$。
-2. **Gate 2 - 周期时间窗门控**：剩余时间必须在 $15\text{s} \le T_{\text{rem}} \le 285\text{s}$ 之间，过滤开盘第一秒与收盘抢跑异常。
-3. **Gate 3 - 预测概率置信门控**：模型校准后胜率 $P \ge 70\%$。
-4. **Gate 4 - 进场价格上限门控**：买入 Ask 价格不得超过 $0.85$（避免胜率虽高但赔率过差的负期望交易）。
-5. **Gate 5 - 盘口价差门控**：Polymarket 买卖价差必须 $\le 0.04$ USDC。
-6. **Gate 6 - 盘口流动性门控**：订单簿对应方向挂单深度必须 $\ge 300.0$ USDC。
-7. **Gate 7 - 资金风控熔断门控**：系统风控状态必须为 NORMAL，无连续亏损冷静期且活跃资金 $\ge \text{Stake}$。
-
-通过硬性门控后，触发 **[0..100] 机会评分卡**（分值 $<60$ 判为 SKIP，$\ge 80$ 判为 HIGH 置信）。
-
----
-
-## ⚡ 真实订单簿深度穿透撮合（Section 21）
-
-本系统坚决不采用“假设以第一档 Ask 全额成交”的简单模型，而是严格依据真实订单簿深度进行穿透计算：
-1. **深度穿透（Depth-Walking Fill）**：遍历实际 Ask 订单簿档位，计算实际成交均价 $P_{\text{fill}}$；
-2. **滑点惩罚**：$\text{Slippage} = P_{\text{fill}} - P_{\text{quote}}$；
-3. **交易手续费扣除**：$\text{Fee} = \text{Stake} \times 1.2\%$；
-4. **实际股份数计算**：$\text{Shares} = \frac{\text{Stake} - \text{Fee}}{P_{\text{fill}}}$。
-
----
-
 ## 📡 REST API 与 WebSocket 实时接口
 
 | 模块分类 | 方式 | 接口路径 | 功能简述 |
 | :--- | :--- | :--- | :--- |
-| **系统核心** | `GET` | `/api/v1/health` | 系统健康、安全守卫状态、各交易所新鲜度 |
-| | `GET` | `/api/v1/safety` | 严格安全锁状态与实盘禁用断言校验 |
-| | `GET` | `/api/v1/config` | 运行时只读脱敏系统配置 |
-| | `GET` | `/api/v1/ws` | 全双工 WebSocket 行情、特征、订单簿与持仓推流 |
+| **交易模式** | `GET` | `/api/v1/trading/mode` | 查询当前交易模式（paper/live）与当前活跃账户 |
+| | `POST` | `/api/v1/trading/mode` | 切换交易模式（paper/live），包含前置账户状态校验 |
+| **账户管理** | `GET` | `/api/v1/accounts` | 获取所有绑定的 Polymarket 账户信息（API Key 掩码） |
+| | `POST` | `/api/v1/accounts` | 绑定新 Polymarket 账户凭据并加密存储 |
+| | `POST` | `/api/v1/accounts/{id}/activate` | 设为当前活跃实盘交易账户 |
+| | `DELETE`| `/api/v1/accounts/{id}` | 删除指定账户 |
+| | `GET` | `/api/v1/accounts/{id}/balance` | 实时刷新并返回账户 Polygon USDC 余额 |
+| **实盘执行** | `GET` | `/api/v1/real/orders` | 获取 Polymarket CLOB 真实委托与成交审计明细 |
+| | `POST` | `/api/v1/real/emergency_halt` | **紧急熔断接口**：立即撤销全部在途委托并强制切回模拟盘 |
+| **在线学习** | `GET` | `/api/v1/learning/status` | 获取当前模型版本、权重分布、Platt 参数与 Brier 分数 |
+| | `POST` | `/api/v1/learning/toggle` | 开启或暂停每轮结算后的在线 SGD 自主学习 |
+| | `POST` | `/api/v1/learning/retrain` | 触发基于全量历史样本的离线/在线批次重新训练 |
+| | `GET` | `/api/v1/learning/history` | 查询历史盘面结算后的逐轮梯度变动与 Loss 履历 |
 | **行情微观** | `GET` | `/api/v1/collector/prices` | Binance / OKX / Bybit / Coinbase 实时行情 |
 | | `GET` | `/api/v1/composite/price/{asset}` | 稳健综合价格指数、收益率与已实现波动率 |
 | | `GET` | `/api/v1/polymarket/markets` | Polymarket 5分钟周期活跃市场列表 |
 | | `GET` | `/api/v1/polymarket/book/{asset}` | 5分钟二元盘口完整深度、买卖价差与 OBI |
-| **特征模型** | `GET` | `/api/v1/features/latest/{asset}`| 37 维实时量化特征快照 |
+| **特征预测** | `GET` | `/api/v1/features/latest/{asset}`| 37 维实时量化特征快照 |
 | | `GET` | `/api/v1/models/prediction/{asset}`| 逻辑回归与校准后胜率预测、特征贡献度 |
-| | `GET` | `/api/v1/dataset/summary` | 本地 SQLite 数据集样本统计与正负平衡度 |
-| **策略模拟** | `GET` | `/api/v1/strategy/signals/latest` | 最新交易决策信号（`BUY_UP` / `BUY_DOWN` / `SKIP`） |
-| | `GET` | `/api/v1/paper/bankroll` | 活跃本金、锁定利润与熔断状态 |
-| | `GET` | `/api/v1/risk/status` | 每日亏损限额、峰值回撤与连亏计数 |
-| | `GET` | `/api/v1/paper/positions/active` | 当前活跃模拟持仓与未实现浮盈 |
-| | `GET` | `/api/v1/paper/results` | 模拟订单历史交割结算盈亏明细 |
-| | `GET` | `/api/v1/paper/statistics` | 胜率、盈亏比、总收益等综合统计 |
-| **回测与回放** | `POST` | `/api/v1/backtest/run` | 触发事件驱动历史回测模拟 |
-| | `GET` | `/api/v1/backtest/latest` | 获取最新回测报告与净值曲线 |
+| **回测复盘** | `POST` | `/api/v1/backtest/run` | 触发事件驱动历史回测模拟 |
 | | `POST` | `/api/v1/replay/start` | 启动历史行情逐帧回放引擎 |
-| | `POST` | `/api/v1/replay/step` | 单步逐帧步进（Step 1 Frame） |
-| | `POST` | `/api/v1/replay/seek` | 进度条时间/帧索引精确定位 |
-| | `POST` | `/api/v1/replay/speed` | 设置回放倍速（1x, 5x, 10x, 20x, 50x） |
 
 ---
 
 ## 🧪 自动化测试套件（100% 通过）
 
-运行全套 15 组集成与端到端测试：
+运行全套 16 组集成与端到端测试：
 ```powershell
 # Windows
-.\scripts\run_all_tests.ps1
+cargo test -- --nocapture
 ```
 ```bash
 # Linux
@@ -295,7 +236,8 @@ cargo test -- --nocapture
 ```
 
 测试覆盖清单：
-- `phase1_integration`: 内核级安全拒绝、SQLite 15 表迁移、健康检查；
+- `real_trading_and_learning_integration`: Polymarket 账户 CRUD、在线增量 SGD 自学习自进化、实盘模式门禁守卫测试；
+- `phase1_integration`: 内核级安全拒绝、SQLite 数据库迁移、健康检查；
 - `phase2_collector_integration`: 跨所归一化、Fail-closed 新鲜度中断；
 - `phase3_polymarket_integration`: 5M周期推进、订单簿深度与结算解析；
 - `phase4_composite_integration`: 综合价格指数、异常报价剔除；
@@ -307,12 +249,13 @@ cargo test -- --nocapture
 - `phase11_risk_integration`: 模式 B 本金回收封顶、模式 A 隔离、四重熔断；
 - `phase12_closed_loop_integration`: 真实结算闭环驱动、资金账本审计；
 - `phase13_backtest_integration`: 历史回测驱动、Sharpe/Sortino/Calmar 计算；
-- `phase14_replay_integration`: 历史逐帧回放、单步前进、时间定位。
+- `phase14_replay_integration`: 历史逐帧回放、单步前进、时间定位；
+- `phase17_realtime_and_tuning_integration`: 动态调参热重载与合成数据集推演。
 
 ---
 
 ## ⚖️ 免责声明
 
-1. 本开源系统仅供量化策略研究、模拟推演与学术回测验证使用。
-2. 系统的 `SafetyGuard` 强制锁定实盘禁止状态，系统内不存在任何真实资金接口或私钥。
-3. 严禁修改安全守卫代码用于任何形式的未授权真实交易，开发者不对任何个人衍生行为承担法律与财务责任。
+1. 本开源系统适用于二元预测市场的策略研究、模拟推演与合规实盘交易。
+2. 实盘交易模式涉及加密资产与链上交互风险，请务必充分理解 Mode B 资金硬顶与风控设置，严禁超出自身风险承受能力下注。
+3. 开发者不对任何因网络延迟、市场剧烈波动、第三方交易所或 Polymarket 节点宕机导致的潜在亏损承担连带责任。

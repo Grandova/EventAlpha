@@ -12,6 +12,7 @@ use crate::collector::CollectorManager;
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::types::{Asset, PolymarketTick};
+pub use clob_client::{PolymarketClobHttpClient, ClobOrderResponse};
 use market_discovery::MarketDiscoveryEngine;
 use orderbook::PolymarketBookEngine;
 use resolution::{MarketResolvedEvent, ResolutionEngine};

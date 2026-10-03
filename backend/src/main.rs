@@ -134,13 +134,58 @@ async fn main() -> Result<()> {
     execution.start(strategy.subscribe_signals());
     execution.start_resolution_listener(polymarket.subscribe_resolutions());
 
-    // 16. Initialize High-Performance Backtest Engine
+    // 16. Initialize Polymarket CLOB Client and Live Execution Engine
+    let clob_http = Arc::new(poly_quant_backend::polymarket::PolymarketClobHttpClient::default());
+    let live_execution = Arc::new(poly_quant_backend::execution::LiveExecutionEngine::new(
+        db.clone(),
+        clob_http.clone(),
+    ));
+
+    // Listen to trading signals for live execution (if live mode is activated)
+    let live_exec_clone = live_execution.clone();
+    let mut live_sig_rx = strategy.subscribe_signals();
+    tokio::spawn(async move {
+        while let Ok(sig) = live_sig_rx.recv().await {
+            if sig.action != poly_quant_backend::types::SignalAction::Skip {
+                let _ = live_exec_clone.execute_signal(&sig).await;
+            }
+        }
+    });
+
+    // 17. Initialize Continuous Self-Learning Engine
+    let self_learning = Arc::new(poly_quant_backend::models::SelfLearningEngine::new(
+        models.clone(),
+        db.clone(),
+    ));
+
+    // Restore prior learned knowledge from SQLite across system restarts
+    self_learning.load_persisted_state(poly_quant_backend::types::Asset::BTC).await;
+    self_learning.load_persisted_state(poly_quant_backend::types::Asset::ETH).await;
+    self_learning.load_persisted_state(poly_quant_backend::types::Asset::SOL).await;
+
+    // Hook market resolution events to continuous self-learning online SGD updates
+    let self_learning_clone = self_learning.clone();
+    let features_clone = features.clone();
+    let mut resolution_rx = polymarket.subscribe_resolutions();
+    tokio::spawn(async move {
+        while let Ok(res) = resolution_rx.recv().await {
+            let snap = features_clone.get_latest_features(res.asset);
+            self_learning_clone.on_round_resolved(
+                res.asset,
+                &res.market_id,
+                res.resolution,
+                snap.as_ref(),
+            ).await;
+        }
+    });
+
+    // 18. Initialize High-Performance Backtest Engine
     let backtest = Arc::new(poly_quant_backend::backtest::BacktestEngine::new(
         db.clone(),
         models.clone(),
     ));
 
-    // 17. Initialize Historical Replay Engine
+    // 19. Initialize Historical Replay Engine
     let replay = Arc::new(poly_quant_backend::replay::ReplayEngine::new(
         db.clone(),
         models.clone(),
@@ -158,6 +203,8 @@ async fn main() -> Result<()> {
         models: models.clone(),
         strategy: strategy.clone(),
         execution: execution.clone(),
+        live_execution: live_execution.clone(),
+        self_learning: self_learning.clone(),
         risk: risk.clone(),
         backtest,
         replay,

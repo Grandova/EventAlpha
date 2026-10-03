@@ -115,9 +115,9 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         models.clone(),
         strategy.clone(),
     ));
-    let state = AppState {
-        config: config.clone(),
-        db: db.clone(),
+    let state = AppState::new(
+        config.clone(),
+        db.clone(),
         collector,
         polymarket,
         composite,
@@ -128,8 +128,8 @@ async fn setup_test_app() -> (axum::Router, Arc<Database>, Arc<AppConfig>) {
         risk,
         backtest,
         replay,
-        start_time_ms: chrono::Utc::now().timestamp_millis(),
-    };
+        chrono::Utc::now().timestamp_millis(),
+    );
     let router = create_router(state);
     (router, db, config)
 }

@@ -2,6 +2,7 @@ pub mod calibration;
 pub mod ensemble;
 pub mod logistic;
 pub mod metrics;
+pub mod self_learning;
 
 use chrono::Utc;
 use dashmap::DashMap;
@@ -19,6 +20,7 @@ pub use calibration::{CalibrationConfig, ProbabilityCalibrator};
 pub use ensemble::{ConfidenceLevel, EnsembleModel, HeuristicRuleModel};
 pub use logistic::{FeatureContribution, LogisticModelConfig, LogisticRegressionModel};
 pub use metrics::{MetricsCalculator, ModelEvaluationMetrics};
+pub use self_learning::{LearningStatusResponse, SelfLearningEngine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelPrediction {

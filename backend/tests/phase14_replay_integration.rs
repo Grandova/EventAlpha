@@ -135,12 +135,20 @@ async fn setup_replay_test_app() -> (axum::Router, Arc<ReplayEngine>, Arc<Databa
         polymarket,
         composite,
         features,
-        models,
+        models: models.clone(),
         strategy,
         execution,
         risk,
         backtest,
         replay: replay.clone(),
+        live_execution: std::sync::Arc::new(poly_quant_backend::execution::LiveExecutionEngine::new(
+            db.clone(),
+            std::sync::Arc::new(poly_quant_backend::polymarket::PolymarketClobHttpClient::default()),
+        )),
+        self_learning: std::sync::Arc::new(poly_quant_backend::models::SelfLearningEngine::new(
+            models.clone(),
+            db.clone(),
+        )),
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

@@ -63,13 +63,20 @@ impl Database {
         &self.pool
     }
 
-    /// Automatically run embedded initial schema migration
+    /// Automatically run embedded initial and evolution schema migrations
     pub async fn run_migrations(&self) -> Result<()> {
-        let migration_sql = include_str!("../../migrations/0001_initial_schema.sql");
-        sqlx::raw_sql(migration_sql)
+        let migration_sql_1 = include_str!("../../migrations/0001_initial_schema.sql");
+        sqlx::raw_sql(migration_sql_1)
             .execute(&self.pool)
             .await
-            .context("Failed to execute initial schema migrations")?;
+            .context("Failed to execute initial schema migrations (0001)")?;
+
+        let migration_sql_2 = include_str!("../../migrations/0002_real_trading_and_self_learning.sql");
+        sqlx::raw_sql(migration_sql_2)
+            .execute(&self.pool)
+            .await
+            .context("Failed to execute real trading & self learning migrations (0002)")?;
+
         Ok(())
     }
 
@@ -923,6 +930,391 @@ impl Database {
             max_win,
             max_loss,
         })
+    }
+
+    // =========================================================================
+    // Polymarket Accounts
+    // =========================================================================
+    pub async fn insert_account(&self, acc: &crate::types::PolymarketAccount) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO polymarket_accounts (
+                id, label, api_key, api_secret, api_passphrase, wallet_address,
+                proxy_wallet_address, is_active, balance_usdc, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#
+        )
+        .bind(&acc.id)
+        .bind(&acc.label)
+        .bind(&acc.api_key)
+        .bind(&acc.api_secret)
+        .bind(&acc.api_passphrase)
+        .bind(&acc.wallet_address)
+        .bind(&acc.proxy_wallet_address)
+        .bind(if acc.is_active { 1 } else { 0 })
+        .bind(acc.balance_usdc)
+        .bind(acc.created_at)
+        .bind(acc.updated_at)
+        .execute(&self.pool)
+        .await
+        .context("Failed to insert polymarket account")?;
+        Ok(())
+    }
+
+    pub async fn get_accounts(&self) -> Result<Vec<crate::types::PolymarketAccount>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, label, api_key, api_secret, api_passphrase, wallet_address,
+                   proxy_wallet_address, is_active, balance_usdc, created_at, updated_at
+            FROM polymarket_accounts
+            ORDER BY created_at DESC
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch polymarket accounts")?;
+
+        let mut accounts = Vec::new();
+        for r in rows {
+            let is_active_int: i64 = r.try_get("is_active")?;
+            accounts.push(crate::types::PolymarketAccount {
+                id: r.try_get("id")?,
+                label: r.try_get("label")?,
+                api_key: r.try_get("api_key")?,
+                api_secret: r.try_get("api_secret")?,
+                api_passphrase: r.try_get("api_passphrase")?,
+                wallet_address: r.try_get("wallet_address")?,
+                proxy_wallet_address: r.try_get("proxy_wallet_address")?,
+                is_active: is_active_int == 1,
+                balance_usdc: r.try_get("balance_usdc")?,
+                created_at: r.try_get("created_at")?,
+                updated_at: r.try_get("updated_at")?,
+            });
+        }
+        Ok(accounts)
+    }
+
+    pub async fn get_active_account(&self) -> Result<Option<crate::types::PolymarketAccount>> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, label, api_key, api_secret, api_passphrase, wallet_address,
+                   proxy_wallet_address, is_active, balance_usdc, created_at, updated_at
+            FROM polymarket_accounts
+            WHERE is_active = 1
+            LIMIT 1
+            "#
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to fetch active polymarket account")?;
+
+        if let Some(r) = row {
+            let is_active_int: i64 = r.try_get("is_active")?;
+            Ok(Some(crate::types::PolymarketAccount {
+                id: r.try_get("id")?,
+                label: r.try_get("label")?,
+                api_key: r.try_get("api_key")?,
+                api_secret: r.try_get("api_secret")?,
+                api_passphrase: r.try_get("api_passphrase")?,
+                wallet_address: r.try_get("wallet_address")?,
+                proxy_wallet_address: r.try_get("proxy_wallet_address")?,
+                is_active: is_active_int == 1,
+                balance_usdc: r.try_get("balance_usdc")?,
+                created_at: r.try_get("created_at")?,
+                updated_at: r.try_get("updated_at")?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn set_active_account(&self, account_id: &str) -> Result<()> {
+        let now = Utc::now().timestamp_millis();
+        // Deactivate all first
+        sqlx::query("UPDATE polymarket_accounts SET is_active = 0, updated_at = ?")
+            .bind(now)
+            .execute(&self.pool)
+            .await?;
+        // Activate target
+        sqlx::query("UPDATE polymarket_accounts SET is_active = 1, updated_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(account_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_account(&self, account_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM polymarket_accounts WHERE id = ?")
+            .bind(account_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_account_balance(&self, account_id: &str, balance: f64) -> Result<()> {
+        let now = Utc::now().timestamp_millis();
+        sqlx::query("UPDATE polymarket_accounts SET balance_usdc = ?, updated_at = ? WHERE id = ?")
+            .bind(balance)
+            .bind(now)
+            .bind(account_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Real Orders
+    // =========================================================================
+    pub async fn insert_real_order(&self, order: &crate::types::RealOrder) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO real_orders (
+                id, account_id, clob_order_id, market_id, token_id, asset,
+                side, outcome, order_type, price, size, filled_size, status,
+                fee, pnl, error_message, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#
+        )
+        .bind(&order.id)
+        .bind(&order.account_id)
+        .bind(&order.clob_order_id)
+        .bind(&order.market_id)
+        .bind(&order.token_id)
+        .bind(order.asset.to_string())
+        .bind(&order.side)
+        .bind(&order.outcome)
+        .bind(&order.order_type)
+        .bind(order.price)
+        .bind(order.size)
+        .bind(order.filled_size)
+        .bind(&order.status)
+        .bind(order.fee)
+        .bind(order.pnl)
+        .bind(&order.error_message)
+        .bind(order.created_at)
+        .bind(order.updated_at)
+        .execute(&self.pool)
+        .await
+        .context("Failed to insert real order")?;
+        Ok(())
+    }
+
+    pub async fn get_real_orders(&self, limit: i64) -> Result<Vec<crate::types::RealOrder>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, account_id, clob_order_id, market_id, token_id, asset,
+                   side, outcome, order_type, price, size, filled_size, status,
+                   fee, pnl, error_message, created_at, updated_at
+            FROM real_orders
+            ORDER BY created_at DESC
+            LIMIT ?
+            "#
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch real orders")?;
+
+        let mut list = Vec::new();
+        for r in rows {
+            let asset_str: String = r.try_get("asset")?;
+            let asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+            list.push(crate::types::RealOrder {
+                id: r.try_get("id")?,
+                account_id: r.try_get("account_id")?,
+                clob_order_id: r.try_get("clob_order_id")?,
+                market_id: r.try_get("market_id")?,
+                token_id: r.try_get("token_id")?,
+                asset,
+                side: r.try_get("side")?,
+                outcome: r.try_get("outcome")?,
+                order_type: r.try_get("order_type")?,
+                price: r.try_get("price")?,
+                size: r.try_get("size")?,
+                filled_size: r.try_get("filled_size")?,
+                status: r.try_get("status")?,
+                fee: r.try_get("fee")?,
+                pnl: r.try_get("pnl")?,
+                error_message: r.try_get("error_message")?,
+                created_at: r.try_get("created_at")?,
+                updated_at: r.try_get("updated_at")?,
+            });
+        }
+        Ok(list)
+    }
+
+    // =========================================================================
+    // Self-Learning State & History
+    // =========================================================================
+    pub async fn save_learning_state(&self, state: &crate::types::LearningState) -> Result<()> {
+        let weights_json = serde_json::to_string(&state.weights)?;
+        let top_features_json = serde_json::to_string(&state.top_features)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO learning_state (
+                id, asset, version, weights_json, bias, platt_a, platt_b,
+                learning_rate, total_samples_trained, rolling_accuracy,
+                rolling_brier_score, top_features_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset) DO UPDATE SET
+                version = excluded.version,
+                weights_json = excluded.weights_json,
+                bias = excluded.bias,
+                platt_a = excluded.platt_a,
+                platt_b = excluded.platt_b,
+                learning_rate = excluded.learning_rate,
+                total_samples_trained = excluded.total_samples_trained,
+                rolling_accuracy = excluded.rolling_accuracy,
+                rolling_brier_score = excluded.rolling_brier_score,
+                top_features_json = excluded.top_features_json,
+                updated_at = excluded.updated_at
+            "#
+        )
+        .bind(&state.id)
+        .bind(state.asset.to_string())
+        .bind(state.version)
+        .bind(weights_json)
+        .bind(state.bias)
+        .bind(state.platt_a)
+        .bind(state.platt_b)
+        .bind(state.learning_rate)
+        .bind(state.total_samples_trained)
+        .bind(state.rolling_accuracy)
+        .bind(state.rolling_brier_score)
+        .bind(top_features_json)
+        .bind(state.updated_at)
+        .execute(&self.pool)
+        .await
+        .context("Failed to save learning state")?;
+        Ok(())
+    }
+
+    pub async fn get_learning_state(&self, asset: crate::types::Asset) -> Result<Option<crate::types::LearningState>> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, asset, version, weights_json, bias, platt_a, platt_b,
+                   learning_rate, total_samples_trained, rolling_accuracy,
+                   rolling_brier_score, top_features_json, updated_at
+            FROM learning_state
+            WHERE asset = ?
+            "#
+        )
+        .bind(asset.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to get learning state")?;
+
+        if let Some(r) = row {
+            let weights_str: String = r.try_get("weights_json")?;
+            let weights: Vec<f64> = serde_json::from_str(&weights_str).unwrap_or_default();
+            let top_features_str: Option<String> = r.try_get("top_features_json")?;
+            let top_features = top_features_str
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+
+            Ok(Some(crate::types::LearningState {
+                id: r.try_get("id")?,
+                asset,
+                version: r.try_get("version")?,
+                weights,
+                bias: r.try_get("bias")?,
+                platt_a: r.try_get("platt_a")?,
+                platt_b: r.try_get("platt_b")?,
+                learning_rate: r.try_get("learning_rate")?,
+                total_samples_trained: r.try_get("total_samples_trained")?,
+                rolling_accuracy: r.try_get("rolling_accuracy")?,
+                rolling_brier_score: r.try_get("rolling_brier_score")?,
+                top_features,
+                updated_at: r.try_get("updated_at")?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn record_learning_history(
+        &self,
+        asset: crate::types::Asset,
+        round_id: &str,
+        predicted_prob: f64,
+        actual_outcome: i64,
+        loss: f64,
+        weights_delta_norm: f64,
+        brier_score: f64,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp_millis();
+        sqlx::query(
+            r#"
+            INSERT INTO learning_history (
+                asset, round_id, predicted_prob, actual_outcome,
+                loss, weights_delta_norm, brier_score, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#
+        )
+        .bind(asset.to_string())
+        .bind(round_id)
+        .bind(predicted_prob)
+        .bind(actual_outcome)
+        .bind(loss)
+        .bind(weights_delta_norm)
+        .bind(brier_score)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .context("Failed to record learning history")?;
+        Ok(())
+    }
+
+    pub async fn get_learning_history(&self, asset: Option<crate::types::Asset>, limit: i64) -> Result<Vec<crate::types::LearningHistoryEntry>> {
+        let rows = if let Some(a) = asset {
+            sqlx::query(
+                r#"
+                SELECT id, asset, round_id, predicted_prob, actual_outcome,
+                       loss, weights_delta_norm, brier_score, timestamp
+                FROM learning_history
+                WHERE asset = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                "#
+            )
+            .bind(a.to_string())
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query(
+                r#"
+                SELECT id, asset, round_id, predicted_prob, actual_outcome,
+                       loss, weights_delta_norm, brier_score, timestamp
+                FROM learning_history
+                ORDER BY timestamp DESC
+                LIMIT ?
+                "#
+            )
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        let mut list = Vec::new();
+        for r in rows {
+            let a_str: String = r.try_get("asset")?;
+            let asset_parsed = a_str.parse().unwrap_or(crate::types::Asset::BTC);
+            list.push(crate::types::LearningHistoryEntry {
+                id: r.try_get("id")?,
+                asset: asset_parsed,
+                round_id: r.try_get("round_id")?,
+                predicted_prob: r.try_get("predicted_prob")?,
+                actual_outcome: r.try_get("actual_outcome")?,
+                loss: r.try_get("loss")?,
+                weights_delta_norm: r.try_get("weights_delta_norm")?,
+                brier_score: r.try_get("brier_score")?,
+                timestamp: r.try_get("timestamp")?,
+            });
+        }
+        Ok(list)
     }
 }
 

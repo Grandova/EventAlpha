@@ -103,6 +103,51 @@ pub struct FeatureSnapshot {
 }
 
 impl FeatureSnapshot {
+    pub fn new(asset: Asset, market_id: &str, timestamp_ms: i64) -> Self {
+        Self {
+            asset,
+            market_id: market_id.to_string(),
+            timestamp_ms,
+            composite_price: 0.0,
+            return_1s: 0.0,
+            return_3s: 0.0,
+            return_5s: 0.0,
+            return_10s: 0.0,
+            return_30s: 0.0,
+            return_60s: 0.0,
+            realized_vol_5s: 0.0,
+            realized_vol_10s: 0.0,
+            realized_vol_30s: 0.0,
+            realized_vol_60s: 0.0,
+            velocity_5s: 0.0,
+            velocity_15s: 0.0,
+            acceleration_5s_15s: 0.0,
+            distance_from_open: 0.0,
+            distance_percent: 0.0,
+            distance_to_vol_ratio: 0.0,
+            remaining_seconds: 150.0,
+            elapsed_seconds: 150.0,
+            time_decay_factor: 0.7,
+            spread_binance_okx: 0.0,
+            spread_binance_bybit: 0.0,
+            spread_binance_coinbase: 0.0,
+            cvd_5s: 0.0,
+            cvd_15s: 0.0,
+            cvd_30s: 0.0,
+            cvd_60s: 0.0,
+            trade_imbalance_5s: 0.0,
+            trade_imbalance_15s: 0.0,
+            trade_imbalance_30s: 0.0,
+            trade_imbalance_60s: 0.0,
+            poly_obi_top5: 0.0,
+            poly_obi_top10: 0.0,
+            poly_obi_top20: 0.0,
+            poly_spread: 0.01,
+            poly_total_liquidity: 1000.0,
+            poly_implied_prob: 0.5,
+        }
+    }
+
     pub fn feature_names() -> &'static [&'static str] {
         FEATURE_NAMES
     }
