@@ -148,7 +148,28 @@ function update_app() {
     cargo build --release
 
     echo -e "${CYAN}Deploying binaries and assets...${NC}"
-    cp "$SRC_DIR/target/release/poly_quant_backend" "$BIN_PATH"
+    NEW_BIN=""
+    for CANDIDATE in \
+        "$SRC_DIR/target/release/poly_quant_backend" \
+        "$SRC_DIR/target/release/poly-quant-backend" \
+        "$SRC_DIR/backend/target/release/poly_quant_backend" \
+        "$SRC_DIR/backend/target/release/poly-quant-backend"
+    do
+        if [ -f "$CANDIDATE" ]; then
+            NEW_BIN="$CANDIDATE"
+            break
+        fi
+    done
+
+    if [ -z "$NEW_BIN" ]; then
+        NEW_BIN=$(find "$SRC_DIR/target/release" "$SRC_DIR/backend/target/release" -maxdepth 1 -type f \( -name "poly_quant_backend" -o -name "poly-quant-backend" \) 2>/dev/null | head -n 1 || true)
+    fi
+
+    if [ -n "$NEW_BIN" ]; then
+        cp "$NEW_BIN" "$BIN_PATH"
+        chmod +x "$BIN_PATH"
+        ln -sf "$BIN_PATH" "$APP_DIR/bin/poly-quant-backend"
+    fi
     rm -rf "$APP_DIR/frontend/dist"
     cp -r "$SRC_DIR/frontend/dist" "$APP_DIR/frontend/dist"
 

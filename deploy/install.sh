@@ -149,16 +149,27 @@ echo -e "${GREEN}✓ 前端生产环境资源包打包完成 (dist/)。${NC}"
 echo -e "${BLUE}[6/8] 正在编译 Rust 高性能量化模拟引擎 (Release 极速优化模式)...${NC}"
 cd "$ROOT_DIR/backend"
 cargo build --release
-TARGET_BIN="$ROOT_DIR/target/release/poly_quant_backend"
 
-if [ ! -f "$TARGET_BIN" ]; then
-    # In case cargo built into backend/target
-    if [ -f "$ROOT_DIR/backend/target/release/poly_quant_backend" ]; then
-        TARGET_BIN="$ROOT_DIR/backend/target/release/poly_quant_backend"
-    else
-        echo -e "${RED}[ERROR] 后端编译失败，未找到二进制可执行文件。${NC}"
-        exit 1
+TARGET_BIN=""
+for CANDIDATE in \
+    "$ROOT_DIR/target/release/poly_quant_backend" \
+    "$ROOT_DIR/target/release/poly-quant-backend" \
+    "$ROOT_DIR/backend/target/release/poly_quant_backend" \
+    "$ROOT_DIR/backend/target/release/poly-quant-backend"
+do
+    if [ -f "$CANDIDATE" ]; then
+        TARGET_BIN="$CANDIDATE"
+        break
     fi
+done
+
+if [ -z "$TARGET_BIN" ]; then
+    TARGET_BIN=$(find "$ROOT_DIR/target/release" "$ROOT_DIR/backend/target/release" -maxdepth 1 -type f \( -name "poly_quant_backend" -o -name "poly-quant-backend" \) 2>/dev/null | head -n 1 || true)
+fi
+
+if [ -z "$TARGET_BIN" ] || [ ! -f "$TARGET_BIN" ]; then
+    echo -e "${RED}[ERROR] 后端编译失败，未找到二进制可执行文件。${NC}"
+    exit 1
 fi
 echo -e "${GREEN}✓ 后端量化可执行程序编译完毕: $TARGET_BIN${NC}"
 
@@ -173,6 +184,7 @@ mkdir -p "$INSTALL_PREFIX/frontend"
 # Copy binary
 cp "$TARGET_BIN" "$INSTALL_PREFIX/bin/poly_quant_backend"
 chmod +x "$INSTALL_PREFIX/bin/poly_quant_backend"
+ln -sf "$INSTALL_PREFIX/bin/poly_quant_backend" "$INSTALL_PREFIX/bin/poly-quant-backend"
 
 # Copy frontend dist
 rm -rf "$INSTALL_PREFIX/frontend/dist"
