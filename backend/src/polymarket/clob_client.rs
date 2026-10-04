@@ -560,18 +560,23 @@ impl PolymarketClobHttpClient {
             .map_err(|e| format!("Order submission failed: {:?}", e))?;
 
         let status_code = resp.status();
-        let resp_json: serde_json::Value = resp
-            .json()
+        let resp_text = resp
+            .text()
             .await
-            .map_err(|e| format!("Failed to parse CLOB order response: {:?}", e))?;
+            .map_err(|e| format!("Failed to read CLOB order response text: {:?}", e))?;
 
         if !status_code.is_success() {
-            let error_msg = resp_json
-                .get("errorMsg")
-                .or_else(|| resp_json.get("message"))
-                .and_then(|m| m.as_str())
-                .unwrap_or("Unknown CLOB rejection")
-                .to_string();
+            let error_msg = if let Ok(resp_json) = serde_json::from_str::<serde_json::Value>(&resp_text) {
+                resp_json
+                    .get("errorMsg")
+                    .or_else(|| resp_json.get("message"))
+                    .or_else(|| resp_json.get("error"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or(&resp_text)
+                    .to_string()
+            } else {
+                format!("HTTP {}: {}", status_code, resp_text.trim())
+            };
             return Ok(ClobOrderResponse {
                 success: false,
                 order_id: None,
@@ -581,6 +586,9 @@ impl PolymarketClobHttpClient {
                 error_msg: Some(error_msg),
             });
         }
+
+        let resp_json: serde_json::Value = serde_json::from_str(&resp_text)
+            .map_err(|e| format!("Failed to parse successful CLOB order response: {:?}", e))?;
 
         let order_id = resp_json
             .get("orderID")
