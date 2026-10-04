@@ -71,8 +71,16 @@ fi
 # 4. 编译最新后端二进制 (包含安全认证 Session API)
 echo -e "${CYAN}[4/4] 编译并升级 Rust 量化内核 (包含登录拦截与安全会话)...${NC}"
 cd "$SCRIPT_DIR/backend"
-if [ -f "$HOME/.cargo/env" ]; then
-    . "$HOME/.cargo/env"
+for CARGO_ENV in "$HOME/.cargo/env" "/root/.cargo/env" "/usr/local/cargo/env"; do
+    if [ -f "$CARGO_ENV" ]; then
+        . "$CARGO_ENV"
+    fi
+done
+export PATH="$HOME/.cargo/bin:/root/.cargo/bin:/usr/local/cargo/bin:$PATH"
+
+if ! command -v cargo >/dev/null 2>&1; then
+    echo -e "${RED}[ERROR] 未检测到 cargo 命令，请确认 Rust 是否已安装。${NC}"
+    exit 1
 fi
 
 cargo build --release
