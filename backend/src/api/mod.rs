@@ -839,12 +839,26 @@ async fn handle_strategy_assets_set(
 
 #[derive(Debug, Deserialize)]
 pub struct AutoTradeToggleRequest {
-    pub enabled: bool,
+    pub enabled: Option<bool>,
+    pub mode: Option<String>,
+    pub paper_enabled: Option<bool>,
+    pub live_enabled: Option<bool>,
 }
 
 async fn handle_strategy_autotrade_get(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mode = state.live_execution.get_mode().await;
+    let paper_enabled = state.execution.is_auto_trading_enabled();
+    let live_enabled = state.live_execution.is_auto_trading_enabled();
+    let current_enabled = match mode {
+        crate::types::TradingMode::Live => live_enabled,
+        crate::types::TradingMode::Paper => paper_enabled,
+    };
+
     Json(serde_json::json!({
-        "enabled": state.strategy.is_auto_trading_enabled()
+        "enabled": current_enabled,
+        "paper_enabled": paper_enabled,
+        "live_enabled": live_enabled,
+        "mode": format!("{:?}", mode).to_lowercase(),
     }))
 }
 
@@ -852,11 +866,41 @@ async fn handle_strategy_autotrade_set(
     State(state): State<AppState>,
     Json(req): Json<AutoTradeToggleRequest>,
 ) -> Json<serde_json::Value> {
-    state.strategy.set_auto_trading_enabled(req.enabled);
+    if let Some(p) = req.paper_enabled {
+        state.execution.set_auto_trading_enabled(p);
+    }
+    if let Some(l) = req.live_enabled {
+        state.live_execution.set_auto_trading_enabled(l);
+    }
+
+    if let Some(enabled) = req.enabled {
+        let current_mode = state.live_execution.get_mode().await;
+        let target_mode = req.mode.as_deref().unwrap_or(match current_mode {
+            crate::types::TradingMode::Live => "live",
+            crate::types::TradingMode::Paper => "paper",
+        });
+
+        if target_mode.eq_ignore_ascii_case("live") {
+            state.live_execution.set_auto_trading_enabled(enabled);
+        } else {
+            state.execution.set_auto_trading_enabled(enabled);
+        }
+    }
+
+    let mode = state.live_execution.get_mode().await;
+    let paper_enabled = state.execution.is_auto_trading_enabled();
+    let live_enabled = state.live_execution.is_auto_trading_enabled();
+    let current_enabled = match mode {
+        crate::types::TradingMode::Live => live_enabled,
+        crate::types::TradingMode::Paper => paper_enabled,
+    };
+
     Json(serde_json::json!({
         "success": true,
-        "enabled": req.enabled,
-        "message": if req.enabled { "自动交易策略已恢复运行" } else { "自动交易策略已暂停" }
+        "enabled": current_enabled,
+        "paper_enabled": paper_enabled,
+        "live_enabled": live_enabled,
+        "message": "自动交易设置已更新"
     }))
 }
 

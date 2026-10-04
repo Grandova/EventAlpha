@@ -73,7 +73,9 @@ export const App: React.FC = () => {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
   const [enabledAssets, setEnabledAssets] = useState<Asset[]>(['BTC', 'ETH', 'SOL']);
-  const [isAutoTradingEnabled, setIsAutoTradingEnabled] = useState<boolean>(true);
+  const [isPaperAutoTradingEnabled, setIsPaperAutoTradingEnabled] = useState<boolean>(true);
+  const [isLiveAutoTradingEnabled, setIsLiveAutoTradingEnabled] = useState<boolean>(false);
+  const isAutoTradingEnabled = tradingMode === 'live' ? isLiveAutoTradingEnabled : isPaperAutoTradingEnabled;
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
 
   // AsmrProg Light / Dark Theme State (Light by default, matching screenshot)
@@ -170,19 +172,52 @@ export const App: React.FC = () => {
         }
       }).catch(() => {});
       api.getAutoTrading().then((res) => {
-        if (res && typeof res.enabled === 'boolean') {
-          setIsAutoTradingEnabled(res.enabled);
+        if (res) {
+          if (typeof res.paper_enabled === 'boolean') {
+            setIsPaperAutoTradingEnabled(res.paper_enabled);
+          }
+          if (typeof res.live_enabled === 'boolean') {
+            setIsLiveAutoTradingEnabled(res.live_enabled);
+          }
         }
       }).catch(() => {});
     }
   }, [isAuthenticated]);
 
-  const handleToggleAutoTrading = async (enabled: boolean) => {
+  const handleTogglePaperAutoTrading = async (enabled: boolean) => {
     try {
-      const res = await api.setAutoTrading(enabled);
-      setIsAutoTradingEnabled(res.enabled);
+      const res = await api.setAutoTrading({ paper_enabled: enabled });
+      setIsPaperAutoTradingEnabled(res.paper_enabled);
     } catch (err: any) {
-      alert(`更新自动交易状态失败: ${err.message || '网络异常'}`);
+      alert(`更新模拟盘自动交易状态失败: ${err.message || '网络异常'}`);
+    }
+  };
+
+  const handleToggleLiveAutoTrading = async (enabled: boolean) => {
+    if (enabled) {
+      if (!activeAccount) {
+        alert('开启实盘自动交易前，请先绑定并激活 Polymarket 账户！');
+        setIsAccountModalOpen(true);
+        return;
+      }
+      const confirmed = window.confirm(
+        `⚠️ 实盘自动交易启用确认：\n\n您即将开启【实盘 CLOB 自动交易】！\n系统在接收到高胜率 AI 策略信号时，将自动使用账户 "${activeAccount.label}" 的真实 USDC 下单撮合。\n\n确认开启？`
+      );
+      if (!confirmed) return;
+    }
+    try {
+      const res = await api.setAutoTrading({ live_enabled: enabled });
+      setIsLiveAutoTradingEnabled(res.live_enabled);
+    } catch (err: any) {
+      alert(`更新实盘自动交易状态失败: ${err.message || '网络异常'}`);
+    }
+  };
+
+  const handleToggleAutoTrading = async (enabled: boolean) => {
+    if (tradingMode === 'live') {
+      await handleToggleLiveAutoTrading(enabled);
+    } else {
+      await handleTogglePaperAutoTrading(enabled);
     }
   };
 
@@ -503,6 +538,10 @@ export const App: React.FC = () => {
           onToggleTradingMode={handleToggleTradingMode}
           isAutoTradingEnabled={isAutoTradingEnabled}
           onToggleAutoTrading={handleToggleAutoTrading}
+          isPaperAutoTradingEnabled={isPaperAutoTradingEnabled}
+          onTogglePaperAutoTrading={handleTogglePaperAutoTrading}
+          isLiveAutoTradingEnabled={isLiveAutoTradingEnabled}
+          onToggleLiveAutoTrading={handleToggleLiveAutoTrading}
           activeAccount={activeAccount}
           onOpenAccountManager={() => setIsAccountModalOpen(true)}
           onEmergencyHalt={handleEmergencyHalt}

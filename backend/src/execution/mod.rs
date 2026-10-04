@@ -20,6 +20,8 @@ use crate::types::{
     SignalAction, TradeStatistics,
 };
 
+use parking_lot::RwLock as SyncRwLock;
+
 #[derive(Clone)]
 pub struct PaperExecutionEngine {
     execution_config: ExecutionConfig,
@@ -34,6 +36,7 @@ pub struct PaperExecutionEngine {
     position_tx: broadcast::Sender<PaperPosition>,
     result_tx: broadcast::Sender<PaperResult>,
     risk: Arc<RwLock<Option<Arc<crate::risk::RiskManager>>>>,
+    is_auto_trading_enabled: Arc<SyncRwLock<bool>>,
 }
 
 impl PaperExecutionEngine {
@@ -61,7 +64,17 @@ impl PaperExecutionEngine {
             position_tx,
             result_tx,
             risk: Arc::new(RwLock::new(None)),
+            is_auto_trading_enabled: Arc::new(SyncRwLock::new(true)),
         }
+    }
+
+    pub fn is_auto_trading_enabled(&self) -> bool {
+        *self.is_auto_trading_enabled.read()
+    }
+
+    pub fn set_auto_trading_enabled(&self, enabled: bool) {
+        *self.is_auto_trading_enabled.write() = enabled;
+        info!("PaperExecutionEngine auto-trading status set to: {}", enabled);
     }
 
     pub async fn set_risk_manager(&self, risk: Arc<crate::risk::RiskManager>) {
@@ -404,6 +417,9 @@ impl PaperExecutionEngine {
         let engine = self.clone();
         tokio::spawn(async move {
             while let Ok(signal) = signal_rx.recv().await {
+                if !engine.is_auto_trading_enabled() {
+                    continue;
+                }
                 if signal.action != SignalAction::Skip {
                     let _ = engine.execute_signal(&signal).await;
                 }

@@ -24,6 +24,10 @@ interface HeaderProps {
   onToggleTradingMode?: (mode: TradingMode) => void;
   isAutoTradingEnabled?: boolean;
   onToggleAutoTrading?: (enabled: boolean) => void;
+  isPaperAutoTradingEnabled?: boolean;
+  onTogglePaperAutoTrading?: (enabled: boolean) => void;
+  isLiveAutoTradingEnabled?: boolean;
+  onToggleLiveAutoTrading?: (enabled: boolean) => void;
   activeAccount?: PolymarketAccountPublic | null;
   onOpenAccountManager?: () => void;
   onEmergencyHalt?: () => void;
@@ -44,6 +48,10 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTradingMode,
   isAutoTradingEnabled = true,
   onToggleAutoTrading,
+  isPaperAutoTradingEnabled = true,
+  onTogglePaperAutoTrading,
+  isLiveAutoTradingEnabled = false,
+  onToggleLiveAutoTrading,
   activeAccount,
   onOpenAccountManager,
   onEmergencyHalt,
@@ -80,27 +88,63 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right: Controls, Theme Switcher & User Profile */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Global Auto-Trading Master Switch */}
-        {onToggleAutoTrading && (
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* Paper Auto-Trading Independent Switch */}
+        {onTogglePaperAutoTrading ? (
+          <button
+            onClick={() => onTogglePaperAutoTrading(!isPaperAutoTradingEnabled)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
+              isPaperAutoTradingEnabled
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
+                : 'bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-[#7d8da1] hover:bg-slate-200'
+            }`}
+            title={isPaperAutoTradingEnabled ? '点击暂停模拟盘自动买入' : '点击开启模拟盘自动买入'}
+          >
+            {isPaperAutoTradingEnabled ? (
+              <>
+                <Play className="w-3.5 h-3.5 fill-[#1b9c85] text-[#1b9c85]" />
+                <span>模拟自动: 开启</span>
+              </>
+            ) : (
+              <>
+                <Pause className="w-3.5 h-3.5 fill-slate-400 text-slate-400" />
+                <span>模拟自动: 暂停</span>
+              </>
+            )}
+          </button>
+        ) : onToggleAutoTrading ? (
           <button
             onClick={() => onToggleAutoTrading(!isAutoTradingEnabled)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
               isAutoTradingEnabled
                 ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
-                : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100 animate-pulse'
+                : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
             }`}
-            title={isAutoTradingEnabled ? '点击暂停策略自动交易（保留行情监控与风控）' : '点击恢复策略自动交易'}
           >
-            {isAutoTradingEnabled ? (
+            {isAutoTradingEnabled ? '模拟自动: 开启' : '模拟自动: 暂停'}
+          </button>
+        ) : null}
+
+        {/* Live Auto-Trading Independent Switch */}
+        {onToggleLiveAutoTrading && (
+          <button
+            onClick={() => onToggleLiveAutoTrading(!isLiveAutoTradingEnabled)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
+              isLiveAutoTradingEnabled
+                ? 'bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-[#ff0060] hover:bg-rose-100'
+                : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
+            }`}
+            title={isLiveAutoTradingEnabled ? '点击暂停实盘 CLOB 自动下单' : '点击开启实盘 CLOB 自动下单'}
+          >
+            {isLiveAutoTradingEnabled ? (
               <>
-                <Play className="w-3.5 h-3.5 fill-[#1b9c85] text-[#1b9c85]" />
-                <span>自动交易: 运行中</span>
+                <Play className="w-3.5 h-3.5 fill-[#ff0060] text-[#ff0060]" />
+                <span>实盘自动: 开启</span>
               </>
             ) : (
               <>
                 <Pause className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                <span>自动交易: 已暂停</span>
+                <span>实盘自动: 暂停</span>
               </>
             )}
           </button>

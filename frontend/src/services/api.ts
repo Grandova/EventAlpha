@@ -162,12 +162,30 @@ export const api = {
       body: JSON.stringify({ assets }),
     }),
   getAutoTrading: () =>
-    fetchJson<{ enabled: boolean }>('/api/v1/strategy/autotrade'),
-  setAutoTrading: (enabled: boolean) =>
-    fetchJson<{ success: boolean; enabled: boolean; message: string }>('/api/v1/strategy/autotrade', {
+    fetchJson<{
+      enabled: boolean;
+      paper_enabled: boolean;
+      live_enabled: boolean;
+      mode: string;
+    }>('/api/v1/strategy/autotrade'),
+  setAutoTrading: (req: {
+    enabled?: boolean;
+    mode?: 'paper' | 'live';
+    paper_enabled?: boolean;
+    live_enabled?: boolean;
+  } | boolean) => {
+    const payload = typeof req === 'boolean' ? { enabled: req } : req;
+    return fetchJson<{
+      success: boolean;
+      enabled: boolean;
+      paper_enabled: boolean;
+      live_enabled: boolean;
+      message: string;
+    }>('/api/v1/strategy/autotrade', {
       method: 'POST',
-      body: JSON.stringify({ enabled }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
   executeManualTrade: (req: {
     market_id: string;
     asset: Asset;

@@ -1,4 +1,5 @@
 use chrono::Utc;
+use parking_lot::RwLock as SyncRwLock;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info, warn};
@@ -15,6 +16,7 @@ pub struct LiveExecutionEngine {
     mode: Arc<RwLock<TradingMode>>,
     max_live_stake: f64,
     order_tx: broadcast::Sender<RealOrder>,
+    is_auto_trading_enabled: Arc<SyncRwLock<bool>>,
 }
 
 impl LiveExecutionEngine {
@@ -26,7 +28,17 @@ impl LiveExecutionEngine {
             mode: Arc::new(RwLock::new(TradingMode::Paper)),
             max_live_stake: 10.0, // Default hard ceiling: max $10 per live trade
             order_tx,
+            is_auto_trading_enabled: Arc::new(SyncRwLock::new(true)),
         }
+    }
+
+    pub fn is_auto_trading_enabled(&self) -> bool {
+        *self.is_auto_trading_enabled.read()
+    }
+
+    pub fn set_auto_trading_enabled(&self, enabled: bool) {
+        *self.is_auto_trading_enabled.write() = enabled;
+        info!("LiveExecutionEngine auto-trading status set to: {}", enabled);
     }
 
     pub fn clob_client(&self) -> &PolymarketClobHttpClient {
@@ -107,6 +119,10 @@ impl LiveExecutionEngine {
     /// Execute a live trading signal on Polymarket CLOB
     pub async fn execute_signal(&self, signal: &PredictionSignal) -> Result<Option<RealOrder>, String> {
         if *self.mode.read().await != TradingMode::Live {
+            return Ok(None);
+        }
+
+        if !self.is_auto_trading_enabled() {
             return Ok(None);
         }
 
