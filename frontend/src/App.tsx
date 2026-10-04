@@ -149,7 +149,13 @@ export const App: React.FC = () => {
     try {
       const modeRes = await api.getTradingMode();
       setTradingMode(modeRes.mode);
-      setActiveAccount(modeRes.active_account);
+      if (modeRes.active_account) {
+        setActiveAccount(modeRes.active_account);
+      } else {
+        const accounts = await api.getAccounts();
+        const active = accounts.find((a) => a.is_active) || accounts[0] || null;
+        setActiveAccount(active);
+      }
     } catch (err) {
       // ignore
     }
@@ -204,20 +210,32 @@ export const App: React.FC = () => {
     if (newMode === tradingMode) return;
 
     if (newMode === 'live') {
-      if (!activeAccount) {
+      let currentActive = activeAccount;
+      if (!currentActive) {
+        try {
+          const accounts = await api.getAccounts();
+          const active = accounts.find((a) => a.is_active) || accounts[0] || null;
+          if (active) {
+            currentActive = active;
+            setActiveAccount(active);
+          }
+        } catch (_) {}
+      }
+
+      if (!currentActive) {
         alert('实盘交易要求必须先绑定并激活至少一个 Polymarket 账户！已为您打开账户管理面板。');
         setIsAccountModalOpen(true);
         return;
       }
 
-      if (activeAccount.balance_usdc <= 0) {
+      if (currentActive.balance_usdc <= 0) {
         const proceed = window.confirm(
-          `⚠️ 提示：当前实盘账户 "${activeAccount.label}" 的 Polygon USDC 余额为 $0.00。是否仍要切换至实盘模式？`
+          `⚠️ 提示：当前实盘账户 "${currentActive.label}" 的 Polygon USDC 余额为 $0.00。\n\n如您已在 Polymarket 充值，请确认您绑定的钱包是否为个人主页网址里的 Proxy 代理钱包。\n是否仍要切换至实盘模式？`
         );
         if (!proceed) return;
       } else {
         const proceed = window.confirm(
-          `⚠️ 实盘风险警示：即将切换至 Polymarket CLOB 实盘撮合模式！\n\n当前活跃账户：${activeAccount.label}\nPolygon 钱包：${activeAccount.wallet_address}\n当前可用余额：$${activeAccount.balance_usdc.toFixed(2)} USDC\n\n系统将以 Mode B 资金硬顶（最大 $10.00 USDC）向真实订单簿下达限价/市价单。确认继续？`
+          `⚠️ 实盘风险警示：即将切换至 Polymarket CLOB 实盘撮合模式！\n\n当前活跃账户：${currentActive.label}\nPolygon 钱包：${currentActive.wallet_address}\n当前可用余额：$${currentActive.balance_usdc.toFixed(2)} USDC\n\n系统将以 Mode B 资金硬顶（最大 $10.00 USDC）向真实订单簿下达限价/市价单。确认继续？`
         );
         if (!proceed) return;
       }
@@ -671,7 +689,10 @@ export const App: React.FC = () => {
       {/* Account Manager Modal */}
       <AccountManagerModal
         isOpen={isAccountModalOpen}
-        onClose={() => setIsAccountModalOpen(false)}
+        onClose={() => {
+          setIsAccountModalOpen(false);
+          syncTradingMode();
+        }}
         onAccountActivated={(acc) => {
           setActiveAccount(acc);
           syncTradingMode();

@@ -129,7 +129,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
     try {
       setLoading(true);
-      await api.createAccount({
+      const created = await api.createAccount({
         label: formData.label.trim(),
         api_key: formData.api_key.trim(),
         api_secret: formData.api_secret?.trim() || '',
@@ -138,7 +138,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
         proxy_wallet_address: formData.proxy_wallet_address?.trim() || undefined,
       });
 
-      setSuccessMsg('Polymarket 账户添加成功！');
+      setSuccessMsg('Polymarket 账户添加成功！已自动激活');
       setShowAddForm(false);
       setFormData({
         label: '',
@@ -149,6 +149,9 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
         proxy_wallet_address: '',
       });
       await loadAccounts();
+      if (onAccountActivated && created) {
+        onAccountActivated(created);
+      }
     } catch (err: any) {
       setError(err.message || '添加账户失败');
     } finally {
@@ -401,7 +404,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                     <input
                       type="text"
                       required
-                      placeholder="0x..."
+                      placeholder="0x... (个人钱包或 Proxy 钱包)"
                       value={formData.wallet_address}
                       onChange={(e) =>
                         setFormData({ ...formData, wallet_address: e.target.value })
@@ -412,11 +415,11 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
-                      Proxy 代理钱包 (可选)
+                      Proxy 代理钱包 (推荐填入)
                     </label>
                     <input
                       type="text"
-                      placeholder="0x... (若使用 Safe 或 Email 登录)"
+                      placeholder="0x... (个人主页 profile 网址里的 0x 地址)"
                       value={formData.proxy_wallet_address || ''}
                       onChange={(e) =>
                         setFormData({ ...formData, proxy_wallet_address: e.target.value })
@@ -424,6 +427,10 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#202528] border border-slate-200 dark:border-slate-700 text-[#363949] dark:text-white text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#6c9bcf] transition-colors"
                     />
                   </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-800 dark:text-blue-300 leading-relaxed">
+                  <span>💡 <strong>为什么账户有钱却显示 $0.00？</strong>在 Polymarket 网站上充值的资金均存放在 <strong>Proxy 代理钱包 (Safe 合约钱包)</strong> 中。请在网站右上角点击个人头像复制网址：<code>polymarket.com/profile/0x...</code>，将网址中的 <strong>0x 代理地址</strong> 填入上方输入框，系统将立刻同步显示您的真实可用资金！</span>
                 </div>
 
                 <div className="space-y-3 pt-1">
@@ -503,7 +510,13 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
             <span>POLYGON MAINNET</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              const active = accounts.find((a) => a.is_active) || accounts[0];
+              if (active && onAccountActivated) {
+                onAccountActivated(active);
+              }
+              onClose();
+            }}
             className="px-4 py-1.5 rounded-xl bg-[#6c9bcf] text-white text-xs font-bold transition-all cursor-pointer"
           >
             完成

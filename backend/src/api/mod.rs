@@ -926,9 +926,17 @@ pub struct AssetQuery {
 
 async fn handle_trading_mode_get(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mode = state.live_execution.get_mode().await;
+    let active_account = state
+        .db
+        .get_active_account()
+        .await
+        .ok()
+        .flatten()
+        .map(|acc| crate::types::PolymarketAccountPublic::from(&acc));
     Json(serde_json::json!({
         "mode": format!("{:?}", mode).to_lowercase(),
-        "is_live": mode == crate::types::TradingMode::Live
+        "is_live": mode == crate::types::TradingMode::Live,
+        "active_account": active_account
     }))
 }
 

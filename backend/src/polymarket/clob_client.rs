@@ -305,11 +305,55 @@ impl PolymarketClobHttpClient {
 
     /// Fetch USDC Balance on Polygon for account
     pub async fn fetch_balance(&self, account: &crate::types::PolymarketAccount) -> Result<f64, String> {
+        let mut target_addresses: Vec<&str> = Vec::new();
+        if let Some(ref proxy) = account.proxy_wallet_address {
+            if !proxy.trim().is_empty() {
+                target_addresses.push(proxy.trim());
+            }
+        }
+        if !account.wallet_address.trim().is_empty() {
+            target_addresses.push(account.wallet_address.trim());
+        }
+
+        // 1. Try Polymarket public Data API (keyless, works for both proxy and EOA wallets)
+        for addr in &target_addresses {
+            let data_api_url = format!("https://data-api.polymarket.com/value?user={}", addr);
+            if let Ok(resp) = self
+                .http_client
+                .get(&data_api_url)
+                .timeout(std::time::Duration::from_secs(3))
+                .send()
+                .await
+            {
+                if resp.status().is_success() {
+                    if let Ok(val_json) = resp.json::<serde_json::Value>().await {
+                        let found_val = val_json
+                            .get("value")
+                            .and_then(|v| v.as_f64())
+                            .or_else(|| {
+                                val_json
+                                    .as_array()
+                                    .and_then(|arr| arr.first())
+                                    .and_then(|item| item.get("value"))
+                                    .and_then(|v| v.as_f64())
+                            })
+                            .or_else(|| val_json.as_f64());
+                        if let Some(v) = found_val {
+                            if v > 0.0 {
+                                return Ok(v);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Try Polymarket CLOB /balance-allowance
         let path = "/balance-allowance?asset_type=COLLATERAL";
         let url = format!("{}{}", self.base_url, path);
         let timestamp = Utc::now().timestamp() as u64;
 
-        let headers = self.generate_auth_headers(
+        if let Ok(headers) = self.generate_auth_headers(
             &account.api_key,
             &account.api_secret,
             &account.api_passphrase,
@@ -317,31 +361,38 @@ impl PolymarketClobHttpClient {
             "GET",
             path,
             None,
-        )?;
-
-        let resp = self
-            .http_client
-            .get(&url)
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|e| format!("Network request failed: {:?}", e))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(format!("Polymarket CLOB API error ({}): {}", status, text));
+        ) {
+            if let Ok(resp) = self
+                .http_client
+                .get(&url)
+                .headers(headers)
+                .timeout(std::time::Duration::from_secs(4))
+                .send()
+                .await
+            {
+                if resp.status().is_success() {
+                    if let Ok(json) = resp.json::<serde_json::Value>().await {
+                        let balance_str = json
+                            .get("balance")
+                            .and_then(|b| b.as_str())
+                            .unwrap_or("0.0");
+                        if let Ok(raw_val) = balance_str.parse::<f64>() {
+                            let balance = if raw_val > 1000.0 && !balance_str.contains('.') {
+                                raw_val / 1_000_000.0
+                            } else {
+                                raw_val
+                            };
+                            if balance > 0.0 {
+                                return Ok(balance);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse response JSON: {:?}", e))?;
-
-        // Polymarket returns collateral balance
-        let balance_str = json.get("balance").and_then(|b| b.as_str()).unwrap_or("0.0");
-        let balance = balance_str.parse::<f64>().unwrap_or(0.0);
-        Ok(balance)
+        // Fallback to existing account balance if previously recorded
+        Ok(account.balance_usdc)
     }
 
     /// Place a real order on Polymarket CLOB
