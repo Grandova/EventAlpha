@@ -20,6 +20,7 @@ import { AccountManagerModal } from './components/AccountManagerModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginPage } from './components/LoginPage';
 import { SetBankrollModal } from './components/SetBankrollModal';
+import { UnlockProfitModal } from './components/UnlockProfitModal';
 import { api, getStoredToken, clearStoredToken } from './services/api';
 import { wsClient } from './services/ws';
 import {
@@ -72,6 +73,8 @@ export const App: React.FC = () => {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
   const [enabledAssets, setEnabledAssets] = useState<Asset[]>(['BTC', 'ETH', 'SOL']);
+  const [isAutoTradingEnabled, setIsAutoTradingEnabled] = useState<boolean>(true);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
 
   // AsmrProg Light / Dark Theme State (Light by default, matching screenshot)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -160,8 +163,22 @@ export const App: React.FC = () => {
           setEnabledAssets(res.assets);
         }
       }).catch(() => {});
+      api.getAutoTrading().then((res) => {
+        if (res && typeof res.enabled === 'boolean') {
+          setIsAutoTradingEnabled(res.enabled);
+        }
+      }).catch(() => {});
     }
   }, [isAuthenticated]);
+
+  const handleToggleAutoTrading = async (enabled: boolean) => {
+    try {
+      const res = await api.setAutoTrading(enabled);
+      setIsAutoTradingEnabled(res.enabled);
+    } catch (err: any) {
+      alert(`更新自动交易状态失败: ${err.message || '网络异常'}`);
+    }
+  };
 
   const handleToggleEnabledAsset = async (asset: Asset) => {
     const current = new Set(enabledAssets);
@@ -466,6 +483,8 @@ export const App: React.FC = () => {
           isWsConnected={wsClient.getStatus()}
           tradingMode={tradingMode}
           onToggleTradingMode={handleToggleTradingMode}
+          isAutoTradingEnabled={isAutoTradingEnabled}
+          onToggleAutoTrading={handleToggleAutoTrading}
           activeAccount={activeAccount}
           onOpenAccountManager={() => setIsAccountModalOpen(true)}
           onEmergencyHalt={handleEmergencyHalt}
@@ -508,6 +527,8 @@ export const App: React.FC = () => {
                     progress={Math.min(100, Math.max(10, ((bankroll?.locked_profit ?? 0.0) / 10.0) * 100))}
                     percentageText={bankroll?.locked_profit ? `+$${bankroll.locked_profit.toFixed(1)}` : '-48%'}
                     accentColor="#ff0060"
+                    onClick={bankroll && bankroll.locked_profit > 0 ? () => setIsUnlockModalOpen(true) : undefined}
+                    actionLabel={bankroll && bankroll.locked_profit > 0 ? '🔓 提取利润' : undefined}
                   />
 
                   <StatCard
@@ -533,7 +554,18 @@ export const App: React.FC = () => {
                 {/* 3. Polymarket 5M Round & AI Opportunity Center */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <div className="lg:col-span-6">
-                    <PolymarketRoundCard market={market} book={book} prediction={prediction} />
+                    <PolymarketRoundCard
+                      market={market}
+                      book={book}
+                      prediction={prediction}
+                      tradingMode={tradingMode}
+                      activeAsset={activeAsset}
+                      onTradeExecuted={() => {
+                        api.getActivePositions().then(setActivePositions).catch(() => {});
+                        api.getPaperOrders(20).then(setRecentOrders).catch(() => {});
+                        api.getBankroll().then(setBankroll).catch(() => {});
+                      }}
+                    />
                   </div>
                   <div className="lg:col-span-6">
                     <OpportunityCenter signal={signal} prediction={prediction} />
@@ -567,6 +599,7 @@ export const App: React.FC = () => {
                   bankroll={bankroll}
                   risk={risk}
                   onOpenSetBankroll={tradingMode === 'paper' ? () => setIsBankrollModalOpen(true) : undefined}
+                  onBankrollUpdated={(newB) => setBankroll(newB)}
                 />
               </div>
             )}
@@ -652,6 +685,16 @@ export const App: React.FC = () => {
         onSuccess={(newBr) => {
           setBankroll(newBr);
           api.getRiskStatus().then(setRisk).catch(() => {});
+        }}
+      />
+
+      {/* Unlock / Withdraw Profit Modal */}
+      <UnlockProfitModal
+        isOpen={isUnlockModalOpen}
+        onClose={() => setIsUnlockModalOpen(false)}
+        currentBankroll={bankroll}
+        onSuccess={(newBr) => {
+          setBankroll(newBr);
         }}
       />
     </div>

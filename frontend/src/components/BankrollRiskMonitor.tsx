@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
-import { DollarSign, Lock, AlertOctagon, TrendingUp, ShieldAlert, CheckCircle2, RotateCcw } from 'lucide-react';
+import { DollarSign, Lock, Unlock, AlertOctagon, TrendingUp, ShieldAlert, CheckCircle2, RotateCcw } from 'lucide-react';
 import { BankrollState, RiskStatus } from '../types';
 import { api } from '../services/api';
+import { UnlockProfitModal } from './UnlockProfitModal';
 
 interface BankrollRiskMonitorProps {
   bankroll: BankrollState | null;
   risk: RiskStatus | null;
   onOpenSetBankroll?: () => void;
+  onBankrollUpdated?: (newBankroll: BankrollState) => void;
 }
 
 export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
   bankroll,
   risk,
   onOpenSetBankroll,
+  onBankrollUpdated,
 }) => {
   const [isUnhalting, setIsUnhalting] = useState(false);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
 
   const activeBankroll = bankroll?.active_bankroll ?? 10.0;
   const bankrollCap = bankroll?.bankroll_cap ?? 10.0;
@@ -165,20 +169,37 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
         </div>
 
         {/* 2. Locked Profits Vault */}
-        <div className="asmr-subcard p-3.5">
-          <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
-            <span className="flex items-center gap-1">
-              <Lock className="h-3 w-3 text-[#1b9c85]" /> 锁定利润金库
+        <div className="asmr-subcard p-3.5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
+              <span className="flex items-center gap-1">
+                <Lock className="h-3 w-3 text-[#1b9c85]" /> 锁定利润金库
+              </span>
+              <span className="font-mono text-[#1b9c85] font-semibold">100% 绝对隔离</span>
+            </div>
+            <div className="text-xl font-black text-[#1b9c85] font-mono-num">
+              +${(typeof lockedProfit === 'number' && !isNaN(lockedProfit) ? lockedProfit : 0).toFixed(2)}{' '}
+              <span className="text-xs text-[#1b9c85]/70 font-normal">USDC</span>
+            </div>
+          </div>
+          <div className="mt-2 pt-2 border-t border-[var(--color-light)] flex items-center justify-between">
+            <span className="text-[10px] text-[var(--color-info-dark)] font-mono">
+              硬顶: ${(typeof bankrollCap === 'number' ? bankrollCap : 10).toFixed(0)}
             </span>
-            <span className="font-mono text-[#1b9c85] font-semibold">100% 绝对隔离</span>
+            <button
+              onClick={() => setIsUnlockModalOpen(true)}
+              disabled={lockedProfit <= 0}
+              className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg transition shadow-sm cursor-pointer ${
+                lockedProfit > 0
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed opacity-50'
+              }`}
+              title="将已锁定的利润提取转入活跃交易资金"
+            >
+              <Unlock className="w-3 h-3" />
+              <span>提取利润</span>
+            </button>
           </div>
-          <div className="text-xl font-black text-[#1b9c85] font-mono-num">
-            +${(typeof lockedProfit === 'number' && !isNaN(lockedProfit) ? lockedProfit : 0).toFixed(2)}{' '}
-            <span className="text-xs text-[#1b9c85]/70 font-normal">USDC</span>
-          </div>
-          <p className="text-[10px] text-[var(--color-info-dark)] mt-2 font-mono">
-            超出 ${(typeof bankrollCap === 'number' ? bankrollCap : 10).toFixed(0)} 硬顶部分自动隔离
-          </p>
         </div>
 
         {/* 3. Total Portfolio Equity */}
@@ -250,6 +271,18 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Unlock / Withdraw Profit Modal */}
+      <UnlockProfitModal
+        isOpen={isUnlockModalOpen}
+        onClose={() => setIsUnlockModalOpen(false)}
+        currentBankroll={bankroll}
+        onSuccess={(newB) => {
+          if (onBankrollUpdated) {
+            onBankrollUpdated(newB);
+          }
+        }}
+      />
     </div>
   );
 };

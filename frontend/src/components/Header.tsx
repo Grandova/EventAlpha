@@ -8,6 +8,8 @@ import {
   OctagonAlert,
   Activity,
   Zap,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { HealthResponse, PriceSummary, Asset, TradingMode, PolymarketAccountPublic } from '../types';
 
@@ -20,6 +22,8 @@ interface HeaderProps {
   isWsConnected?: boolean;
   tradingMode?: TradingMode;
   onToggleTradingMode?: (mode: TradingMode) => void;
+  isAutoTradingEnabled?: boolean;
+  onToggleAutoTrading?: (enabled: boolean) => void;
   activeAccount?: PolymarketAccountPublic | null;
   onOpenAccountManager?: () => void;
   onEmergencyHalt?: () => void;
@@ -38,6 +42,8 @@ export const Header: React.FC<HeaderProps> = ({
   isWsConnected = true,
   tradingMode = 'paper',
   onToggleTradingMode,
+  isAutoTradingEnabled = true,
+  onToggleAutoTrading,
   activeAccount,
   onOpenAccountManager,
   onEmergencyHalt,
@@ -75,6 +81,31 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Controls, Theme Switcher & User Profile */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Global Auto-Trading Master Switch */}
+        {onToggleAutoTrading && (
+          <button
+            onClick={() => onToggleAutoTrading(!isAutoTradingEnabled)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
+              isAutoTradingEnabled
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
+                : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100 animate-pulse'
+            }`}
+            title={isAutoTradingEnabled ? '点击暂停策略自动交易（保留行情监控与风控）' : '点击恢复策略自动交易'}
+          >
+            {isAutoTradingEnabled ? (
+              <>
+                <Play className="w-3.5 h-3.5 fill-[#1b9c85] text-[#1b9c85]" />
+                <span>自动交易: 运行中</span>
+              </>
+            ) : (
+              <>
+                <Pause className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                <span>自动交易: 已暂停</span>
+              </>
+            )}
+          </button>
+        )}
+
         {/* Trading Mode Switcher */}
         <div className="flex items-center p-1 rounded-2xl bg-white dark:bg-[#202528] shadow-[0_0.5rem_1rem_rgba(132,139,200,0.1)] dark:shadow-none">
           <button

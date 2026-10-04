@@ -16,7 +16,7 @@ use crate::polymarket::orderbook::PolymarketBookEngine;
 use crate::polymarket::resolution::MarketResolvedEvent;
 use crate::safety::SafetyGuard;
 use crate::types::{
-    MarketSide, PaperOrder, PaperPosition, PaperResult, PredictionSignal, Resolution,
+    Asset, MarketSide, PaperOrder, PaperPosition, PaperResult, PredictionSignal, Resolution,
     SignalAction, TradeStatistics,
 };
 
@@ -241,6 +241,160 @@ impl PaperExecutionEngine {
         );
 
         Ok(Some((order, position)))
+    }
+
+    /// Manually execute a paper order regardless of strategy signal
+    pub async fn execute_manual_order(
+        &self,
+        market_id: &str,
+        asset: Asset,
+        side: MarketSide,
+        stake: Option<f64>,
+    ) -> Result<(PaperOrder, PaperPosition), String> {
+        // Enforce safety guard: zero real trading
+        SafetyGuard::enforce_paper_only(false).map_err(|e| e.to_string())?;
+
+        let now_ms = Utc::now().timestamp_millis();
+
+        // Check if there is already an active position for this market
+        for entry in self.active_positions.iter() {
+            if entry.value().market_id == market_id && entry.value().status == "OPEN" {
+                return Err(format!(
+                    "标的 {} (市场 {}) 当前已有持仓尚未结算，请等待该轮结算后再买入",
+                    asset, market_id
+                ));
+            }
+        }
+
+        // Determine requested stake
+        let requested_stake = match stake {
+            Some(s) if s > 0.0 => s.min(self.position_config.max_stake.max(100.0)),
+            _ => self.position_config.stake.min(self.position_config.max_stake),
+        };
+        if requested_stake <= 0.0 {
+            return Err("下单金额必须大于 0".to_string());
+        }
+
+        // Pre-trade Risk & Circuit Breaker Check
+        {
+            let r_guard = self.risk.read().await;
+            if let Some(ref risk) = *r_guard {
+                if let Err(reason) = risk.can_open_position(requested_stake).await {
+                    return Err(format!("风控拦截: {}", reason));
+                }
+            }
+        }
+
+        // Simulate network / order transmission latency if configured
+        if self.execution_config.latency_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(self.execution_config.latency_ms)).await;
+        }
+
+        // Execute realistic Depth-Walking fill simulation against Polymarket orderbook
+        let (quote_price, fill_price, total_shares, slippage, fill_status) = if self.execution_config.orderbook_depth_fill {
+            match self.poly_books.simulate_buy_fill(asset, side, requested_stake) {
+                Ok(fill) => (
+                    fill.quote_price,
+                    fill.avg_fill_price,
+                    fill.total_shares,
+                    fill.slippage,
+                    "FILLED".to_string(),
+                ),
+                Err(err) => {
+                    warn!(
+                        "Manual orderbook fill simulation for {} {:?} warning: {}. Using fallback execution price.",
+                        asset, side, err
+                    );
+                    let quote = 0.50;
+                    let fill = (quote * (1.0 + self.execution_config.slippage_rate)).min(0.99);
+                    let shares = requested_stake / fill;
+                    let slip = (fill - quote).max(0.0);
+                    (quote, fill, shares, slip, "FILLED".to_string())
+                }
+            }
+        } else {
+            let quote = 0.50;
+            let fill = (quote * (1.0 + self.execution_config.slippage_rate)).min(0.99);
+            let shares = requested_stake / fill;
+            let slip = (fill - quote).max(0.0);
+            (quote, fill, shares, slip, "FILLED".to_string())
+        };
+
+        // Fee deduction
+        let fee = requested_stake * self.execution_config.fee_rate;
+
+        let order_id = format!("ord_man_{}", Uuid::new_v4().simple());
+        let position_id = format!("pos_man_{}", Uuid::new_v4().simple());
+
+        let order = PaperOrder {
+            order_id: order_id.clone(),
+            market_id: market_id.to_string(),
+            asset,
+            side,
+            stake: requested_stake,
+            shares: total_shares,
+            quote_price,
+            fill_price,
+            slippage,
+            fee,
+            status: fill_status,
+            signal_id: Some("MANUAL_ORDER".to_string()),
+            timestamp_ms: now_ms,
+        };
+
+        let position = PaperPosition {
+            position_id: position_id.clone(),
+            order_id: order_id.clone(),
+            market_id: market_id.to_string(),
+            asset,
+            side,
+            entry_time_ms: now_ms,
+            entry_price: fill_price,
+            stake: requested_stake,
+            shares: total_shares,
+            status: "OPEN".to_string(),
+            settled_at_ms: None,
+            created_at_ms: now_ms,
+        };
+
+        // Persist to database
+        if let Err(e) = self.db.insert_paper_order(&order).await {
+            error!("Failed to persist manual paper order: {:#}", e);
+        }
+        if let Err(e) = self.db.insert_paper_position(&position).await {
+            error!("Failed to persist manual paper position: {:#}", e);
+        }
+
+        // Deduct stake from active bankroll
+        {
+            let r_guard = self.risk.read().await;
+            if let Some(ref risk) = *r_guard {
+                let _ = risk
+                    .reserve_stake(order.stake, "MANUAL_ORDER_OPEN", Some(&order.order_id))
+                    .await;
+            }
+        }
+
+        // Cache active position and order history
+        self.active_positions.insert(position_id.clone(), position.clone());
+        {
+            let mut hist = self.order_history.write().await;
+            if hist.len() >= 500 {
+                hist.pop_front();
+            }
+            hist.push_back(order.clone());
+        }
+
+        // Broadcast events
+        let _ = self.order_tx.send(order.clone());
+        let _ = self.position_tx.send(position.clone());
+
+        info!(
+            "✋ MANUAL PAPER ORDER FILLED: {} {} | Stake: {:.2} USDC | Price: {:.4} (Slip: {:.4}) | Shares: {:.2} | Fee: {:.4} USDC",
+            order.side, order.asset, order.stake, order.fill_price, order.slippage, order.shares, order.fee
+        );
+
+        Ok((order, position))
     }
 
     /// Background runner subscribing to StrategyEngine prediction signals

@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::polymarket::clob_client::PolymarketClobHttpClient;
-use crate::types::{MarketSide, PredictionSignal, RealOrder, SignalAction, TradingMode};
+use crate::types::{Asset, MarketSide, PredictionSignal, RealOrder, SignalAction, TradingMode};
 
 #[derive(Clone)]
 pub struct LiveExecutionEngine {
@@ -200,6 +200,104 @@ impl LiveExecutionEngine {
 
         let _ = self.order_tx.send(real_order.clone());
         Ok(Some(real_order))
+    }
+
+    /// Execute a manual live order on Polymarket CLOB
+    pub async fn execute_manual_order(
+        &self,
+        market_id: &str,
+        asset: Asset,
+        side: MarketSide,
+        stake: Option<f64>,
+    ) -> Result<RealOrder, String> {
+        let mode = *self.mode.read().await;
+        if mode != TradingMode::Live {
+            return Err("系统当前处于模拟盘模式 (Paper Mode)，请先在设置中切换为实盘模式".to_string());
+        }
+
+        let account = match self.db.get_active_account().await {
+            Ok(Some(acc)) => acc,
+            _ => {
+                error!("Cannot place live order: No active Polymarket account configured");
+                return Err("未配置或未激活 Polymarket 实盘交易账户，请前往账户管理添加并激活".to_string());
+            }
+        };
+
+        let outcome_str = match side {
+            MarketSide::Up => "UP",
+            MarketSide::Down => "DOWN",
+        };
+
+        let token_id = format!("{}_{}", market_id, outcome_str);
+
+        // Requested stake capped by max_live_stake
+        let requested_stake = stake.unwrap_or(1.0).clamp(0.1, self.max_live_stake);
+        let requested_price = 0.50; // Fallback price estimation
+        let size = (requested_stake / requested_price).max(1.0);
+
+        let now_ms = Utc::now().timestamp_millis();
+        let internal_order_id = Uuid::new_v4().to_string();
+
+        info!(
+            "🚀 SUBMITTING MANUAL LIVE ORDER TO POLYMARKET: {} {} | Size: {:.2} (${:.2} USDC) | Account: {}",
+            outcome_str, asset, size, requested_stake, account.label
+        );
+
+        let clob_resp = self
+            .clob_client
+            .place_order(
+                &account,
+                &token_id,
+                "BUY",
+                requested_price,
+                size,
+                "FOK",
+            )
+            .await;
+
+        let (clob_order_id, status, error_message, filled_size) = match clob_resp {
+            Ok(resp) => {
+                if resp.success {
+                    info!("✅ POLYMARKET CLOB MANUAL ORDER FILLED: {:?}", resp.order_id);
+                    (resp.order_id, "FILLED".to_string(), None, resp.filled_size.unwrap_or(size))
+                } else {
+                    warn!("❌ Polymarket CLOB rejected manual order: {:?}", resp.error_msg);
+                    (None, "FAILED".to_string(), resp.error_msg, 0.0)
+                }
+            }
+            Err(e) => {
+                error!("Network error submitting manual order to Polymarket: {}", e);
+                (None, "FAILED".to_string(), Some(e), 0.0)
+            }
+        };
+
+        let real_order = RealOrder {
+            id: internal_order_id,
+            account_id: account.id,
+            clob_order_id,
+            market_id: market_id.to_string(),
+            token_id,
+            asset,
+            side: "BUY".to_string(),
+            outcome: outcome_str.to_string(),
+            order_type: "FOK".to_string(),
+            price: requested_price,
+            size,
+            filled_size,
+            status,
+            fee: requested_stake * 0.012,
+            pnl: None,
+            error_message,
+            created_at: now_ms,
+            updated_at: now_ms,
+        };
+
+        if let Err(e) = self.db.insert_real_order(&real_order).await {
+            error!("Failed to persist manual real order: {:?}", e);
+        }
+
+        let _ = self.order_tx.send(real_order.clone());
+        Ok(real_order)
     }
 
     /// Emergency Kill Switch: Cancel order & Halt live trading

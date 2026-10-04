@@ -132,6 +132,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+  unlockProfit: (amount?: number) =>
+    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>('/api/v1/paper/bankroll/unlock', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    }),
   getBankrollHistory: (limit = 50) =>
     fetchJson<BankrollHistoryEntry[]>(`/api/v1/paper/bankroll/history?limit=${limit}`),
   getRiskStatus: () => fetchJson<RiskStatus>('/api/v1/risk/status'),
@@ -155,6 +160,30 @@ export const api = {
     fetchJson<{ success: boolean; message: string; assets: Asset[] }>('/api/v1/strategy/assets', {
       method: 'POST',
       body: JSON.stringify({ assets }),
+    }),
+  getAutoTrading: () =>
+    fetchJson<{ enabled: boolean }>('/api/v1/strategy/autotrade'),
+  setAutoTrading: (enabled: boolean) =>
+    fetchJson<{ success: boolean; enabled: boolean; message: string }>('/api/v1/strategy/autotrade', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+  executeManualTrade: (req: {
+    market_id: string;
+    asset: Asset;
+    side: 'UP' | 'DOWN' | 'Up' | 'Down';
+    stake?: number;
+    mode?: 'paper' | 'live';
+  }) =>
+    fetchJson<{
+      success: boolean;
+      mode: string;
+      order?: any;
+      position?: any;
+      message: string;
+    }>('/api/v1/trade/manual', {
+      method: 'POST',
+      body: JSON.stringify(req),
     }),
   getPaperOrders: (limit = 20) =>
     fetchJson<PaperOrder[]>(`/api/v1/paper/orders?limit=${limit}`),

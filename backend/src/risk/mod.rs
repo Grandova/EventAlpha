@@ -378,6 +378,53 @@ impl RiskManager {
         Ok(snapshot)
     }
 
+    /// Unlock and transfer locked profits into active bankroll for trading
+    pub async fn unlock_profit_to_active(&self, amount: Option<f64>) -> Result<BankrollState, String> {
+        let mut state = self.state.write().await;
+        if state.locked_profit <= 0.0 {
+            return Err("锁定金库中暂无可用利润资金".to_string());
+        }
+
+        let to_transfer = match amount {
+            Some(a) if a > 0.0 => a.min(state.locked_profit),
+            _ => state.locked_profit, // default: transfer all
+        };
+
+        if to_transfer <= 0.0 {
+            return Err("提取金额必须大于 0".to_string());
+        }
+
+        state.locked_profit -= to_transfer;
+        state.active_bankroll += to_transfer;
+
+        // If active bankroll exceeds bankroll_cap, expand cap to accommodate new capital
+        if state.active_bankroll > state.bankroll_cap {
+            state.bankroll_cap = state.active_bankroll;
+        }
+        state.total_equity = state.active_bankroll + state.locked_profit;
+
+        info!(
+            "🔓 UNLOCKED PROFIT: Transferred ${:.2} from locked vault to active trading funds. Active: ${:.2}, Locked: ${:.2}",
+            to_transfer, state.active_bankroll, state.locked_profit
+        );
+
+        let snapshot = state.clone();
+        let _ = self
+            .db
+            .record_bankroll_entry(
+                snapshot.active_bankroll,
+                snapshot.locked_profit,
+                snapshot.total_equity,
+                to_transfer,
+                "UNLOCK_PROFIT_TO_ACTIVE",
+                None,
+            )
+            .await;
+
+        let _ = self.bankroll_tx.send(snapshot.clone());
+        Ok(snapshot)
+    }
+
     pub async fn get_bankroll_state(&self) -> BankrollState {
         self.state.read().await.clone()
     }

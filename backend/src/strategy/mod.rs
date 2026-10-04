@@ -33,6 +33,7 @@ pub struct StrategyEngine {
     recent_decisions: Arc<RwLock<VecDeque<DecisionLog>>>,
     signal_tx: broadcast::Sender<PredictionSignal>,
     enabled_assets: Arc<SyncRwLock<std::collections::HashSet<Asset>>>,
+    is_auto_trading_enabled: Arc<SyncRwLock<bool>>,
 }
 
 impl StrategyEngine {
@@ -55,6 +56,7 @@ impl StrategyEngine {
             recent_decisions: Arc::new(RwLock::new(VecDeque::with_capacity(500))),
             signal_tx,
             enabled_assets: Arc::new(SyncRwLock::new(initial_enabled)),
+            is_auto_trading_enabled: Arc::new(SyncRwLock::new(true)),
         }
     }
 
@@ -64,6 +66,15 @@ impl StrategyEngine {
 
     pub fn update_config(&self, new_config: StrategyConfig) {
         *self.config.write() = new_config;
+    }
+
+    pub fn is_auto_trading_enabled(&self) -> bool {
+        *self.is_auto_trading_enabled.read()
+    }
+
+    pub fn set_auto_trading_enabled(&self, enabled: bool) {
+        *self.is_auto_trading_enabled.write() = enabled;
+        info!("Auto-trading global status set to: {}", enabled);
     }
 
     pub fn get_enabled_assets(&self) -> Vec<Asset> {
@@ -92,7 +103,59 @@ impl StrategyEngine {
         is_fresh: bool,
         remaining_seconds: i64,
     ) -> (PredictionSignal, DecisionLog) {
-        // 0. Asset Trading Enabled Check (币种独立开关)
+        // 0a. Global Auto-Trading Master Switch Check
+        if !*self.is_auto_trading_enabled.read() {
+            let action = SignalAction::Skip;
+            let decision_reason = "自动交易已暂停 (Auto-trading paused by user)".to_string();
+            let confidence = ConfidenceLevel::Skip;
+            let prediction_id = format!("pred_{}", Uuid::new_v4().simple());
+            let market_implied_up = polymarket_tick.and_then(|t| t.up_mid).or(Some(0.50));
+
+            let signal = PredictionSignal {
+                prediction_id,
+                market_id: prediction.market_id.clone(),
+                asset: prediction.asset,
+                timestamp_ms: prediction.timestamp_ms,
+                model_version: prediction.model_version.clone(),
+                p_up: prediction.calibrated_p_up,
+                p_down: prediction.calibrated_p_down,
+                fair_value_up: prediction.calibrated_p_up,
+                fair_value_down: prediction.calibrated_p_down,
+                market_implied_up,
+                gross_edge: 0.0,
+                estimated_fee: self.execution_config.fee_rate,
+                estimated_slippage: self.execution_config.slippage_rate,
+                net_edge: 0.0,
+                signal_score: 0.0,
+                confidence,
+                action,
+                decision_reason: decision_reason.clone(),
+            };
+
+            let decision = DecisionLog {
+                timestamp_ms: prediction.timestamp_ms,
+                market_id: prediction.market_id.clone(),
+                asset: prediction.asset,
+                p_up: prediction.calibrated_p_up,
+                p_down: prediction.calibrated_p_down,
+                up_ask: polymarket_tick.and_then(|t| t.up_ask),
+                down_ask: polymarket_tick.and_then(|t| t.down_ask),
+                gross_edge: 0.0,
+                fee: self.execution_config.fee_rate,
+                slippage: self.execution_config.slippage_rate,
+                net_edge: 0.0,
+                liquidity_check: "PASS".to_string(),
+                spread_check: "PASS".to_string(),
+                time_check: "PASS".to_string(),
+                risk_check: "Auto-trading paused".to_string(),
+                final_action: action,
+                reason: decision_reason,
+            };
+
+            return (signal, decision);
+        }
+
+        // 0b. Asset Trading Enabled Check (币种独立开关)
         if !self.enabled_assets.read().contains(&prediction.asset) {
             let action = SignalAction::Skip;
             let decision_reason = format!("标的 {} 自动交易已在设置中禁用", prediction.asset);

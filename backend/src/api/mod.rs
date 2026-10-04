@@ -143,6 +143,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/config", get(handle_config))
         .route("/api/v1/paper/bankroll", get(handle_bankroll))
         .route("/api/v1/paper/bankroll/set", post(handle_bankroll_set))
+        .route("/api/v1/paper/bankroll/unlock", post(handle_bankroll_unlock))
         .route("/api/v1/paper/bankroll/history", get(handle_bankroll_history))
         .route("/api/v1/risk/status", get(handle_risk_status))
         .route("/api/v1/risk/config", post(handle_risk_config_update))
@@ -184,6 +185,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/ws", get(ws::handle_ws_upgrade))
         .route("/api/v1/strategy/config", get(handle_strategy_config_get).post(handle_strategy_config_update))
         .route("/api/v1/strategy/assets", get(handle_strategy_assets_get).post(handle_strategy_assets_set))
+        .route("/api/v1/strategy/autotrade", get(handle_strategy_autotrade_get).post(handle_strategy_autotrade_set))
         .route("/api/v1/models/config", get(handle_model_config))
         .route("/api/v1/models/train", post(handle_model_train))
         .route("/api/v1/dataset/generate_synthetic", post(handle_dataset_generate_synthetic))
@@ -195,6 +197,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/accounts/{id}/balance", get(handle_account_balance))
         .route("/api/v1/real/orders", get(handle_real_orders_get))
         .route("/api/v1/real/emergency_halt", post(handle_real_emergency_halt))
+        .route("/api/v1/trade/manual", post(handle_trade_manual))
         // Self-Learning & Auto-Evolution
         .route("/api/v1/learning/status", get(handle_learning_status))
         .route("/api/v1/learning/toggle", post(handle_learning_toggle))
@@ -354,6 +357,34 @@ async fn handle_bankroll_set(
             Json(serde_json::json!({
                 "success": true,
                 "message": format!("模拟资金成功设置为 ${:.2} USDC", new_state.active_bankroll),
+                "bankroll": new_state
+            })),
+        ),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "message": err
+            })),
+        ),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UnlockProfitRequest {
+    pub amount: Option<f64>,
+}
+
+async fn handle_bankroll_unlock(
+    State(state): State<AppState>,
+    Json(req): Json<UnlockProfitRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state.risk.unlock_profit_to_active(req.amount).await {
+        Ok(new_state) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": format!("成功将锁定金库中的利润提取至可用本金！当前可用本金: ${:.2} USDC", new_state.active_bankroll),
                 "bankroll": new_state
             })),
         ),
@@ -806,6 +837,29 @@ async fn handle_strategy_assets_set(
     )
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AutoTradeToggleRequest {
+    pub enabled: bool,
+}
+
+async fn handle_strategy_autotrade_get(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "enabled": state.strategy.is_auto_trading_enabled()
+    }))
+}
+
+async fn handle_strategy_autotrade_set(
+    State(state): State<AppState>,
+    Json(req): Json<AutoTradeToggleRequest>,
+) -> Json<serde_json::Value> {
+    state.strategy.set_auto_trading_enabled(req.enabled);
+    Json(serde_json::json!({
+        "success": true,
+        "enabled": req.enabled,
+        "message": if req.enabled { "自动交易策略已恢复运行" } else { "自动交易策略已暂停" }
+    }))
+}
+
 async fn handle_model_config(
     State(state): State<AppState>,
 ) -> Json<crate::models::LogisticModelConfig> {
@@ -987,6 +1041,77 @@ async fn handle_real_emergency_halt(State(state): State<AppState>) -> Json<serde
         "mode": "paper",
         "message": "Emergency halt triggered. Real trading halted immediately."
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ManualTradeRequest {
+    pub market_id: String,
+    pub asset: Asset,
+    pub side: crate::types::MarketSide,
+    pub stake: Option<f64>,
+    pub mode: Option<String>,
+}
+
+async fn handle_trade_manual(
+    State(state): State<AppState>,
+    Json(req): Json<ManualTradeRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let current_mode = state.live_execution.get_mode().await;
+    let target_mode = req.mode.as_deref().unwrap_or(match current_mode {
+        crate::types::TradingMode::Live => "live",
+        crate::types::TradingMode::Paper => "paper",
+    });
+
+    if target_mode.eq_ignore_ascii_case("live") {
+        match state
+            .live_execution
+            .execute_manual_order(&req.market_id, req.asset, req.side, req.stake)
+            .await
+        {
+            Ok(real_order) => (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "mode": "live",
+                    "order": real_order,
+                    "message": format!("实盘手动订单已提交至 Polymarket CLOB: 状态 {}", real_order.status)
+                })),
+            ),
+            Err(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "mode": "live",
+                    "message": err
+                })),
+            ),
+        }
+    } else {
+        match state
+            .execution
+            .execute_manual_order(&req.market_id, req.asset, req.side, req.stake)
+            .await
+        {
+            Ok((order, position)) => (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "mode": "paper",
+                    "order": order,
+                    "position": position,
+                    "message": format!("模拟盘手动订单已撮合成交！成交价: {:.3} USDC", order.fill_price)
+                })),
+            ),
+            Err(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "mode": "paper",
+                    "message": err
+                })),
+            ),
+        }
+    }
 }
 
 async fn handle_learning_status(
