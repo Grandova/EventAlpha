@@ -440,20 +440,20 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
             </div>
             {/* Breakdown of the 4 exchanges */}
             <div className="flex items-center gap-2 mt-0.5 text-[10px] font-mono text-[#7d8da1]">
-              <span title="Binance (40% 权重)">
-                BN: {composite?.price_binance ? `$${composite.price_binance.toFixed(1)}` : '--'}
+              <span title="Binance (40% 权重 · USDT计价)">
+                BN<span className="opacity-60 text-[9px]">(USDT)</span>: {composite?.price_binance ? `$${composite.price_binance.toFixed(1)}` : '--'}
               </span>
               <span>·</span>
-              <span title="Coinbase (25% 权重)">
-                CB: {composite?.price_coinbase ? `$${composite.price_coinbase.toFixed(1)}` : '--'}
+              <span title="Coinbase (25% 权重 · USD法币计价)">
+                CB<span className="opacity-60 text-[9px]">(USD)</span>: {composite?.price_coinbase ? `$${composite.price_coinbase.toFixed(1)}` : '--'}
               </span>
               <span>·</span>
-              <span title="OKX (25% 权重)">
-                OKX: {composite?.price_okx ? `$${composite.price_okx.toFixed(1)}` : '--'}
+              <span title="OKX (25% 权重 · USDT计价)">
+                OKX<span className="opacity-60 text-[9px]">(USDT)</span>: {composite?.price_okx ? `$${composite.price_okx.toFixed(1)}` : '--'}
               </span>
               <span>·</span>
-              <span title="Bybit (10% 权重)">
-                BY: {composite?.price_bybit ? `$${composite.price_bybit.toFixed(1)}` : '--'}
+              <span title="Bybit (10% 权重 · USDT计价)">
+                BY<span className="opacity-60 text-[9px]">(USDT)</span>: {composite?.price_bybit ? `$${composite.price_bybit.toFixed(1)}` : '--'}
               </span>
             </div>
           </div>
@@ -810,9 +810,17 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
               </strong>
             </div>
             <div>
-              <span className="text-[#7d8da1] text-[10px] block">跨所基差 (BN-CB):</span>
+              <span className="text-[#7d8da1] text-[10px] block" title="Binance(USDT) 与 Coinbase(USD) 跨所法币/稳定币基差">
+                BN-CB 汇差 (USDT/USD):
+              </span>
               <strong className="text-[#6c9bcf]">
-                {typeof composite?.spread_binance_coinbase === 'number' ? `$${composite.spread_binance_coinbase.toFixed(2)}` : '--'}
+                {typeof composite?.spread_binance_coinbase === 'number'
+                  ? `${composite.spread_binance_coinbase >= 0 ? '+' : ''}$${composite.spread_binance_coinbase.toFixed(2)}${
+                      composite.price_binance && composite.price_binance > 0
+                        ? ` (${composite.spread_binance_coinbase >= 0 ? '+' : ''}${((composite.spread_binance_coinbase / composite.price_binance) * 100).toFixed(3)}%)`
+                        : ''
+                    }`
+                  : '--'}
               </strong>
             </div>
           </div>
@@ -887,19 +895,56 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
             )}
 
             {activeIndicatorTab === 'spreads' && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {[
-                  { label: 'Binance - OKX 价差', val: composite?.spread_binance_okx },
-                  { label: 'Binance - Bybit 价差', val: composite?.spread_binance_bybit },
-                  { label: 'Binance - Coinbase 价差', val: composite?.spread_binance_coinbase },
-                ].map((m, i) => (
-                  <div key={i} className="p-2 rounded-xl bg-white dark:bg-[#202528] border border-slate-100 dark:border-slate-800 font-mono text-center">
-                    <span className="text-[10px] text-[#7d8da1] block">{m.label}</span>
-                    <span className="text-xs font-black text-[#6c9bcf]">
-                      {typeof m.val === 'number' ? `$${m.val.toFixed(2)}` : '--'}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    {
+                      label: 'Binance - OKX (同质USDT)',
+                      val: composite?.spread_binance_okx,
+                      base: composite?.price_binance,
+                      tip: '同为USDT计价现货，价差反映两所流动性微小差异（通常在0.005%以内）',
+                    },
+                    {
+                      label: 'Binance - Bybit (同质USDT)',
+                      val: composite?.spread_binance_bybit,
+                      base: composite?.price_binance,
+                      tip: '同为USDT计价现货，价差反映两所流动性微小差异（通常在0.005%以内）',
+                    },
+                    {
+                      label: 'BN(USDT) - CB(USD) 汇率基差',
+                      val: composite?.spread_binance_coinbase,
+                      base: composite?.price_binance,
+                      tip: '币安为USDT计价，Coinbase为美元USD法币计价。USDT/USD微幅溢折价(~0.02%)反映在此价差中，属正常法币/稳定币汇差',
+                    },
+                  ].map((m, i) => {
+                    const pct =
+                      typeof m.val === 'number' && m.base && m.base > 0
+                        ? ((m.val / m.base) * 100).toFixed(3)
+                        : null;
+                    return (
+                      <div
+                        key={i}
+                        title={m.tip}
+                        className="p-2 rounded-xl bg-white dark:bg-[#202528] border border-slate-100 dark:border-slate-800 font-mono text-center"
+                      >
+                        <span className="text-[10px] text-[#7d8da1] block">{m.label}</span>
+                        <div className="flex items-center justify-center gap-1 mt-0.5">
+                          <span className="text-xs font-black text-[#6c9bcf]">
+                            {typeof m.val === 'number' ? `${m.val >= 0 ? '+' : ''}$${m.val.toFixed(2)}` : '--'}
+                          </span>
+                          {pct && (
+                            <span className="text-[10px] text-[#7d8da1] font-semibold">
+                              ({m.val! >= 0 ? '+' : ''}{pct}%)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[10px] text-[#7d8da1] font-mono bg-slate-50 dark:bg-slate-800/40 p-2 rounded-lg flex items-center justify-between">
+                  <span>💡 说明：Binance/OKX/Bybit 均为 USDT 计价，价差极小(&lt;0.01%)；Coinbase 为纯美元 USD 法币计价，二者价差本质为 USDT/USD 实时汇率溢价。</span>
+                </div>
               </div>
             )}
           </div>
