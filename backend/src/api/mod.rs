@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use chrono::Utc;
@@ -193,8 +193,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/trading/mode", get(handle_trading_mode_get).post(handle_trading_mode_set))
         .route("/api/v1/accounts", get(handle_accounts_get).post(handle_accounts_create))
         .route("/api/v1/accounts/{id}/activate", post(handle_account_activate))
-        .route("/api/v1/accounts/{id}", axum::routing::delete(handle_account_delete))
+        .route("/api/v1/accounts/{id}", put(handle_account_update).delete(handle_account_delete))
         .route("/api/v1/accounts/{id}/balance", get(handle_account_balance))
+        .route("/api/v1/accounts/{id}/calibrate-balance", post(handle_account_calibrate_balance))
         .route("/api/v1/real/orders", get(handle_real_orders_get))
         .route("/api/v1/real/emergency_halt", post(handle_real_emergency_halt))
         .route("/api/v1/trade/manual", post(handle_trade_manual))
@@ -1061,19 +1062,112 @@ async fn handle_account_delete(
     Json(serde_json::json!({ "success": success }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateAccountRequest {
+    pub label: Option<String>,
+    pub api_key: Option<String>,
+    pub api_secret: Option<String>,
+    pub api_passphrase: Option<String>,
+    pub wallet_address: Option<String>,
+    pub proxy_wallet_address: Option<String>,
+    pub balance_usdc: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CalibrateBalanceRequest {
+    pub balance_usdc: f64,
+}
+
+async fn handle_account_update(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateAccountRequest>,
+) -> Result<Json<crate::types::PolymarketAccountPublic>, (StatusCode, String)> {
+    let accounts = state.db.get_accounts().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let mut account = accounts.into_iter().find(|a| a.id == id).ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    if let Some(l) = req.label {
+        if !l.trim().is_empty() {
+            account.label = l.trim().to_string();
+        }
+    }
+    if let Some(k) = req.api_key {
+        if !k.trim().is_empty() {
+            account.api_key = k.trim().to_string();
+        }
+    }
+    if let Some(s) = req.api_secret {
+        account.api_secret = s.trim().to_string();
+    }
+    if let Some(p) = req.api_passphrase {
+        account.api_passphrase = p.trim().to_string();
+    }
+    if let Some(w) = req.wallet_address {
+        if !w.trim().is_empty() {
+            account.wallet_address = w.trim().to_string();
+        }
+    }
+    if let Some(proxy) = req.proxy_wallet_address {
+        let p_trimmed = proxy.trim();
+        account.proxy_wallet_address = if p_trimmed.is_empty() {
+            None
+        } else {
+            Some(p_trimmed.to_string())
+        };
+    }
+    if let Some(bal) = req.balance_usdc {
+        if bal >= 0.0 {
+            account.balance_usdc = bal;
+        }
+    }
+
+    if let Err(e) = state.db.update_account(&account).await {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update account: {:?}", e)));
+    }
+
+    Ok(Json(crate::types::PolymarketAccountPublic::from(&account)))
+}
+
+async fn handle_account_calibrate_balance(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<CalibrateBalanceRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let accounts = state.db.get_accounts().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let account = accounts.into_iter().find(|a| a.id == id).ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    let new_bal = req.balance_usdc.max(0.0);
+    state.db.update_account_balance(&account.id, new_bal).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "account_id": id,
+        "balance_usdc": new_bal,
+        "success": true
+    })))
+}
+
 async fn handle_account_balance(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let accounts = state.db.get_accounts().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let account = accounts.into_iter().find(|a| a.id == id).ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+    let mut account = accounts.into_iter().find(|a| a.id == id).ok_or_else(|| (StatusCode::NOT_FOUND, "Account not found".to_string()))?;
+
+    // Try auto-resolving proxy wallet if empty
+    if account.proxy_wallet_address.as_deref().unwrap_or("").trim().is_empty() {
+        if let Some(resolved) = state.live_execution.clob_client().resolve_proxy_wallet(&account.wallet_address).await {
+            let _ = state.db.update_account_proxy_wallet(&account.id, &resolved).await;
+            account.proxy_wallet_address = Some(resolved);
+        }
+    }
 
     let balance = state.live_execution.clob_client().fetch_balance(&account).await.unwrap_or(account.balance_usdc);
     let _ = state.db.update_account_balance(&account.id, balance).await;
 
     Ok(Json(serde_json::json!({
         "account_id": id,
-        "balance_usdc": balance
+        "balance_usdc": balance,
+        "proxy_wallet_address": account.proxy_wallet_address
     })))
 }
 

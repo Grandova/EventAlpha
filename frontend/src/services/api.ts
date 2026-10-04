@@ -304,7 +304,19 @@ export const api = {
       method: 'DELETE',
     }),
   getAccountBalance: (id: string) =>
-    fetchJson<{ account_id: string; balance_usdc: number }>(`/api/v1/accounts/${id}/balance`),
+    fetchJson<{ account_id: string; balance_usdc: number; proxy_wallet_address?: string }>(`/api/v1/accounts/${id}/balance`),
+  updateAccount: (id: string, req: Partial<CreateAccountRequest> & { balance_usdc?: number }) =>
+    fetchJson<PolymarketAccountPublic>(`/api/v1/accounts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }),
+  calibrateAccountBalance: (id: string, balance_usdc: number) =>
+    fetchJson<{ account_id: string; balance_usdc: number; success: boolean }>(`/api/v1/accounts/${id}/calibrate-balance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ balance_usdc }),
+    }),
 
   // Real CLOB Trading & Emergency Halt
   getRealOrders: (limit = 20) => fetchJson<RealOrder[]>(`/api/v1/real/orders?limit=${limit}`),

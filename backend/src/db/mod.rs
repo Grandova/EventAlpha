@@ -1108,6 +1108,41 @@ impl Database {
         Ok(())
     }
 
+    pub async fn update_account_proxy_wallet(&self, account_id: &str, proxy_wallet: &str) -> Result<()> {
+        let now = Utc::now().timestamp_millis();
+        sqlx::query("UPDATE polymarket_accounts SET proxy_wallet_address = ?, updated_at = ? WHERE id = ?")
+            .bind(proxy_wallet)
+            .bind(now)
+            .bind(account_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_account(&self, acc: &crate::types::PolymarketAccount) -> Result<()> {
+        let now = Utc::now().timestamp_millis();
+        sqlx::query(
+            r#"
+            UPDATE polymarket_accounts
+            SET label = ?, api_key = ?, api_secret = ?, api_passphrase = ?,
+                wallet_address = ?, proxy_wallet_address = ?, balance_usdc = ?, updated_at = ?
+            WHERE id = ?
+            "#
+        )
+        .bind(&acc.label)
+        .bind(&acc.api_key)
+        .bind(&acc.api_secret)
+        .bind(&acc.api_passphrase)
+        .bind(&acc.wallet_address)
+        .bind(&acc.proxy_wallet_address)
+        .bind(acc.balance_usdc)
+        .bind(now)
+        .bind(&acc.id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     // =========================================================================
     // Real Orders
     // =========================================================================

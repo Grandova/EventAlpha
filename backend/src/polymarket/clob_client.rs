@@ -303,19 +303,139 @@ impl PolymarketClobHttpClient {
         Ok(headers)
     }
 
+    /// Try resolving proxy wallet address from EOA via Polymarket profile API
+    pub async fn resolve_proxy_wallet(&self, eoa: &str) -> Option<String> {
+        let clean_eoa = eoa.trim();
+        if !clean_eoa.starts_with("0x") {
+            return None;
+        }
+        let url = format!("https://polymarket.com/api/profile/userData?address={}", clean_eoa);
+        if let Ok(resp) = self
+            .http_client
+            .get(&url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .timeout(Duration::from_secs(4))
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<serde_json::Value>().await {
+                    if let Some(proxy) = json.get("proxyWallet").and_then(|p| p.as_str()) {
+                        if proxy.starts_with("0x") && !proxy.eq_ignore_ascii_case(clean_eoa) {
+                            return Some(proxy.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Query ERC-20 token balance via Polygon public RPC
+    pub async fn fetch_polygon_erc20_balance(&self, token_address: &str, user_address: &str) -> Option<f64> {
+        let clean_user = user_address.trim().to_lowercase();
+        let clean_user = clean_user.strip_prefix("0x").unwrap_or(&clean_user);
+        if clean_user.len() != 40 {
+            return None;
+        }
+        let padded_addr = format!("{:0>64}", clean_user);
+        let data = format!("0x70a08231{}", padded_addr); // balanceOf(address) selector: 0x70a08231
+
+        let payload = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [
+                {
+                    "to": token_address,
+                    "data": data
+                },
+                "latest"
+            ],
+            "id": 1
+        });
+
+        let rpc_endpoints = [
+            "https://polygon-bor-rpc.publicnode.com",
+            "https://1rpc.io/matic",
+            "https://polygon.drpc.org",
+        ];
+
+        for rpc in rpc_endpoints {
+            if let Ok(resp) = self
+                .http_client
+                .post(rpc)
+                .header("Content-Type", "application/json")
+                .header("User-Agent", "Mozilla/5.0")
+                .timeout(Duration::from_secs(3))
+                .json(&payload)
+                .send()
+                .await
+            {
+                if resp.status().is_success() {
+                    if let Ok(res_json) = resp.json::<serde_json::Value>().await {
+                        if let Some(hex_str) = res_json.get("result").and_then(|r| r.as_str()) {
+                            let clean_hex = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+                            if let Ok(raw_u128) = u128::from_str_radix(clean_hex, 16) {
+                                let balance = (raw_u128 as f64) / 1_000_000.0;
+                                return Some(balance);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// Fetch USDC Balance on Polygon for account
     pub async fn fetch_balance(&self, account: &crate::types::PolymarketAccount) -> Result<f64, String> {
-        let mut target_addresses: Vec<&str> = Vec::new();
+        let mut target_addresses: Vec<String> = Vec::new();
         if let Some(ref proxy) = account.proxy_wallet_address {
             if !proxy.trim().is_empty() {
-                target_addresses.push(proxy.trim());
+                target_addresses.push(proxy.trim().to_string());
             }
         }
         if !account.wallet_address.trim().is_empty() {
-            target_addresses.push(account.wallet_address.trim());
+            let eoa = account.wallet_address.trim().to_string();
+            if !target_addresses.contains(&eoa) {
+                target_addresses.push(eoa);
+            }
         }
 
-        // 1. Try Polymarket public Data API (keyless, works for both proxy and EOA wallets)
+        // If proxy is not set, try auto-resolving from EOA profile
+        if account.proxy_wallet_address.as_deref().unwrap_or("").trim().is_empty() {
+            if let Some(resolved) = self.resolve_proxy_wallet(&account.wallet_address).await {
+                if !target_addresses.contains(&resolved) {
+                    target_addresses.insert(0, resolved);
+                }
+            }
+        }
+
+        // 1. Try On-Chain ERC-20 balances on Polygon (Native USDC, USDC.e, pUSD)
+        let tokens = [
+            "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Native USDC
+            "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // Bridged USDC.e
+            "0xc011a7e12a19f7b1f670d46f03b03f3342e82dfb", // PolyUSD (pUSD)
+        ];
+
+        let mut max_onchain_balance = 0.0;
+        for addr in &target_addresses {
+            let mut addr_sum = 0.0;
+            for token in &tokens {
+                if let Some(b) = self.fetch_polygon_erc20_balance(token, addr).await {
+                    addr_sum += b;
+                }
+            }
+            if addr_sum > max_onchain_balance {
+                max_onchain_balance = addr_sum;
+            }
+        }
+
+        if max_onchain_balance > 0.0 {
+            return Ok(max_onchain_balance);
+        }
+
+        // 2. Try Polymarket public Data API (keyless, works for both proxy and EOA wallets)
         for addr in &target_addresses {
             let data_api_url = format!("https://data-api.polymarket.com/value?user={}", addr);
             if let Ok(resp) = self
@@ -348,7 +468,7 @@ impl PolymarketClobHttpClient {
             }
         }
 
-        // 2. Try Polymarket CLOB /balance-allowance
+        // 3. Try Polymarket CLOB /balance-allowance
         let path = "/balance-allowance?asset_type=COLLATERAL";
         let url = format!("{}{}", self.base_url, path);
         let timestamp = Utc::now().timestamp() as u64;
