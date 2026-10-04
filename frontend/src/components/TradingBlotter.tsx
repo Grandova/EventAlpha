@@ -17,9 +17,14 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
   const [activeTab, setActiveTab] = useState<'positions' | 'results' | 'orders'>('positions');
   const [showAll, setShowAll] = useState(false);
 
-  const displayPositions = showAll ? activePositions : activePositions.slice(0, 5);
-  const displayResults = showAll ? settledResults : settledResults.slice(0, 5);
-  const displayOrders = showAll ? recentOrders : recentOrders.slice(0, 5);
+  const formatTime = (ts?: number) => {
+    if (!ts || isNaN(ts)) return '--:--:--';
+    return new Date(ts).toLocaleTimeString([], { hour12: false });
+  };
+
+  const displayPositions = showAll ? activePositions : activePositions.slice(0, 10);
+  const displayResults = showAll ? settledResults : settledResults.slice(0, 10);
+  const displayOrders = showAll ? recentOrders : recentOrders.slice(0, 10);
 
   return (
     <div className="asmr-card p-6 lg:p-8 space-y-4">
@@ -76,6 +81,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
             <thead>
               <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
                 <th className="pb-3 text-left pl-3">标的 & 方向</th>
+                <th className="pb-3">开仓时间</th>
                 <th className="pb-3 font-mono">持仓编号</th>
                 <th className="pb-3 font-mono">本金 / 入场价</th>
                 <th className="pb-3">状态</th>
@@ -100,6 +106,9 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                       </div>
                     </td>
                     <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
+                      {formatTime(pos.created_at_ms || pos.entry_time_ms)}
+                    </td>
+                    <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
                       {pos.position_id.slice(0, 10)}
                     </td>
                     <td className="py-3.5 font-mono font-bold text-[#363949] dark:text-white">
@@ -117,7 +126,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
+                  <td colSpan={6} className="py-8 text-center text-[#7d8da1] font-mono">
                     暂无运行中的活跃在途持仓。
                   </td>
                 </tr>
@@ -131,6 +140,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
             <thead>
               <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
                 <th className="pb-3 text-left pl-3">标的 & 方向</th>
+                <th className="pb-3">结算时间</th>
                 <th className="pb-3 font-mono">结算编号</th>
                 <th className="pb-3 font-mono">盈亏 / 本金</th>
                 <th className="pb-3">结果</th>
@@ -161,6 +171,9 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                         </div>
                       </td>
                       <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
+                        {formatTime(res.created_at_ms || res.entry_time_ms)}
+                      </td>
+                      <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
                         {res.result_id.slice(0, 10)}
                       </td>
                       <td className="py-3.5 font-mono font-bold">
@@ -186,7 +199,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                 })
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
+                  <td colSpan={6} className="py-8 text-center text-[#7d8da1] font-mono">
                     暂无已结算历史记录。
                   </td>
                 </tr>
@@ -200,6 +213,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
             <thead>
               <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
                 <th className="pb-3 text-left pl-3">标的 & 方向</th>
+                <th className="pb-3">委托时间</th>
                 <th className="pb-3 font-mono">委托单号</th>
                 <th className="pb-3 font-mono">本金 / 价格</th>
                 <th className="pb-3">状态</th>
@@ -224,6 +238,9 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                       </div>
                     </td>
                     <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
+                      {formatTime(ord.timestamp_ms)}
+                    </td>
+                    <td className="py-3.5 font-mono text-[#7d8da1] dark:text-slate-400">
                       {ord.order_id.slice(0, 10)}
                     </td>
                     <td className="py-3.5 font-mono font-bold text-[#363949] dark:text-white">
@@ -241,7 +258,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
+                  <td colSpan={6} className="py-8 text-center text-[#7d8da1] font-mono">
                     暂无委托记录。
                   </td>
                 </tr>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Timer, ArrowUpRight, ArrowDownRight, Zap, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { MarketDisplayInfo, MarketBookSummary, ModelPrediction, Asset, TradingMode } from '../types';
+import { Timer, ArrowUpRight, ArrowDownRight, Zap, CheckCircle2, AlertCircle, Loader2, BookmarkCheck, PauseCircle } from 'lucide-react';
+import { MarketDisplayInfo, MarketBookSummary, ModelPrediction, Asset, TradingMode, PaperPosition } from '../types';
 import { api } from '../services/api';
 
 interface PolymarketRoundCardProps {
@@ -9,6 +9,8 @@ interface PolymarketRoundCardProps {
   prediction: ModelPrediction | null;
   tradingMode?: TradingMode;
   activeAsset?: Asset;
+  activePositions?: PaperPosition[];
+  isAutoTradingEnabled?: boolean;
   onTradeExecuted?: () => void;
 }
 
@@ -18,20 +20,36 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   prediction,
   tradingMode = 'paper',
   activeAsset = 'BTC',
+  activePositions = [],
+  isAutoTradingEnabled = true,
   onTradeExecuted,
 }) => {
-  const [stake, setStake] = useState<number>(1.0);
+  const [stakeInput, setStakeInput] = useState<string>('1.0');
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [execStatus, setExecStatus] = useState<{ success: boolean; msg: string } | null>(null);
+
+  // Check if there is an active OPEN position for this round / asset
+  const currentPosition = activePositions.find(
+    (p) => p.status === 'OPEN' && (p.market_id === market?.id || p.asset === activeAsset)
+  );
 
   const handleManualOrder = async (side: 'UP' | 'DOWN') => {
     if (!market) {
       setExecStatus({ success: false, msg: '暂无当前市场信息' });
       return;
     }
-    if (stake <= 0) {
-      setExecStatus({ success: false, msg: '下单金额必须大于 0' });
+
+    const finalStake = parseFloat(stakeInput);
+    if (isNaN(finalStake) || finalStake <= 0) {
+      setExecStatus({ success: false, msg: '请输入大于 0 的有效下单金额' });
       return;
+    }
+
+    if (tradingMode === 'live') {
+      const confirmed = window.confirm(
+        `⚠️ 实盘下单二次确认：\n\n标的: ${activeAsset} 5M\n方向: ${side === 'UP' ? '看涨 (UP)' : '看跌 (DOWN)'}\n下注金额: $${finalStake.toFixed(2)} USDC\n\n该操作将以真实资金向 Polymarket CLOB 下单撮合，确认继续？`
+      );
+      if (!confirmed) return;
     }
 
     try {
@@ -41,14 +59,14 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
         market_id: market.id,
         asset: activeAsset,
         side,
-        stake,
+        stake: finalStake,
         mode: tradingMode,
       });
 
       if (res.success) {
         setExecStatus({
           success: true,
-          msg: res.message || `手动下单成功！(${side} $${stake.toFixed(2)})`,
+          msg: res.message || `手动下单成功！(${side} $${finalStake.toFixed(2)})`,
         });
         if (onTradeExecuted) {
           onTradeExecuted();
@@ -62,7 +80,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       setIsExecuting(false);
       setTimeout(() => {
         setExecStatus((prev) => (prev?.success ? null : prev));
-      }, 5000);
+      }, 6000);
     }
   };
   const remainingSecs = market?.remaining_seconds ?? 0;
@@ -230,8 +248,40 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       </div>
 
       {/* Manual Quick Trade Panel */}
-      <div className="mt-4 p-3.5 bg-slate-50 dark:bg-[#181a1e] rounded-2xl border border-slate-200/70 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-2.5">
+      <div className="mt-4 p-3.5 bg-slate-50 dark:bg-[#181a1e] rounded-2xl border border-slate-200/70 dark:border-slate-800 space-y-2.5">
+        {/* Active Open Position Badge (If User Already Has a Position In This Round) */}
+        {currentPosition ? (
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 dark:bg-emerald-950/30 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <BookmarkCheck className="h-4 w-4 text-[#1b9c85] shrink-0" />
+              <div>
+                <span className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] mr-1.5 ${
+                  currentPosition.side === 'UP'
+                    ? 'bg-[#1b9c85] text-white'
+                    : 'bg-[#ff0060] text-white'
+                }`}>
+                  本轮已开仓: {currentPosition.side === 'UP' ? '看涨 UP' : '看跌 DOWN'}
+                </span>
+                <span className="font-mono font-bold text-[#363949] dark:text-white">
+                  ${currentPosition.stake.toFixed(2)} USDC ({currentPosition.shares.toFixed(2)} 股 @ ${currentPosition.entry_price.toFixed(3)})
+                </span>
+              </div>
+            </div>
+            <span className="text-[11px] text-[#1b9c85] font-bold font-mono">
+              等待 5M 窗口交割
+            </span>
+          </div>
+        ) : null}
+
+        {/* Informational Banner if Global Auto-Trading is Paused */}
+        {!isAutoTradingEnabled && (
+          <div className="p-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+            <PauseCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span>策略自动交易已暂停，您仍可通过下方按钮随时手动快速下注</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <Zap className="h-4 w-4 text-amber-500" />
             <span className="text-xs font-bold text-[#363949] dark:text-white">
@@ -242,22 +292,39 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
             </span>
           </div>
 
-          {/* Quick Stake Selector */}
-          <div className="flex items-center gap-1">
-            {[1, 2, 5, 10].map((amt) => (
-              <button
-                key={amt}
-                type="button"
-                onClick={() => setStake(amt)}
-                className={`px-2 py-0.5 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
-                  stake === amt
-                    ? 'bg-[#6c9bcf] text-white border-[#6c9bcf] shadow-sm'
-                    : 'bg-white dark:bg-[#202528] text-[#7d8da1] border-slate-200 dark:border-slate-700 hover:text-[#363949]'
-                }`}
-              >
-                ${amt}
-              </button>
-            ))}
+          {/* Quick Stake Selector & Custom Input */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
+              {[1, 2, 5, 10].map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => setStakeInput(amt.toString())}
+                  className={`px-2 py-0.5 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
+                    parseFloat(stakeInput) === amt
+                      ? 'bg-[#6c9bcf] text-white border-[#6c9bcf] shadow-sm'
+                      : 'bg-white dark:bg-[#202528] text-[#7d8da1] border-slate-200 dark:border-slate-700 hover:text-[#363949]'
+                  }`}
+                >
+                  ${amt}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Stake Input Box */}
+            <div className="relative flex items-center">
+              <span className="absolute left-2 text-[11px] font-mono font-semibold text-[#7d8da1]">$</span>
+              <input
+                type="number"
+                step="any"
+                min="0.1"
+                placeholder="自定义"
+                value={stakeInput}
+                onChange={(e) => setStakeInput(e.target.value)}
+                className="w-16 pl-4 pr-1 py-0.5 text-[11px] font-mono font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202528] text-[#363949] dark:text-white focus:outline-none focus:border-[#6c9bcf]"
+                title="输入自定义下注金额 (USDC)"
+              />
+            </div>
           </div>
         </div>
 
@@ -274,7 +341,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
             ) : (
               <ArrowUpRight className="h-4 w-4" />
             )}
-            <span>买入看涨 UP (${stake.toFixed(0)})</span>
+            <span>买入看涨 UP (${parseFloat(stakeInput) > 0 ? parseFloat(stakeInput).toFixed(2) : '1.00'})</span>
           </button>
 
           <button
@@ -288,7 +355,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
             ) : (
               <ArrowDownRight className="h-4 w-4" />
             )}
-            <span>买入看跌 DOWN (${stake.toFixed(0)})</span>
+            <span>买入看跌 DOWN (${parseFloat(stakeInput) > 0 ? parseFloat(stakeInput).toFixed(2) : '1.00'})</span>
           </button>
         </div>
 

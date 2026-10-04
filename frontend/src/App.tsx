@@ -560,6 +560,8 @@ export const App: React.FC = () => {
                       prediction={prediction}
                       tradingMode={tradingMode}
                       activeAsset={activeAsset}
+                      activePositions={activePositions}
+                      isAutoTradingEnabled={isAutoTradingEnabled}
                       onTradeExecuted={() => {
                         api.getActivePositions().then(setActivePositions).catch(() => {});
                         api.getPaperOrders(20).then(setRecentOrders).catch(() => {});

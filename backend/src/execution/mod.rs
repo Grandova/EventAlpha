@@ -586,17 +586,27 @@ impl PaperExecutionEngine {
         &self,
         event: &MarketResolvedEvent,
     ) -> Result<Vec<PaperResult>, String> {
+        let now_ms = event.resolved_at_ms;
         let mut matching_pos_ids: Vec<String> = self
             .active_positions
             .iter()
-            .filter(|entry| entry.value().market_id == event.market_id && entry.value().status == "OPEN")
+            .filter(|entry| {
+                let p = entry.value();
+                if p.status != "OPEN" {
+                    return false;
+                }
+                // Match exact market_id OR expired position (>= 280s) for the same asset
+                p.market_id == event.market_id || (p.asset == event.asset && (now_ms - p.created_at_ms) >= 280_000)
+            })
             .map(|entry| entry.key().clone())
             .collect();
 
-        // Also check database for any OPEN positions belonging to this market
+        // Also check database for any OPEN positions belonging to this market or expired for this asset
         if let Ok(db_positions) = self.db.get_active_positions().await {
             for p in db_positions {
-                if p.market_id == event.market_id && !matching_pos_ids.contains(&p.position_id) {
+                if (p.market_id == event.market_id || (p.asset == event.asset && (now_ms - p.created_at_ms) >= 280_000))
+                    && !matching_pos_ids.contains(&p.position_id)
+                {
                     matching_pos_ids.push(p.position_id);
                 }
             }

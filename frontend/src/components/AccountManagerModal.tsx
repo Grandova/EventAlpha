@@ -122,14 +122,6 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
       setError('请输入 Polymarket API Key');
       return;
     }
-    if (!formData.api_secret.trim()) {
-      setError('请输入 Polymarket API Secret');
-      return;
-    }
-    if (!formData.api_passphrase.trim()) {
-      setError('请输入 Polymarket API Passphrase');
-      return;
-    }
     if (!formData.wallet_address.trim() || !formData.wallet_address.startsWith('0x')) {
       setError('请输入合法的 Polygon 钱包地址 (0x 开头)');
       return;
@@ -140,8 +132,8 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
       await api.createAccount({
         label: formData.label.trim(),
         api_key: formData.api_key.trim(),
-        api_secret: formData.api_secret.trim(),
-        api_passphrase: formData.api_passphrase.trim(),
+        api_secret: formData.api_secret?.trim() || '',
+        api_passphrase: formData.api_passphrase?.trim() || '',
         wallet_address: formData.wallet_address.trim(),
         proxy_wallet_address: formData.proxy_wallet_address?.trim() || undefined,
       });
@@ -361,17 +353,17 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
               {/* Guidance on where to get API Key, Secret and Passphrase */}
               <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
                 <div className="flex items-center gap-1.5 font-bold">
-                  <span>💡 凭据获取指南（为什么官网 Relayer 页面只有 API 密钥和地址？）</span>
+                  <span>💡 凭据填写指南（全面兼容官方 Relayer 密钥与 Builders 密钥）</span>
                 </div>
                 <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                  Polymarket 官方存在两种不同用途的密钥体系：
+                  Polymarket 官方提供两种密钥体系，本系统均已完美支持：
                 </p>
                 <ul className="text-[11px] list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300 pl-1">
                   <li>
-                    <strong className="text-amber-600 dark:text-amber-400">Relayer API Keys（您当前创建的）</strong>：仅用于链上免 Gas 中继代付，官方页面仅提供 Key 和地址，<strong>无法用于订单簿交易撮合</strong>。
+                    <strong className="text-amber-600 dark:text-amber-400">官方 Relayer API 密钥</strong>：仅提供 <strong>API Key</strong> 与 <strong>钱包地址</strong>，下方 Secret 和 Passphrase <strong>直接留空即可</strong>！
                   </li>
                   <li>
-                    <strong className="text-emerald-600 dark:text-emerald-400">Builders API Keys（推荐直接获取）</strong>：用于 CLOB 挂单买卖撮合，官方会一次性直接提供 <strong>API Key、Secret、Passphrase</strong> 三件套！
+                    <strong className="text-emerald-600 dark:text-emerald-400">官方 Builders API 密钥</strong>：包含 <strong>API Key、Secret、Passphrase</strong> 完整凭据，填写完整可启用 CLOB 原生完整签名。
                   </li>
                 </ul>
                 <div className="pt-1 flex items-center justify-between">
@@ -452,12 +444,11 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
-                        API Secret (Base64) *
+                        API Secret (选填 / Relayer密钥可留空)
                       </label>
                       <input
                         type="password"
-                        required
-                        placeholder="••••••••••••••••"
+                        placeholder="•••••••••••••••• (选填)"
                         value={formData.api_secret}
                         onChange={(e) =>
                           setFormData({ ...formData, api_secret: e.target.value })
@@ -468,12 +459,11 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
                     <div>
                       <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
-                        API Passphrase *
+                        API Passphrase (选填 / Relayer密钥可留空)
                       </label>
                       <input
                         type="password"
-                        required
-                        placeholder="••••••••"
+                        placeholder="•••••••• (选填)"
                         value={formData.api_passphrase}
                         onChange={(e) =>
                           setFormData({ ...formData, api_passphrase: e.target.value })

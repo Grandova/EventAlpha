@@ -269,34 +269,36 @@ impl PolymarketClobHttpClient {
         path: &str,
         body: Option<&str>,
     ) -> Result<HeaderMap, String> {
-        // Decode secret: try base64, fallback to raw bytes
-        let secret_bytes = BASE64.decode(api_secret).unwrap_or_else(|_| api_secret.as_bytes().to_vec());
-
-        let mut mac = HmacSha256::new_from_slice(&secret_bytes)
-            .map_err(|e| format!("Invalid HMAC key length: {:?}", e))?;
-
-        // Payload format: timestamp + method + path + body
-        let payload = format!("{}{}{}{}", timestamp, method.to_uppercase(), path, body.unwrap_or(""));
-        mac.update(payload.as_bytes());
-        let signature = BASE64.encode(mac.finalize().into_bytes());
-
         let mut headers = HeaderMap::new();
         headers.insert(
             HeaderName::from_static("poly-api-key"),
             HeaderValue::from_str(api_key).map_err(|e| e.to_string())?,
         );
-        headers.insert(
-            HeaderName::from_static("poly-signature"),
-            HeaderValue::from_str(&signature).map_err(|e| e.to_string())?,
-        );
+        let _ = HeaderValue::from_str(api_key).map(|v| headers.insert(HeaderName::from_static("x-api-key"), v));
+
+        // If secret is provided, generate full L2 HMAC-SHA256 signature
+        if !api_secret.trim().is_empty() {
+            let secret_bytes = BASE64.decode(api_secret).unwrap_or_else(|_| api_secret.as_bytes().to_vec());
+            if let Ok(mut mac) = HmacSha256::new_from_slice(&secret_bytes) {
+                let payload = format!("{}{}{}{}", timestamp, method.to_uppercase(), path, body.unwrap_or(""));
+                mac.update(payload.as_bytes());
+                let signature = BASE64.encode(mac.finalize().into_bytes());
+                if let Ok(sig_val) = HeaderValue::from_str(&signature) {
+                    headers.insert(HeaderName::from_static("poly-signature"), sig_val);
+                }
+            }
+        }
+
         headers.insert(
             HeaderName::from_static("poly-timestamp"),
             HeaderValue::from_str(&timestamp.to_string()).map_err(|e| e.to_string())?,
         );
-        headers.insert(
-            HeaderName::from_static("poly-passphrase"),
-            HeaderValue::from_str(api_passphrase).map_err(|e| e.to_string())?,
-        );
+
+        if !api_passphrase.trim().is_empty() {
+            if let Ok(pass_val) = HeaderValue::from_str(api_passphrase) {
+                headers.insert(HeaderName::from_static("poly-passphrase"), pass_val);
+            }
+        }
 
         Ok(headers)
     }
