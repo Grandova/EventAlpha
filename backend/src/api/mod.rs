@@ -722,6 +722,11 @@ async fn handle_polymarket_price_history(
         return Err(StatusCode::BAD_REQUEST);
     };
 
+    let live_history = state.polymarket.discovery().get_poly_price_history(asset);
+    if live_history.len() >= 5 {
+        return Ok(Json(live_history));
+    }
+
     let now_ms = Utc::now().timestamp_millis();
     let (window_start_ms, _) = crate::polymarket::market_discovery::MarketDiscoveryEngine::calculate_5m_window(now_ms);
     let start_epoch_sec = window_start_ms / 1000;
@@ -737,6 +742,10 @@ async fn handle_polymarket_price_history(
         if !pts.is_empty() {
             return Ok(Json(pts));
         }
+    }
+
+    if !live_history.is_empty() {
+        return Ok(Json(live_history));
     }
 
     Ok(Json(state.composite.get_price_history(asset, Some(300))))
@@ -1583,8 +1592,8 @@ strategy:
   max_entry_price: 0.85
   max_spread: 0.04
   min_liquidity: 300.0
-  min_time_remaining_sec: 15
-  max_time_remaining_sec: 285
+  min_time_remaining_sec: 30
+  max_time_remaining_sec: 240
   score_thresholds:
     skip_below: 60.0
     low: 60.0

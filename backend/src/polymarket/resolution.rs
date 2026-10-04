@@ -246,8 +246,8 @@ strategy:
   max_entry_price: 0.85
   max_spread: 0.04
   min_liquidity: 300.0
-  min_time_remaining_sec: 15
-  max_time_remaining_sec: 285
+  min_time_remaining_sec: 30
+  max_time_remaining_sec: 240
   score_thresholds:
     skip_below: 60.0
     low: 60.0

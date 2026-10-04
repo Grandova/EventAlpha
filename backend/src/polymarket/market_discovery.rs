@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
@@ -278,6 +279,7 @@ pub async fn fetch_polymarket_price_history(
 pub struct MarketDiscoveryEngine {
     active_markets: Arc<DashMap<Asset, Polymarket5mMarket>>,
     latest_poly_prices: Arc<DashMap<Asset, (f64, i64)>>,
+    poly_history: Arc<DashMap<Asset, VecDeque<crate::composite::PriceHistoryPoint>>>,
     db: Arc<Database>,
 }
 
@@ -286,16 +288,44 @@ impl MarketDiscoveryEngine {
         Self {
             active_markets: Arc::new(DashMap::new()),
             latest_poly_prices: Arc::new(DashMap::new()),
+            poly_history: Arc::new(DashMap::new()),
             db,
         }
     }
 
     pub fn set_latest_poly_price(&self, asset: Asset, price: f64, timestamp_ms: i64) {
+        if price <= 0.0 {
+            return;
+        }
         self.latest_poly_prices.insert(asset, (price, timestamp_ms));
+
+        let mut queue = self.poly_history.entry(asset).or_insert_with(VecDeque::new);
+        let pt = crate::composite::PriceHistoryPoint {
+            timestamp_ms,
+            price,
+        };
+        if let Some(last) = queue.back_mut() {
+            if timestamp_ms - last.timestamp_ms < 500 {
+                last.price = price;
+                last.timestamp_ms = timestamp_ms;
+                return;
+            }
+        }
+        queue.push_back(pt);
+        if queue.len() > 300 {
+            queue.pop_front();
+        }
     }
 
     pub fn get_latest_poly_price(&self, asset: Asset) -> Option<f64> {
         self.latest_poly_prices.get(&asset).map(|e| e.0)
+    }
+
+    pub fn get_poly_price_history(&self, asset: Asset) -> Vec<crate::composite::PriceHistoryPoint> {
+        self.poly_history
+            .get(&asset)
+            .map(|q| q.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Calculate epoch-aligned 5-minute round timestamps

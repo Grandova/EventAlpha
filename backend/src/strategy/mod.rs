@@ -276,8 +276,8 @@ impl StrategyEngine {
             GateResult {
                 gate_name: "交割窗口时机 (Timing)".to_string(),
                 passed: time_res.is_pass(),
-                value: format!("{}s (窗口: {}s - {}s)", remaining_seconds, cfg.min_time_remaining_sec, cfg.max_time_remaining_sec),
-                threshold: Some(format!("{}s - {}s", cfg.min_time_remaining_sec, cfg.max_time_remaining_sec)),
+                value: format!("{}s (入场窗口: {}s - {}s)", remaining_seconds, cfg.min_time_remaining_sec, cfg.max_time_remaining_sec),
+                threshold: Some(format!("{}s - {}s (避开开盘初期盲目入场)", cfg.min_time_remaining_sec, cfg.max_time_remaining_sec)),
             },
             GateResult {
                 gate_name: "模型胜率置信度 (Probability)".to_string(),

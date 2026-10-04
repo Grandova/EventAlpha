@@ -10,6 +10,7 @@ use crate::collector::freshness::FreshnessTracker;
 use crate::types::{Asset, Exchange, MarketTick, TradeTick};
 
 pub const BYBIT_WS_URL: &str = "wss://stream.bybit.com/v5/public/spot";
+pub const BYBIT_WS_FALLBACK_URL: &str = "wss://stream.bytick.com/v5/public/spot";
 
 pub fn symbol_to_asset(symbol: &str) -> Option<Asset> {
     match symbol.to_uppercase().as_str() {
@@ -31,7 +32,55 @@ pub fn parse_bybit_message(
     let topic = val.get("topic").and_then(|t| t.as_str()).unwrap_or("");
     let ts = val.get("ts").and_then(|t| t.as_i64()).unwrap_or(receive_ts_ms);
 
-    if topic.starts_with("tickers.") {
+    if topic.starts_with("orderbook.1.") {
+        let Some(data) = val.get("data") else {
+            return (None, None);
+        };
+        let symbol = data.get("s").and_then(|s| s.as_str()).unwrap_or("");
+        let Some(asset) = symbol_to_asset(symbol) else {
+            return (None, None);
+        };
+
+        let bid = data
+            .get("b")
+            .and_then(|b| b.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|row| row.get(0))
+            .and_then(|p| p.as_str())
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        let ask = data
+            .get("a")
+            .and_then(|a| a.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|row| row.get(0))
+            .and_then(|p| p.as_str())
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        if bid <= 0.0 || ask <= 0.0 {
+            return (None, None);
+        }
+
+        let mid = (bid + ask) / 2.0;
+        let latency_ms = (receive_ts_ms - ts).max(0);
+
+        let tick = MarketTick {
+            exchange: Exchange::Bybit,
+            symbol: symbol.to_string(),
+            asset,
+            exchange_timestamp_ms: ts,
+            receive_timestamp_ms: receive_ts_ms,
+            latency_ms,
+            bid,
+            ask,
+            mid,
+            last: mid,
+            volume_24h: 0.0,
+        };
+        (Some(tick), None)
+    } else if topic.starts_with("tickers.") {
         let Some(data) = val.get("data") else {
             return (None, None);
         };
@@ -40,12 +89,12 @@ pub fn parse_bybit_message(
             return (None, None);
         };
 
-        let bid = data
+        let mut bid = data
             .get("bid1Price")
             .and_then(|p| p.as_str())
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(0.0);
-        let ask = data
+        let mut ask = data
             .get("ask1Price")
             .and_then(|p| p.as_str())
             .and_then(|s| s.parse::<f64>().ok())
@@ -60,6 +109,13 @@ pub fn parse_bybit_message(
             .and_then(|p| p.as_str())
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(0.0);
+
+        // In Bybit spot tickers, bid1Price/ask1Price are omitted if unchanged or in simple ticker feeds.
+        // Fall back to lastPrice if bid/ask are not present.
+        if (bid <= 0.0 || ask <= 0.0) && last > 0.0 {
+            bid = last;
+            ask = last;
+        }
 
         if bid <= 0.0 || ask <= 0.0 {
             return (None, None);
@@ -141,22 +197,29 @@ pub async fn run_bybit_collector(
 ) {
     let mut backoff_secs = 1u64;
 
+    let mut url_idx = 0;
+    let urls = [BYBIT_WS_URL, BYBIT_WS_FALLBACK_URL];
+
     loop {
-        info!("Connecting to Bybit WebSocket stream...");
+        let ws_url = urls[url_idx % urls.len()];
+        info!("Connecting to Bybit WebSocket stream ({}) ...", ws_url);
         freshness.set_connected(Exchange::Bybit, false);
 
-        match tokio::time::timeout(Duration::from_secs(5), connect_async(BYBIT_WS_URL)).await {
+        match tokio::time::timeout(Duration::from_secs(5), connect_async(ws_url)).await {
             Ok(Ok((ws_stream, _))) => {
-                info!("Successfully connected to Bybit WebSocket.");
+                info!("Successfully connected to Bybit WebSocket ({}).", ws_url);
                 freshness.set_connected(Exchange::Bybit, true);
                 backoff_secs = 1;
 
                 let (mut write, mut read) = ws_stream.split();
 
-                // Send subscription command
+                // Send subscription command (including orderbook.1 for low-latency L1 quote and tickers for 24h stats)
                 let sub_payload = serde_json::json!({
                     "op": "subscribe",
                     "args": [
+                        "orderbook.1.BTCUSDT",
+                        "orderbook.1.ETHUSDT",
+                        "orderbook.1.SOLUSDT",
                         "tickers.BTCUSDT",
                         "tickers.ETHUSDT",
                         "tickers.SOLUSDT",
@@ -235,6 +298,7 @@ pub async fn run_bybit_collector(
         }
 
         freshness.set_connected(Exchange::Bybit, false);
+        url_idx += 1;
         tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
         backoff_secs = (backoff_secs * 2).min(15);
     }
@@ -268,5 +332,29 @@ mod tests {
         assert_eq!(tick.bid, 67139.50);
         assert_eq!(tick.ask, 67140.50);
         assert_eq!(tick.latency_ms, 50);
+    }
+
+    #[test]
+    fn test_parse_bybit_orderbook() {
+        let json = r#"
+        {
+            "topic": "orderbook.1.BTCUSDT",
+            "ts": 1700000000000,
+            "type": "snapshot",
+            "data": {
+                "s": "BTCUSDT",
+                "b": [["85394.6", "0.240597"]],
+                "a": [["85394.7", "1.527276"]]
+            }
+        }
+        "#;
+
+        let (tick_opt, _) = parse_bybit_message(json, 1700000000050);
+        let tick = tick_opt.expect("Should parse Bybit orderbook L1");
+        assert_eq!(tick.exchange, Exchange::Bybit);
+        assert_eq!(tick.asset, Asset::BTC);
+        assert_eq!(tick.bid, 85394.6);
+        assert_eq!(tick.ask, 85394.7);
+        assert_eq!(tick.mid, (85394.6 + 85394.7) / 2.0);
     }
 }

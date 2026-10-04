@@ -1,4 +1,5 @@
 pub mod clob_client;
+pub mod live_feed;
 pub mod market_discovery;
 pub mod orderbook;
 pub mod resolution;
@@ -102,6 +103,11 @@ impl PolymarketManager {
         tokio::spawn(clob_client::run_polymarket_clob_collector(
             book_engine.clone(),
             vec![], // Active dynamic tokens
+        ));
+
+        // 1b. Spawn Polymarket Official Live Data WebSocket for real-time 60s TWAP & Chainlink prices
+        tokio::spawn(live_feed::run_polymarket_live_feed(
+            discovery.clone(),
         ));
 
         // 2. Spawn 5-minute lifecycle round management task

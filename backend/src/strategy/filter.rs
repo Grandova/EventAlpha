@@ -84,16 +84,17 @@ impl HardFilterEngine {
         }
     }
 
-    /// Check execution time window (e.g. between 15s and 285s remaining)
+    /// Check execution time window (e.g. between 30s and 240s remaining)
+    /// Prevents premature immediate trading right at round open (first 60s) and late-round manipulation (last 30s)
     pub fn check_timing(remaining_seconds: i64, config: &StrategyConfig) -> FilterResult {
         if remaining_seconds < config.min_time_remaining_sec as i64 {
             FilterResult::Skip(format!(
-                "Remaining time {}s < minimum execution limit {}s",
+                "临近交割倒计时 (剩余 {}s < 底线 {}s)，流动性枯竭且波动不可控，暂停入场",
                 remaining_seconds, config.min_time_remaining_sec
             ))
         } else if remaining_seconds > config.max_time_remaining_sec as i64 {
             FilterResult::Skip(format!(
-                "Remaining time {}s > maximum allowed limit {}s (round too early)",
+                "开盘初期观察期 (剩余 {}s > 上限 {}s)，等待价格趋势确立，禁止开盘盲目冲动入场",
                 remaining_seconds, config.max_time_remaining_sec
             ))
         } else {
@@ -123,8 +124,8 @@ mod tests {
             max_entry_price: 0.85,
             max_spread: 0.04,
             min_liquidity: 300.0,
-            min_time_remaining_sec: 15,
-            max_time_remaining_sec: 285,
+            min_time_remaining_sec: 30,
+            max_time_remaining_sec: 240,
             score_thresholds: crate::config::ScoreThresholds {
                 skip_below: 60.0,
                 low: 60.0,
