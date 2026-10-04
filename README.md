@@ -2,13 +2,15 @@
 ### 工业级高精度量化预测、概率校准、模拟盘与实盘双模式、自主在线学习与自进化量化交易系统
 
 ![Mode](https://img.shields.io/badge/Trading%20Mode-Paper%20%7C%20Live%20CLOB-brightgreen)
+![Security](https://img.shields.io/badge/Security-Session%20Auth%20Protected-green)
+![Language](https://img.shields.io/badge/UI%20Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)
 ![Safety](https://img.shields.io/badge/Safety%20Lock-Mode%20B%20%2410%20Cap%20%26%20Emergency%20Halt-red)
 ![UI Style](https://img.shields.io/badge/UI%20Style-AsmrProg--YT%20Dashboard%20Designs-cyan)
 ![Rust](https://img.shields.io/badge/Rust-1.85+-orange)
 ![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite%206%20%7C%20Tailwind-blue)
 ![Database](https://img.shields.io/badge/Database-SQLite%20WAL%20(19%20Tables)-purple)
 ![Self-Learning](https://img.shields.io/badge/AI%20Engine-Online%20SGD%20Incremental%20Learning-blueviolet)
-![Tests](https://img.shields.io/badge/Tests-16%20Suites%20%7C%2092%20Passed%20(100%25)-success)
+![Tests](https://img.shields.io/badge/Tests-16%20Suites%20%7C%2093%20Passed%20(100%25)-success)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
@@ -49,6 +51,21 @@
   - **深色模式**：`#181a1e` 暗夜底色与 `#202528` 高质感深灰卡片，通过顶部 Sun/Moon 按钮一键平滑切换，状态持久化至本地存储。
 - **SVG 动态环形进度圆环 (Circular Progress Rings)**：在活跃本金卡、策略胜率卡、模型自学习卡中展示高精度 SVG 圆环与居中百分比，实时映射盘面状态。
 - **内存级在线增量自学习 (In-Memory Online SGD)**：每次 5 分钟盘面结算后，SGD 权重梯度直接原子写入运行中的模型管理中枢 (`ModelManager.logistic.write()`)，免重启即刻赋能下一轮推演。
+
+### 4. 专为国内大陆交易者打造的 100% 纯中文本地化交互
+- **全要素中文界面**：摒弃生涩外文词汇，所有导航栏、仪表盘指标卡、活跃币种分析、机会评分雷达、实时交易流水、深度委托簿、资金风控中心、回测控制台均使用纯正简体中文呈现；
+- **异常安全兜底（Null-Safe Resilience）**：全面加固盘口价格与指标数据管道，对所有价格、收益、深度数值增加非空与有效性校验，彻底消除前端 `toFixed` 渲染异常风险。
+
+### 5. 🔐 公网服务器部署安全防护与账户登录认证体系
+- **彻底杜绝公网裸奔风险**：云服务器（如部署在公网 IP `185.248.185.194`）暴露在互联网时，系统内置强安全门禁；
+- **默认登录凭据**：
+  - **默认账号**：`admin`
+  - **默认初始密码**：`admin_polyquant`
+- **Session Bearer Token 机制**：登录成功后签发高安全随机 Session Token，所有 API 均进行 Bearer 身份校验，未认证或超时自动阻断并跳转至现代化登录界面；
+- **凭据自定义与环境变量覆盖**：
+  - 支持在配置文件 `config/config.yaml` 的 `auth:` 模块中自定义修改用户名和密码；
+  - 支持直接通过环境变量 `ADMIN_USER` 和 `ADMIN_PASSWORD` 实现零改密部署；
+  - 默认 Session 保持时间 72 小时，支持前台一键退出登录（右上角与左侧导航底部均可一键注销）。
 
 ---
 
@@ -99,6 +116,12 @@ polyquant update          # 方式一：直接运行全局快捷更新命令
 # 或：
 cd ~/EventAlpha && git pull && sudo bash install.sh   # 方式二：手动拉取并重新部署
 ```
+
+> 🔑 **访问控制台与初始登录凭据**：
+> 安装完成后，直接在浏览器中打开：`http://您的服务器IP:8080`
+> - **登录账号**：`admin`
+> - **初始密码**：`admin_polyquant`
+> 系统已全面配置安全认证拦截防线，有效保护暴露在公网上的量化策略与真实交易资金安全。可在 `/opt/polyquant/config/config.yaml` 中随时修改或通过环境变量 `ADMIN_PASSWORD` 覆盖。
 
 **安装脚本将全自动完成以下工作：**
 1. 自动检测 Linux 发行版与包管理器（`apt` / `dnf` / `yum` / `apk`）；
@@ -207,6 +230,9 @@ polyquant update   # 一键从 GitHub 拉取最新代码并热重编译更新
 
 | 模块分类 | 方式 | 接口路径 | 功能简述 |
 | :--- | :--- | :--- | :--- |
+| **安全认证** | `POST` | `/api/v1/auth/login` | 管理员登录，获取高安全 Bearer Session Token |
+| | `GET` | `/api/v1/auth/me` | 校验当前 Token 状态与当前登录用户身份 |
+| | `POST` | `/api/v1/auth/logout` | 注销并安全销毁当前 Session |
 | **交易模式** | `GET` | `/api/v1/trading/mode` | 查询当前交易模式（paper/live）与当前活跃账户 |
 | | `POST` | `/api/v1/trading/mode` | 切换交易模式（paper/live），包含前置账户状态校验 |
 | **账户管理** | `GET` | `/api/v1/accounts` | 获取所有绑定的 Polymarket 账户信息（API Key 掩码） |

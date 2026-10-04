@@ -27,7 +27,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
         <div>
           <h2 className="text-xl font-extrabold text-[#363949] dark:text-white tracking-tight">
-            Recent Orders
+            近期交易与委托
           </h2>
           <p className="text-xs text-[#7d8da1] dark:text-slate-400 mt-0.5">
             Polymarket 5M 交易执行与结算审计
@@ -44,7 +44,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                 : 'text-[#7d8da1] hover:text-[#363949]'
             }`}
           >
-            Active Positions ({activePositions.length})
+            在途持仓 ({activePositions.length})
           </button>
           <button
             onClick={() => setActiveTab('results')}
@@ -54,7 +54,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                 : 'text-[#7d8da1] hover:text-[#363949]'
             }`}
           >
-            Settled ({settledResults.length})
+            已结算 ({settledResults.length})
           </button>
           <button
             onClick={() => setActiveTab('orders')}
@@ -64,7 +64,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                 : 'text-[#7d8da1] hover:text-[#363949]'
             }`}
           >
-            All Orders ({recentOrders.length})
+            全部委托 ({recentOrders.length})
           </button>
         </div>
       </div>
@@ -75,11 +75,11 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
           <table className="w-full text-center text-xs">
             <thead>
               <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
-                <th className="pb-3 text-left pl-3">Asset & Side</th>
-                <th className="pb-3 font-mono">Order Number</th>
-                <th className="pb-3 font-mono">Stake / Fill</th>
-                <th className="pb-3">Status</th>
-                <th className="pb-3 text-right pr-3">Details</th>
+                <th className="pb-3 text-left pl-3">标的 & 方向</th>
+                <th className="pb-3 font-mono">持仓编号</th>
+                <th className="pb-3 font-mono">本金 / 入场价</th>
+                <th className="pb-3">状态</th>
+                <th className="pb-3 text-right pr-3">详情</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -103,22 +103,22 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                       {pos.position_id.slice(0, 10)}
                     </td>
                     <td className="py-3.5 font-mono font-bold text-[#363949] dark:text-white">
-                      ${pos.stake.toFixed(2)} @ ${pos.entry_price.toFixed(3)}
+                      ${(typeof pos.stake === 'number' && !isNaN(pos.stake) ? pos.stake : 0).toFixed(2)} @ ${(typeof pos.entry_price === 'number' && !isNaN(pos.entry_price) ? pos.entry_price : 0.5).toFixed(3)}
                     </td>
                     <td className="py-3.5">
                       <span className="text-[#1b9c85] font-extrabold text-xs">
-                        Active
+                        持仓中
                       </span>
                     </td>
                     <td className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer">
-                      Details
+                      详情
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
-                    No active positions currently running.
+                    暂无运行中的活跃在途持仓。
                   </td>
                 </tr>
               )}
@@ -130,17 +130,19 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
           <table className="w-full text-center text-xs">
             <thead>
               <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
-                <th className="pb-3 text-left pl-3">Asset & Side</th>
-                <th className="pb-3 font-mono">Result ID</th>
-                <th className="pb-3 font-mono">PnL / Stake</th>
-                <th className="pb-3">Status</th>
-                <th className="pb-3 text-right pr-3">Details</th>
+                <th className="pb-3 text-left pl-3">标的 & 方向</th>
+                <th className="pb-3 font-mono">结算编号</th>
+                <th className="pb-3 font-mono">盈亏 / 本金</th>
+                <th className="pb-3">结果</th>
+                <th className="pb-3 text-right pr-3">详情</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
               {displayResults.length > 0 ? (
                 displayResults.map((res) => {
                   const isWin = res.outcome === 'WIN';
+                  const pnlVal = typeof res.pnl === 'number' && !isNaN(res.pnl) ? res.pnl : 0;
+                  const stakeVal = typeof res.stake === 'number' && !isNaN(res.stake) ? res.stake : 0;
                   return (
                     <tr key={res.result_id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="py-3.5 text-left pl-3 font-bold text-[#363949] dark:text-white">
@@ -162,10 +164,10 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                         {res.result_id.slice(0, 10)}
                       </td>
                       <td className="py-3.5 font-mono font-bold">
-                        <span className={res.pnl >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
-                          {res.pnl >= 0 ? '+' : ''}${res.pnl.toFixed(2)}
+                        <span className={pnlVal >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
+                          {pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(2)}
                         </span>
-                        <span className="text-[#7d8da1] text-[10px] ml-1">(${res.stake.toFixed(2)})</span>
+                        <span className="text-[#7d8da1] text-[10px] ml-1">(${stakeVal.toFixed(2)})</span>
                       </td>
                       <td className="py-3.5">
                         <span
@@ -173,11 +175,11 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                             isWin ? 'text-[#1b9c85]' : 'text-[#ff0060]'
                           }`}
                         >
-                          {isWin ? 'Active' : 'Declined'}
+                          {isWin ? '盈利 (WIN)' : '亏损 (LOSS)'}
                         </span>
                       </td>
                       <td className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer">
-                        Details
+                        详情
                       </td>
                     </tr>
                   );
@@ -185,7 +187,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
               ) : (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
-                    No settled results yet.
+                    暂无已结算历史记录。
                   </td>
                 </tr>
               )}
@@ -197,11 +199,11 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
           <table className="w-full text-center text-xs">
             <thead>
               <tr className="text-[#7d8da1] dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
-                <th className="pb-3 text-left pl-3">Asset & Side</th>
-                <th className="pb-3 font-mono">Order Number</th>
-                <th className="pb-3 font-mono">Payment / Fill</th>
-                <th className="pb-3">Status</th>
-                <th className="pb-3 text-right pr-3">Details</th>
+                <th className="pb-3 text-left pl-3">标的 & 方向</th>
+                <th className="pb-3 font-mono">委托单号</th>
+                <th className="pb-3 font-mono">本金 / 价格</th>
+                <th className="pb-3">状态</th>
+                <th className="pb-3 text-right pr-3">详情</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -225,22 +227,22 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                       {ord.order_id.slice(0, 10)}
                     </td>
                     <td className="py-3.5 font-mono font-bold text-[#363949] dark:text-white">
-                      ${ord.stake.toFixed(2)} (${ord.fill_price.toFixed(3)})
+                      ${(typeof ord.stake === 'number' && !isNaN(ord.stake) ? ord.stake : 0).toFixed(2)} (${(typeof ord.fill_price === 'number' && !isNaN(ord.fill_price) ? ord.fill_price : 0.5).toFixed(3)})
                     </td>
                     <td className="py-3.5">
-                      <span className="text-[#f7d154] font-extrabold text-xs">
-                        {ord.status}
+                      <span className="text-[#1b9c85] font-extrabold text-xs">
+                        {ord.status === 'FILLED' ? '已成交' : ord.status === 'PENDING' ? '待撮合' : ord.status}
                       </span>
                     </td>
                     <td className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer">
-                      Details
+                      详情
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-[#7d8da1] font-mono">
-                    No orders recorded yet.
+                    暂无委托记录。
                   </td>
                 </tr>
               )}
@@ -255,7 +257,7 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
           onClick={() => setShowAll(!showAll)}
           className="text-xs font-bold text-[#6c9bcf] hover:underline cursor-pointer transition-colors"
         >
-          {showAll ? 'Show Less' : 'Show All'}
+          {showAll ? '收起列表' : '展开查看全部记录'}
         </button>
       </div>
     </div>

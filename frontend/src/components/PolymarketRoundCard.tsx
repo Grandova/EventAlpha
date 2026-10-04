@@ -44,11 +44,11 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
               Polymarket 5M
             </span>
             <span className="text-xs text-[#7d8da1] dark:text-slate-400 font-mono">
-              ID: {market?.id ? market.id.slice(0, 16) : 'Awaiting...'}
+              ID: {market?.id ? market.id.slice(0, 16) : '等待市场中...'}
             </span>
           </div>
           <h3 className="text-base font-extrabold text-[#363949] dark:text-white mt-1 tracking-tight">
-            {market?.question ?? 'Active 5-Minute Crypto Up/Down Contract'}
+            {market?.question ?? '进行中的 5 分钟加密货币涨跌期权合约'}
           </h3>
         </div>
 
@@ -57,7 +57,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
           <div className="flex items-center justify-between text-xs mb-1.5 font-semibold">
             <span className="text-[#7d8da1] dark:text-slate-400 flex items-center gap-1.5">
               <Timer className="h-3.5 w-3.5 text-[#6c9bcf]" />
-              Window:
+              交割窗口:
             </span>
             <span
               className={`font-mono-num font-black text-sm ${
@@ -92,41 +92,41 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
         <div className="p-4 rounded-2xl border border-[#1b9c85]/20 bg-[#1b9c85]/5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-extrabold text-[#1b9c85] flex items-center gap-1 uppercase tracking-wider">
-              <ArrowUpRight className="h-4 w-4" /> UP Outcome
+              <ArrowUpRight className="h-4 w-4" /> 看涨合约 (UP)
             </span>
             <span className="text-[11px] text-[#7d8da1] font-mono">
-              Implied: <strong className="text-[#1b9c85]">{impliedUp.toFixed(1)}%</strong>
+              盘口胜率: <strong className="text-[#1b9c85]">{(typeof impliedUp === 'number' && !isNaN(impliedUp) ? impliedUp : 50).toFixed(1)}%</strong>
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 mb-3">
             <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Bid</span>
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">买一价 (Bid)</span>
               <span className="text-base font-mono-num font-extrabold text-[#1b9c85]">
-                ${upBid.toFixed(3)}
+                ${(typeof upBid === 'number' && !isNaN(upBid) ? upBid : 0.5).toFixed(3)}
               </span>
             </div>
             <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Ask</span>
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">卖一价 (Ask)</span>
               <span className="text-base font-mono-num font-extrabold text-[#363949] dark:text-white">
-                ${upAsk.toFixed(3)}
+                ${(typeof upAsk === 'number' && !isNaN(upAsk) ? upAsk : 0.51).toFixed(3)}
               </span>
             </div>
           </div>
 
           <div className="text-xs space-y-1 font-medium">
             <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
-              <span>Model P(Up):</span>
-              <span className="font-mono-num font-bold text-[#363949] dark:text-white">{modelUp.toFixed(1)}%</span>
+              <span>模型胜率:</span>
+              <span className="font-mono-num font-bold text-[#363949] dark:text-white">{(typeof modelUp === 'number' && !isNaN(modelUp) ? modelUp : 50).toFixed(1)}%</span>
             </div>
             <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
-              <span>Net Edge:</span>
+              <span>净数学期望:</span>
               <span
                 className={`font-mono-num font-bold ${
                   modelUp / 100 - upAsk >= 0.05 ? 'text-[#1b9c85]' : 'text-[#7d8da1]'
                 }`}
               >
-                {((modelUp / 100 - upAsk) * 100).toFixed(1)}%
+                {(((typeof modelUp === 'number' ? modelUp : 50) / 100 - (typeof upAsk === 'number' ? upAsk : 0.51)) * 100).toFixed(1)}%
               </span>
             </div>
           </div>
@@ -136,41 +136,41 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
         <div className="p-4 rounded-2xl border border-[#ff0060]/20 bg-[#ff0060]/5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-extrabold text-[#ff0060] flex items-center gap-1 uppercase tracking-wider">
-              <ArrowDownRight className="h-4 w-4" /> DOWN Outcome
+              <ArrowDownRight className="h-4 w-4" /> 看跌合约 (DOWN)
             </span>
             <span className="text-[11px] text-[#7d8da1] font-mono">
-              Implied: <strong className="text-[#ff0060]">{impliedDown.toFixed(1)}%</strong>
+              盘口胜率: <strong className="text-[#ff0060]">{(typeof impliedDown === 'number' && !isNaN(impliedDown) ? impliedDown : 50).toFixed(1)}%</strong>
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 mb-3">
             <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Bid</span>
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">买一价 (Bid)</span>
               <span className="text-base font-mono-num font-extrabold text-[#ff0060]">
-                ${downBid.toFixed(3)}
+                ${(typeof downBid === 'number' && !isNaN(downBid) ? downBid : 0.5).toFixed(3)}
               </span>
             </div>
             <div className="bg-white dark:bg-[#202528] p-2.5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] text-[#7d8da1] block font-semibold">Best Ask</span>
+              <span className="text-[10px] text-[#7d8da1] block font-semibold">卖一价 (Ask)</span>
               <span className="text-base font-mono-num font-extrabold text-[#363949] dark:text-white">
-                ${downAsk.toFixed(3)}
+                ${(typeof downAsk === 'number' && !isNaN(downAsk) ? downAsk : 0.51).toFixed(3)}
               </span>
             </div>
           </div>
 
           <div className="text-xs space-y-1 font-medium">
             <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
-              <span>Model P(Down):</span>
-              <span className="font-mono-num font-bold text-[#363949] dark:text-white">{modelDown.toFixed(1)}%</span>
+              <span>模型胜率:</span>
+              <span className="font-mono-num font-bold text-[#363949] dark:text-white">{(typeof modelDown === 'number' && !isNaN(modelDown) ? modelDown : 50).toFixed(1)}%</span>
             </div>
             <div className="flex justify-between text-[#7d8da1] dark:text-slate-400">
-              <span>Net Edge:</span>
+              <span>净数学期望:</span>
               <span
                 className={`font-mono-num font-bold ${
                   modelDown / 100 - downAsk >= 0.05 ? 'text-[#1b9c85]' : 'text-[#7d8da1]'
                 }`}
               >
-                {((modelDown / 100 - downAsk) * 100).toFixed(1)}%
+                {(((typeof modelDown === 'number' ? modelDown : 50) / 100 - (typeof downAsk === 'number' ? downAsk : 0.51)) * 100).toFixed(1)}%
               </span>
             </div>
           </div>
@@ -179,8 +179,8 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
 
       {/* Footer */}
       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-[#7d8da1] font-mono">
-        <span>Spread: ${spreadUp.toFixed(3)}</span>
-        <span>Liquidity: ${totalLiquidity.toFixed(0)} USDC</span>
+        <span>买卖价差: ${(typeof spreadUp === 'number' && !isNaN(spreadUp) ? spreadUp : 0.01).toFixed(3)}</span>
+        <span>流动性深度: ${(typeof totalLiquidity === 'number' && !isNaN(totalLiquidity) ? totalLiquidity : 1000).toFixed(0)} USDC</span>
       </div>
     </div>
   );

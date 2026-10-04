@@ -105,7 +105,7 @@ export const LiveTradingBlotter: React.FC<LiveTradingBlotterProps> = ({
                   <div className="text-xs font-bold text-[#363949] dark:text-white flex items-center gap-2">
                     <span>{activeAccount.label}</span>
                     <span className="text-[#1b9c85] font-bold">
-                      ${activeAccount.balance_usdc.toFixed(2)} USDC
+                      ${(typeof activeAccount.balance_usdc === 'number' && !isNaN(activeAccount.balance_usdc) ? activeAccount.balance_usdc : 0).toFixed(2)} USDC
                     </span>
                   </div>
                 </div>
@@ -222,10 +222,10 @@ export const LiveTradingBlotter: React.FC<LiveTradingBlotterProps> = ({
                       </td>
                       <td className="py-3 text-[#7d8da1] uppercase">{o.order_type}</td>
                       <td className="py-3 text-[#363949] dark:text-white font-bold font-mono">
-                        ${o.price.toFixed(3)}
+                        ${(typeof o.price === 'number' && !isNaN(o.price) ? o.price : 0).toFixed(3)}
                       </td>
                       <td className="py-3 text-[#7d8da1] font-mono">
-                        {o.filled_size.toFixed(1)} / {o.size.toFixed(1)}
+                        {(typeof o.filled_size === 'number' && !isNaN(o.filled_size) ? o.filled_size : 0).toFixed(1)} / {(typeof o.size === 'number' && !isNaN(o.size) ? o.size : 0).toFixed(1)}
                       </td>
                       <td className="py-3">
                         <span
@@ -242,9 +242,9 @@ export const LiveTradingBlotter: React.FC<LiveTradingBlotterProps> = ({
                           {o.status.toUpperCase()}
                         </span>
                       </td>
-                      <td className="py-3 text-[#7d8da1] font-mono">${o.fee.toFixed(3)}</td>
+                      <td className="py-3 text-[#7d8da1] font-mono">${(typeof o.fee === 'number' && !isNaN(o.fee) ? o.fee : 0).toFixed(3)}</td>
                       <td className="py-3 font-mono font-bold">
-                        {o.pnl !== undefined && o.pnl !== null ? (
+                        {typeof o.pnl === 'number' && !isNaN(o.pnl) ? (
                           <span
                             className={o.pnl >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}
                           >

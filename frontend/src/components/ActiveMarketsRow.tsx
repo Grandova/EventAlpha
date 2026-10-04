@@ -16,20 +16,23 @@ export const ActiveMarketsRow: React.FC<ActiveMarketsRowProps> = ({
   remainingSeconds,
 }) => {
   const assets: { asset: Asset; name: string; iconBg: string; symbol: string }[] = [
-    { asset: 'BTC', name: 'Bitcoin 5M', iconBg: 'bg-[#f7931a]', symbol: '₿' },
-    { asset: 'ETH', name: 'Ethereum 5M', iconBg: 'bg-[#627eea]', symbol: 'Ξ' },
-    { asset: 'SOL', name: 'Solana 5M', iconBg: 'bg-[#14f195]', symbol: '◎' },
+    { asset: 'BTC', name: '比特币 5M (BTC)', iconBg: 'bg-[#f7931a]', symbol: '₿' },
+    { asset: 'ETH', name: '以太坊 5M (ETH)', iconBg: 'bg-[#627eea]', symbol: 'Ξ' },
+    { asset: 'SOL', name: '索拉纳 5M (SOL)', iconBg: 'bg-[#14f195]', symbol: '◎' },
   ];
 
   const getPrice = (a: Asset) => {
     const p = spotPrices.find((sp) => sp.asset === a);
-    return p ? `$${p.price.toFixed(a === 'BTC' ? 1 : 2)}` : '--';
+    const val = p ? (p.price ?? (p as any).mid ?? (p as any).last) : undefined;
+    return typeof val === 'number' && !isNaN(val)
+      ? `$${val.toLocaleString(undefined, { minimumFractionDigits: a === 'BTC' ? 1 : 2, maximumFractionDigits: a === 'BTC' ? 1 : 2 })}`
+      : '--';
   };
 
   return (
     <div className="space-y-3">
       <h3 className="text-base font-extrabold text-[#363949] dark:text-white">
-        Active Markets
+        活跃 5 分钟盘面
       </h3>
 
       <div className="asmr-card p-6 flex flex-wrap items-center justify-around gap-6">
@@ -68,7 +71,7 @@ export const ActiveMarketsRow: React.FC<ActiveMarketsRowProps> = ({
                 {price}
               </span>
               <span className="text-[10px] font-mono text-[#6c9bcf]">
-                {remainingSeconds}s Left
+                剩余 {remainingSeconds} 秒
               </span>
             </div>
           );
@@ -85,8 +88,8 @@ export const ActiveMarketsRow: React.FC<ActiveMarketsRowProps> = ({
           <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#6c9bcf] flex items-center justify-center text-[#6c9bcf] transition-all group-hover:bg-[#6c9bcf]/10 group-hover:border-solid">
             <Plus className="w-7 h-7" />
           </div>
-          <span className="mt-2 text-xs font-bold text-[#6c9bcf]">More</span>
-          <span className="text-[10px] text-[#7d8da1] dark:text-slate-400">Switch Asset</span>
+          <span className="mt-2 text-xs font-bold text-[#6c9bcf]">切换币种</span>
+          <span className="text-[10px] text-[#7d8da1] dark:text-slate-400">BTC / ETH / SOL</span>
         </div>
       </div>
     </div>

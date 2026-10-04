@@ -208,6 +208,7 @@ async fn main() -> Result<()> {
         risk: risk.clone(),
         backtest,
         replay,
+        sessions: Arc::new(dashmap::DashMap::new()),
         start_time_ms,
     };
 

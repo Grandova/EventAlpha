@@ -154,6 +154,7 @@ async fn setup_execution_test_app() -> (
             models.clone(),
             db.clone(),
         )),
+        sessions: std::sync::Arc::new(dashmap::DashMap::new()),
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

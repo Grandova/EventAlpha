@@ -37,10 +37,14 @@ export interface HealthResponse {
 export interface PriceSummary {
   exchange: string;
   asset: string;
-  price: number;
+  price?: number;
+  mid?: number;
+  last?: number;
+  bid?: number;
+  ask?: number;
   latency_ms: number;
   is_fresh: boolean;
-  age_ms: number;
+  age_ms?: number;
 }
 
 export interface CompositePriceSnapshot {
@@ -582,5 +586,24 @@ export interface LearningHistoryEntry {
   weights_delta_norm: number;
   brier_score: number;
   timestamp: number;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  token?: string;
+  username?: string;
+  expires_at?: number;
+  message: string;
+}
+
+export interface AuthStatusResponse {
+  authenticated: boolean;
+  auth_enabled: boolean;
+  username?: string;
 }
 

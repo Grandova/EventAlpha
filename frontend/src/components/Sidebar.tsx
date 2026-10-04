@@ -21,6 +21,7 @@ interface SidebarProps {
   activePositionsCount?: number;
   isLive?: boolean;
   tradingMode?: TradingMode;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,61 +29,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   activePositionsCount = 0,
   tradingMode = 'paper',
+  onLogout,
 }) => {
   const isPaper = tradingMode === 'paper';
 
   const navItems = [
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: '核心全景大盘',
       icon: LayoutDashboard,
       badge: activePositionsCount > 0 ? `${activePositionsCount}` : undefined,
     },
     {
       id: 'self-learning',
-      label: 'Analytics & AI',
+      label: 'AI 自主学习演化',
       icon: Brain,
-      badge: 'Auto',
+      badge: '自学习',
     },
     {
       id: 'live-orders',
-      label: 'Live Orders',
+      label: '实盘成交审计',
       icon: ShieldAlert,
-      badge: !isPaper ? 'LIVE' : undefined,
+      badge: !isPaper ? '实盘' : undefined,
     },
     {
       id: 'accounts',
-      label: 'Wallets & Keys',
+      label: 'Polymarket 账户',
       icon: Wallet,
     },
     {
       id: 'microstructure',
-      label: 'OrderBook L2',
+      label: 'L2 盘口深度',
       icon: Layers,
     },
     {
       id: 'features',
-      label: 'Feature Matrix',
+      label: '37维特征矩阵',
       icon: Cpu,
     },
     {
       id: 'tuning',
-      label: 'Strategy Tuner',
+      label: '策略参数实验室',
       icon: Sliders,
     },
     {
       id: 'backtest',
-      label: 'Backtest Lab',
+      label: '事件驱动回测',
       icon: FlaskConical,
     },
     {
       id: 'replay',
-      label: 'Replay Console',
+      label: '逐帧复盘推演',
       icon: PlayCircle,
     },
     {
       id: 'events',
-      label: 'Risk & Audit',
+      label: '风控日志与审计',
       icon: FileText,
     },
   ];
@@ -101,10 +103,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <h2 className="font-extrabold text-base tracking-tight text-[#363949] dark:text-white flex items-center">
-              AsmrProg<span className="text-[#ff0060] text-xs ml-1 font-mono">.Quant</span>
+              EventAlpha<span className="text-[#ff0060] text-xs ml-1 font-mono">.Quant</span>
             </h2>
             <p className="text-[10px] text-[#7d8da1] dark:text-slate-400 font-medium">
-              Polymarket 5M Engine
+              Polymarket 5M 智能量化
             </p>
           </div>
         </div>
@@ -142,9 +144,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {item.badge && (
                   <span
                     className={`shrink-0 px-2 py-0.5 text-[10px] font-extrabold rounded-full font-mono ${
-                      item.badge === 'LIVE'
+                      item.badge === '实盘'
                         ? 'bg-[#ff0060] text-white animate-pulse'
-                        : item.badge === 'Auto'
+                        : item.badge === '自学习'
                         ? 'bg-[#1b9c85] text-white'
                         : 'bg-[#ff0060] text-white'
                     }`}
@@ -174,8 +176,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 isPaper ? 'bg-[#1b9c85]' : 'bg-[#ff0060] animate-ping'
               }`}
             />
-            <span className="font-bold uppercase tracking-wider text-[11px]">
-              {isPaper ? 'Simulation' : 'CLOB Live'}
+            <span className="font-bold tracking-wider text-[11px]">
+              {isPaper ? '安全模拟盘' : 'CLOB 实盘中'}
             </span>
           </div>
           <span className="text-[10px] font-mono opacity-80">v0.2.1</span>
@@ -183,11 +185,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Logout / Reset Button */}
         <button
-          onClick={() => onSelectTab('dashboard')}
+          onClick={() => {
+            if (onLogout) {
+              onLogout();
+            } else {
+              onSelectTab('dashboard');
+            }
+          }}
           className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-xs font-semibold text-[#7d8da1] hover:text-[#ff0060] hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
-          <span>Exit Session</span>
+          <span>安全退出登录</span>
         </button>
       </div>
     </aside>

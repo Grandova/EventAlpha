@@ -108,11 +108,11 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-cyan-400" />
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            High-Performance Event-Driven Backtest Engine
+            高性能事件驱动量化回测引擎
           </h2>
         </div>
         <span className="text-[10px] text-slate-500 font-mono">
-          Strict Time-Arrow &bull; Realistic Orderbook Fill Slippage &bull; Mode A/B Simulation
+          严格防未来函数 &bull; 真实订单簿深度穿透与滑点 &bull; 资金模式 A/B 模拟
         </span>
       </div>
 
@@ -120,7 +120,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
       <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs mb-3">
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Asset</label>
+            <label className="text-[10px] text-slate-400 block mb-1">标的资产</label>
             <select
               value={asset}
               onChange={(e) => setAsset(e.target.value as Asset)}
@@ -133,19 +133,19 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Bankroll Mode</label>
+            <label className="text-[10px] text-slate-400 block mb-1">资金管理模式</label>
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value as any)}
               className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono"
             >
-              <option value="capital_recovery">Mode B (Recovery)</option>
-              <option value="profit_isolation">Mode A (Isolation)</option>
+              <option value="capital_recovery">模式 B (本金回收)</option>
+              <option value="profit_isolation">模式 A (利润隔离)</option>
             </select>
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Initial Bankroll</label>
+            <label className="text-[10px] text-slate-400 block mb-1">初始资金 ($)</label>
             <input
               type="number"
               step="1"
@@ -156,7 +156,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Bankroll Cap</label>
+            <label className="text-[10px] text-slate-400 block mb-1">资金硬顶 ($)</label>
             <input
               type="number"
               step="1"
@@ -167,7 +167,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Stake / Trade</label>
+            <label className="text-[10px] text-slate-400 block mb-1">单笔注额 ($)</label>
             <input
               type="number"
               step="0.1"
@@ -178,7 +178,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Min Prob Gate</label>
+            <label className="text-[10px] text-slate-400 block mb-1">胜率硬门槛</label>
             <input
               type="number"
               step="0.05"
@@ -189,7 +189,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Min Net Edge</label>
+            <label className="text-[10px] text-slate-400 block mb-1">净期望门槛</label>
             <input
               type="number"
               step="0.01"
@@ -200,7 +200,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           </div>
 
           <div>
-            <label className="text-[10px] text-slate-400 block mb-1">Fee Rate</label>
+            <label className="text-[10px] text-slate-400 block mb-1">综合手续费率</label>
             <input
               type="number"
               step="0.001"
@@ -213,15 +213,15 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-800">
           <span className="text-xs text-slate-500 font-mono">
-            Simulates orderbook depth walking, fee deduction, and Mode B bankroll recovery logic.
+            完整模拟逐档吃单滑点深度、手续费扣除与模式 B 利润隔离机制。
           </span>
           <button
             onClick={handleRunBacktest}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 cursor-pointer"
           >
             <Play className="h-3.5 w-3.5 fill-slate-950" />
-            {loading ? 'Running Simulation...' : 'Execute Backtest'}
+            {loading ? '正在模拟推演中...' : '执行事件回测'}
           </button>
         </div>
       </div>
@@ -238,51 +238,51 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           {/* Key Quantitative Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 mb-4">
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Sharpe Ratio</span>
+              <span className="text-[10px] text-slate-400 block">夏普比率 (Sharpe)</span>
               <span className="text-lg font-bold font-mono-num text-cyan-400">
-                {metrics.sharpe_ratio.toFixed(2)}
+                {(typeof metrics.sharpe_ratio === 'number' && !isNaN(metrics.sharpe_ratio) ? metrics.sharpe_ratio : 0).toFixed(2)}
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Sortino Ratio</span>
+              <span className="text-[10px] text-slate-400 block">索提诺比率 (Sortino)</span>
               <span className="text-lg font-bold font-mono-num text-emerald-400">
-                {metrics.sortino_ratio.toFixed(2)}
+                {(typeof metrics.sortino_ratio === 'number' && !isNaN(metrics.sortino_ratio) ? metrics.sortino_ratio : 0).toFixed(2)}
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Calmar Ratio</span>
+              <span className="text-[10px] text-slate-400 block">卡尔玛比率 (Calmar)</span>
               <span className="text-lg font-bold font-mono-num text-purple-400">
-                {metrics.calmar_ratio.toFixed(2)}
+                {(typeof metrics.calmar_ratio === 'number' && !isNaN(metrics.calmar_ratio) ? metrics.calmar_ratio : 0).toFixed(2)}
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Max Drawdown</span>
+              <span className="text-[10px] text-slate-400 block">最大历史回撤</span>
               <span className="text-lg font-bold font-mono-num text-rose-400">
-                {(metrics.max_drawdown_pct * 100).toFixed(1)}% (${metrics.max_drawdown_usdc.toFixed(2)})
+                {((typeof metrics.max_drawdown_pct === 'number' && !isNaN(metrics.max_drawdown_pct) ? metrics.max_drawdown_pct : 0) * 100).toFixed(1)}% (${(typeof metrics.max_drawdown_usdc === 'number' && !isNaN(metrics.max_drawdown_usdc) ? metrics.max_drawdown_usdc : 0).toFixed(2)})
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Win Rate</span>
+              <span className="text-[10px] text-slate-400 block">综合胜率</span>
               <span className="text-lg font-bold font-mono-num text-emerald-400">
-                {metrics.win_rate.toFixed(1)}%
+                {(typeof metrics.win_rate === 'number' && !isNaN(metrics.win_rate) ? metrics.win_rate : 0).toFixed(1)}%
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Profit Factor</span>
+              <span className="text-[10px] text-slate-400 block">盈亏比 (Profit Factor)</span>
               <span className="text-lg font-bold font-mono-num text-white">
-                {metrics.profit_factor.toFixed(2)}
+                {(typeof metrics.profit_factor === 'number' && !isNaN(metrics.profit_factor) ? metrics.profit_factor : 0).toFixed(2)}
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Net PnL</span>
+              <span className="text-[10px] text-slate-400 block">净盈亏金额</span>
               <span className={`text-lg font-bold font-mono-num ${metrics.net_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {metrics.net_pnl >= 0 ? '+' : ''}${metrics.net_pnl.toFixed(2)}
+                {metrics.net_pnl >= 0 ? '+' : ''}${(typeof metrics.net_pnl === 'number' && !isNaN(metrics.net_pnl) ? metrics.net_pnl : 0).toFixed(2)}
               </span>
             </div>
             <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
-              <span className="text-[10px] text-slate-400 block">Locked Profit</span>
+              <span className="text-[10px] text-slate-400 block">最终锁定利润</span>
               <span className="text-lg font-bold font-mono-num text-emerald-400">
-                ${metrics.final_locked_profit.toFixed(2)}
+                ${(typeof metrics.final_locked_profit === 'number' && !isNaN(metrics.final_locked_profit) ? metrics.final_locked_profit : 0).toFixed(2)}
               </span>
             </div>
           </div>
@@ -290,7 +290,7 @@ export const BacktestConsole: React.FC<BacktestConsoleProps> = ({ defaultAsset }
           {/* Interactive SVG Equity Curve */}
           <div className="mb-4">
             <h3 className="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">
-              Portfolio Equity Curve (Walk-Forward Simulation)
+              资产净值动态演进曲线 (全真走势推演)
             </h3>
             {renderEquitySvg()}
           </div>

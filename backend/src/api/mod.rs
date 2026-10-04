@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod ws;
 
 use axum::{
@@ -57,6 +58,7 @@ pub struct AppState {
     pub risk: Arc<RiskManager>,
     pub backtest: Arc<BacktestEngine>,
     pub replay: Arc<ReplayEngine>,
+    pub sessions: Arc<dashmap::DashMap<String, auth::SessionInfo>>,
     pub start_time_ms: i64,
 }
 
@@ -94,6 +96,7 @@ impl AppState {
             risk,
             backtest,
             replay,
+            sessions: Arc::new(dashmap::DashMap::new()),
             start_time_ms,
         }
     }
@@ -133,6 +136,9 @@ pub fn create_router(state: AppState) -> Router {
     let router = Router::new()
         .route("/health", get(handle_health))
         .route("/api/v1/health", get(handle_health))
+        .route("/api/v1/auth/login", post(auth::handle_login))
+        .route("/api/v1/auth/me", get(auth::handle_auth_me))
+        .route("/api/v1/auth/logout", post(auth::handle_logout))
         .route("/api/v1/safety", get(handle_safety))
         .route("/api/v1/config", get(handle_config))
         .route("/api/v1/paper/bankroll", get(handle_bankroll))
@@ -971,6 +977,8 @@ assets: ["BTC", "ETH", "SOL"]
         let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
         let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
 
+        let sessions = Arc::new(dashmap::DashMap::new());
+
         AppState {
             config,
             db,
@@ -986,6 +994,7 @@ assets: ["BTC", "ETH", "SOL"]
             risk,
             backtest,
             replay,
+            sessions,
             start_time_ms: Utc::now().timestamp_millis(),
         }
     }

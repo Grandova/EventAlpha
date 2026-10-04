@@ -32,12 +32,45 @@ import {
   RealOrder,
   LearningState,
   LearningHistoryEntry,
+  LoginRequest,
+  LoginResponse,
+  AuthStatusResponse,
 } from '../types';
 
 const BASE_URL = '';
 
+export function getStoredToken(): string | null {
+  return localStorage.getItem('polyquant_auth_token');
+}
+
+export function setStoredToken(token: string) {
+  localStorage.setItem('polyquant_auth_token', token);
+}
+
+export function clearStoredToken() {
+  localStorage.removeItem('polyquant_auth_token');
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${url}`, init);
+  const token = getStoredToken();
+  const headers = new Headers(init?.headers || {});
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (!headers.has('Content-Type') && init?.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await fetch(`${BASE_URL}${url}`, {
+    ...init,
+    headers,
+  });
+
+  if (res.status === 401 && !url.includes('/api/v1/auth/')) {
+    clearStoredToken();
+    window.dispatchEvent(new Event('polyquant_auth_required'));
+  }
+
   if (!res.ok) {
     const errorText = await res.text().catch(() => 'Unknown error');
     throw new Error(`API error ${res.status}: ${errorText}`);
@@ -46,6 +79,18 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Authentication & Security
+  login: (req: LoginRequest) =>
+    fetchJson<LoginResponse>('/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  getAuthStatus: () => fetchJson<AuthStatusResponse>('/api/v1/auth/me'),
+  logout: () =>
+    fetchJson<any>('/api/v1/auth/logout', {
+      method: 'POST',
+    }),
+
   // System Health & Safety
   getHealth: () => fetchJson<HealthResponse>('/api/v1/health'),
   getSafety: () => fetchJson<any>('/api/v1/safety'),

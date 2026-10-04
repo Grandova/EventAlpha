@@ -198,6 +198,16 @@ if [ ! -f "$INSTALL_PREFIX/config/config.yaml" ]; then
     echo -e "${GREEN}✓ 已复制默认量化配置至 $INSTALL_PREFIX/config/config.yaml${NC}"
 else
     echo -e "${YELLOW}检测到已有量化配置，保留用户现有配置文件。${NC}"
+    if ! grep -q "auth:" "$INSTALL_PREFIX/config/config.yaml"; then
+        echo "" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo "# 安全认证访问控制" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo "auth:" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo "  enabled: true" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo "  username: \"admin\"" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo "  password: \"admin_polyquant\"" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo "  session_timeout_hours: 72" >> "$INSTALL_PREFIX/config/config.yaml"
+        echo -e "${GREEN}✓ 已为现有配置文件自动增补安全认证 (auth) 配置。${NC}"
+    fi
 fi
 
 # Record source directory for `polyquant update`
@@ -264,6 +274,8 @@ if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$LAN_IP" ]; then
     echo -e "公网访问地址:   ${CYAN}${BOLD}http://$PUBLIC_IP:$PORT${NC} (云服务器公网/或已做路由器端口映射)"
 fi
 echo -e "本机访问地址:   ${BLUE}http://127.0.0.1:$PORT${NC}"
+echo -e "控制台登录账号: ${GREEN}${BOLD}admin${NC}"
+echo -e "控制台初始密码: ${GREEN}${BOLD}admin_polyquant${NC} (建议在配置文件中修改或使用环境变量)"
 echo -e "健康检查 API:   ${BLUE}http://127.0.0.1:$PORT/api/v1/health${NC}"
 echo -e "WebSocket 接口: ${BLUE}ws://127.0.0.1:$PORT/api/v1/ws${NC}"
 echo -e "配置文件路径:   ${YELLOW}$INSTALL_PREFIX/config/config.yaml${NC}"

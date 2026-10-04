@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub execution: ExecutionConfig,
     pub freshness: FreshnessConfig,
     pub assets: Vec<String>,
+    #[serde(default)]
+    pub auth: AuthConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +104,45 @@ pub struct FreshnessConfig {
     pub max_clock_skew_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    #[serde(default = "default_auth_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_auth_username")]
+    pub username: String,
+    #[serde(default = "default_auth_password")]
+    pub password: String,
+    #[serde(default = "default_session_timeout")]
+    pub session_timeout_hours: u64,
+}
+
+fn default_auth_enabled() -> bool {
+    true
+}
+
+fn default_auth_username() -> String {
+    "admin".to_string()
+}
+
+fn default_auth_password() -> String {
+    "admin_polyquant".to_string()
+}
+
+fn default_session_timeout() -> u64 {
+    72
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_auth_enabled(),
+            username: default_auth_username(),
+            password: default_auth_password(),
+            session_timeout_hours: default_session_timeout(),
+        }
+    }
+}
+
 impl AppConfig {
     /// Load configuration from a YAML file, apply ENV overrides, and enforce safety guards
     pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -130,6 +171,14 @@ impl AppConfig {
 
         if let Ok(db_url) = std::env::var("DATABASE_URL") {
             config.database.url = db_url;
+        }
+
+        if let Ok(user) = std::env::var("ADMIN_USER").or_else(|_| std::env::var("POLYQUANT_USER")) {
+            config.auth.username = user;
+        }
+
+        if let Ok(pass) = std::env::var("ADMIN_PASSWORD").or_else(|_| std::env::var("POLYQUANT_PASSWORD")) {
+            config.auth.password = pass;
         }
 
         // Validate config integrity & enforce safety rules

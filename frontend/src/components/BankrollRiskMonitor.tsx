@@ -39,10 +39,10 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-bold text-[var(--color-dark)]">
-              Capital Management & Risk Circuit Breakers
+              资金管理与风控熔断机制
             </h2>
             <p className="text-xs text-[var(--color-info-dark)]">
-              Real-time drawdown, consecutive loss limiters & bankroll locks
+              实时回撤追踪、连亏硬限制与资金利润锁定金库
             </p>
           </div>
         </div>
@@ -51,19 +51,19 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
         <div className="flex items-center gap-2">
           {isHalted ? (
             <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-950 text-[#ff0060] border border-rose-300 dark:border-rose-800">
-              <ShieldAlert className="h-3.5 w-3.5" /> CIRCUIT BREAKER: HALTED
+              <ShieldAlert className="h-3.5 w-3.5" /> 触发熔断: 交易暂停
             </span>
           ) : isInCooldown ? (
             <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
-              <AlertOctagon className="h-3.5 w-3.5" /> LOSS COOLDOWN ACTIVE
+              <AlertOctagon className="h-3.5 w-3.5" /> 连亏冷却中: 暂时休眠
             </span>
           ) : (
             <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-[#1b9c85] border border-emerald-300 dark:border-emerald-800/80">
-              <CheckCircle2 className="h-3.5 w-3.5" /> RISK STATUS: NORMAL
+              <CheckCircle2 className="h-3.5 w-3.5" /> 风控状态: 正常运行
             </span>
           )}
           <span className="text-[10px] text-[var(--color-info-dark)] bg-[var(--color-background)] px-2.5 py-1 rounded-full font-mono uppercase border border-[var(--color-light)]">
-            Mode: {mode === 'capital_recovery' ? 'Mode B (Capital Recovery)' : 'Mode A (Profit Isolation)'}
+            模式: {mode === 'capital_recovery' ? '模式 B (本金回收保护)' : '模式 A (利润隔离)'}
           </span>
         </div>
       </div>
@@ -73,16 +73,16 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
         {/* 1. Active Bankroll (Mode B Cap $10) */}
         <div className="asmr-subcard p-3.5">
           <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
-            <span>Active Bankroll</span>
-            <span className="font-mono text-[var(--color-primary)] font-semibold">Cap: ${bankrollCap.toFixed(2)}</span>
+            <span>活跃交易资金</span>
+            <span className="font-mono text-[var(--color-primary)] font-semibold">硬顶: ${(typeof bankrollCap === 'number' && !isNaN(bankrollCap) ? bankrollCap : 10).toFixed(2)}</span>
           </div>
           <div className="text-xl font-black text-[var(--color-dark)] font-mono-num">
-            ${activeBankroll.toFixed(2)} <span className="text-xs text-[var(--color-info-dark)] font-normal">USDC</span>
+            ${(typeof activeBankroll === 'number' && !isNaN(activeBankroll) ? activeBankroll : 10).toFixed(2)} <span className="text-xs text-[var(--color-info-dark)] font-normal">USDC</span>
           </div>
           <div className="h-1.5 w-full bg-[var(--color-light)] rounded-full mt-2 overflow-hidden">
             <div
               className="h-full bg-[var(--color-primary)] rounded-full"
-              style={{ width: `${Math.min(100, (activeBankroll / bankrollCap) * 100)}%` }}
+              style={{ width: `${Math.min(100, (activeBankroll / (bankrollCap || 10)) * 100)}%` }}
             />
           </div>
         </div>
@@ -91,27 +91,27 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
         <div className="asmr-subcard p-3.5">
           <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
             <span className="flex items-center gap-1">
-              <Lock className="h-3 w-3 text-[#1b9c85]" /> Locked Profit Vault
+              <Lock className="h-3 w-3 text-[#1b9c85]" /> 锁定利润金库
             </span>
-            <span className="font-mono text-[#1b9c85] font-semibold">100% Risk Free</span>
+            <span className="font-mono text-[#1b9c85] font-semibold">100% 绝对无风险</span>
           </div>
           <div className="text-xl font-black text-[#1b9c85] font-mono-num">
-            +${lockedProfit.toFixed(2)} <span className="text-xs text-[#1b9c85]/70 font-normal">USDC</span>
+            +${(typeof lockedProfit === 'number' && !isNaN(lockedProfit) ? lockedProfit : 0).toFixed(2)} <span className="text-xs text-[#1b9c85]/70 font-normal">USDC</span>
           </div>
-          <p className="text-[10px] text-[var(--color-info-dark)] mt-2 font-mono">Excess gains above $10 cap</p>
+          <p className="text-[10px] text-[var(--color-info-dark)] mt-2 font-mono">超出 $10 硬顶部分自动隔离</p>
         </div>
 
         {/* 3. Total Portfolio Equity */}
         <div className="asmr-subcard p-3.5">
           <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
-            <span>Total Equity</span>
-            <span className="font-mono text-[var(--color-info-dark)]">Active + Locked</span>
+            <span>总资产净值</span>
+            <span className="font-mono text-[var(--color-info-dark)]">活跃资金 + 锁定利润</span>
           </div>
           <div className="text-xl font-black text-[var(--color-dark)] font-mono-num">
-            ${totalEquity.toFixed(2)} <span className="text-xs text-[var(--color-info-dark)] font-normal">USDC</span>
+            ${(typeof totalEquity === 'number' && !isNaN(totalEquity) ? totalEquity : 10).toFixed(2)} <span className="text-xs text-[var(--color-info-dark)] font-normal">USDC</span>
           </div>
           <div className="text-[10px] text-[var(--color-info-dark)] mt-2 font-mono">
-            Return:{' '}
+            总收益率:{' '}
             <strong className={totalEquity >= 10.0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
               {(((totalEquity - 10.0) / 10.0) * 100).toFixed(1)}%
             </strong>
@@ -121,12 +121,12 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
         {/* 4. Daily Loss & Circuit Breaker */}
         <div className="asmr-subcard p-3.5">
           <div className="flex items-center justify-between text-[11px] text-[var(--color-info-dark)] mb-1">
-            <span>Daily Loss Limit</span>
-            <span className="font-mono text-[#ff0060] font-semibold">Max ${dailyLossLimit.toFixed(2)}</span>
+            <span>单日最大亏损限额</span>
+            <span className="font-mono text-[#ff0060] font-semibold">上限 ${(typeof dailyLossLimit === 'number' && !isNaN(dailyLossLimit) ? dailyLossLimit : 2).toFixed(2)}</span>
           </div>
           <div className="text-xl font-black text-[var(--color-dark)] font-mono-num">
-            ${dailyLoss.toFixed(2)}{' '}
-            <span className="text-xs text-[var(--color-info-dark)] font-normal">/ ${dailyLossLimit.toFixed(2)}</span>
+            ${(typeof dailyLoss === 'number' && !isNaN(dailyLoss) ? dailyLoss : 0).toFixed(2)}{' '}
+            <span className="text-xs text-[var(--color-info-dark)] font-normal">/ ${(typeof dailyLossLimit === 'number' && !isNaN(dailyLossLimit) ? dailyLossLimit : 2).toFixed(2)}</span>
           </div>
           <div className="h-1.5 w-full bg-[var(--color-light)] rounded-full mt-2 overflow-hidden">
             <div
@@ -140,21 +140,21 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
       {/* Circuit Breaker Detailed Gauges */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-[var(--color-light)] text-xs">
         <div className="asmr-subcard p-2.5 flex items-center justify-between">
-          <span className="text-[var(--color-info-dark)]">Consecutive Losses:</span>
+          <span className="text-[var(--color-info-dark)]">当前连续亏损:</span>
           <span className="font-mono-num font-bold text-[var(--color-dark)]">
-            {consecutiveLosses} / {maxConsecutiveLosses} trades
+            {consecutiveLosses} / {maxConsecutiveLosses} 笔
           </span>
         </div>
 
         <div className="asmr-subcard p-2.5 flex items-center justify-between">
-          <span className="text-[var(--color-info-dark)]">Peak-to-Trough Drawdown:</span>
+          <span className="text-[var(--color-info-dark)]">历史高点最大回撤:</span>
           <span className={`font-mono-num font-bold ${maxDrawdownPct > 15 ? 'text-[#ff0060]' : 'text-[var(--color-dark)]'}`}>
-            {maxDrawdownPct.toFixed(1)}% / max {maxDrawdownLimit.toFixed(0)}%
+            {(typeof maxDrawdownPct === 'number' && !isNaN(maxDrawdownPct) ? maxDrawdownPct : 0).toFixed(1)}% / 上限 {(typeof maxDrawdownLimit === 'number' && !isNaN(maxDrawdownLimit) ? maxDrawdownLimit : 20).toFixed(0)}%
           </span>
         </div>
 
         <div className="asmr-subcard p-2.5 flex items-center justify-between">
-          <span className="text-[var(--color-info-dark)]">Minimum Bankroll Floor:</span>
+          <span className="text-[var(--color-info-dark)]">资金保护底线 (Floor):</span>
           <span className="font-mono-num font-bold text-[var(--color-dark)]">$2.00 USDC</span>
         </div>
       </div>

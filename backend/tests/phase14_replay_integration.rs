@@ -149,6 +149,7 @@ async fn setup_replay_test_app() -> (axum::Router, Arc<ReplayEngine>, Arc<Databa
             models.clone(),
             db.clone(),
         )),
+        sessions: std::sync::Arc::new(dashmap::DashMap::new()),
         start_time_ms: chrono::Utc::now().timestamp_millis(),
     };
     let app = create_router(state);

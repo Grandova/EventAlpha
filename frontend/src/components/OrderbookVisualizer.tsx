@@ -47,13 +47,13 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-bold text-[var(--color-dark)] flex items-center gap-2">
-              CLOB Orderbook Depth Ladder
+              CLOB 订单簿深度天梯
               <span className="text-[10px] text-[var(--color-primary)] font-mono bg-blue-50 dark:bg-cyan-950/60 px-2 py-0.5 rounded-full border border-blue-200 dark:border-cyan-800/60">
                 {asset} 5M
               </span>
             </h3>
             <p className="text-xs text-[var(--color-info-dark)]">
-              Live Polymarket L2 Depth, Spreads & Orderbook Imbalance (OBI)
+              Polymarket L2 实时深度、价差与买卖失衡指标 (OBI)
             </p>
           </div>
         </div>
@@ -70,7 +70,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
               }`}
             >
               <ArrowUp className="h-3 w-3" />
-              UP Token
+              看涨合约 (UP)
             </button>
             <button
               onClick={() => setActiveSide('DOWN')}
@@ -81,7 +81,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
               }`}
             >
               <ArrowDown className="h-3 w-3" />
-              DOWN Token
+              看跌合约 (DOWN)
             </button>
           </div>
 
@@ -89,7 +89,7 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
             <button
               onClick={onRefresh}
               className="p-1.5 bg-[var(--color-background)] hover:bg-[var(--color-light)] border border-[var(--color-light)] rounded-xl text-[var(--color-info-dark)] hover:text-[var(--color-dark)] transition-colors"
-              title="Refresh orderbook"
+              title="刷新订单簿深度"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
@@ -100,45 +100,45 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
       {/* Summary Metrics Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
         <div className="asmr-subcard p-3">
-          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">BEST BID / ASK</div>
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">买一价 / 卖一价</div>
           <div className="text-xs font-mono font-bold flex items-center gap-1">
-            <span className="text-[#1b9c85]">${bestBid.toFixed(3)}</span>
+            <span className="text-[#1b9c85]">${(typeof bestBid === 'number' && !isNaN(bestBid) ? bestBid : 0.5).toFixed(3)}</span>
             <span className="text-[var(--color-info-dark)]">/</span>
-            <span className="text-[#ff0060]">${bestAsk.toFixed(3)}</span>
+            <span className="text-[#ff0060]">${(typeof bestAsk === 'number' && !isNaN(bestAsk) ? bestAsk : 0.51).toFixed(3)}</span>
           </div>
         </div>
 
         <div className="asmr-subcard p-3">
-          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">MID & SPREAD</div>
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">中间价 & 买卖价差</div>
           <div className="text-xs font-mono font-bold text-[var(--color-dark)] flex items-center justify-between">
-            <span>${mid.toFixed(3)}</span>
+            <span>${(typeof mid === 'number' && !isNaN(mid) ? mid : 0.5).toFixed(3)}</span>
             <span className="text-amber-500 text-[11px] font-semibold">
-              +{(spread * 100).toFixed(1)}¢
+              +{((typeof spread === 'number' && !isNaN(spread) ? spread : 0.01) * 100).toFixed(1)}¢
             </span>
           </div>
         </div>
 
         <div className="asmr-subcard p-3">
-          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">OBI (TOP 5 / 10 / 20)</div>
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">失衡度 OBI (前5 / 10 / 20档)</div>
           <div className="text-xs font-mono font-bold flex items-center gap-1.5">
             <span className={obi5 >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
-              {obi5 >= 0 ? '+' : ''}{(obi5 * 100).toFixed(0)}%
+              {obi5 >= 0 ? '+' : ''}{((typeof obi5 === 'number' && !isNaN(obi5) ? obi5 : 0) * 100).toFixed(0)}%
             </span>
             <span className="text-[var(--color-info-dark)]">|</span>
             <span className={obi10 >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
-              {obi10 >= 0 ? '+' : ''}{(obi10 * 100).toFixed(0)}%
+              {obi10 >= 0 ? '+' : ''}{((typeof obi10 === 'number' && !isNaN(obi10) ? obi10 : 0) * 100).toFixed(0)}%
             </span>
             <span className="text-[var(--color-info-dark)]">|</span>
             <span className={obi20 >= 0 ? 'text-[#1b9c85]' : 'text-[#ff0060]'}>
-              {obi20 >= 0 ? '+' : ''}{(obi20 * 100).toFixed(0)}%
+              {obi20 >= 0 ? '+' : ''}{((typeof obi20 === 'number' && !isNaN(obi20) ? obi20 : 0) * 100).toFixed(0)}%
             </span>
           </div>
         </div>
 
         <div className="asmr-subcard p-3">
-          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">TOTAL DEPTH (BID/ASK)</div>
+          <div className="text-[10px] text-[var(--color-info-dark)] font-semibold mb-0.5">总挂单深度 (买盘 / 卖盘)</div>
           <div className="text-xs font-mono font-bold text-[var(--color-dark)]">
-            ${totalBidDepth.toFixed(0)} / ${totalAskDepth.toFixed(0)} USDC
+            ${(typeof totalBidDepth === 'number' && !isNaN(totalBidDepth) ? totalBidDepth : 0).toFixed(0)} / ${(typeof totalAskDepth === 'number' && !isNaN(totalAskDepth) ? totalAskDepth : 0).toFixed(0)} USDC
           </div>
         </div>
       </div>
@@ -148,15 +148,15 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
         {/* Bids Ladder (Buy orders, green depth bars) */}
         <div className="asmr-subcard p-3.5">
           <div className="flex items-center justify-between text-[11px] font-bold text-[#1b9c85] pb-2 mb-2 border-b border-[var(--color-light)]">
-            <span>BIDS (BUY)</span>
-            <span>SIZE (SHARES)</span>
-            <span>TOTAL ($)</span>
+            <span>买单 (BIDS)</span>
+            <span>挂单数量 (份)</span>
+            <span>金额 ($)</span>
           </div>
 
           <div className="space-y-1">
             {bids.length === 0 ? (
               <div className="text-center py-6 text-[var(--color-info-dark)] italic text-[11px]">
-                No active bids in orderbook
+                当前买盘暂无活跃挂单
               </div>
             ) : (
               bids.slice(0, 8).map((level: OrderBookLevel, idx: number) => {
@@ -169,13 +169,13 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
                       style={{ width: `${fillPct}%` }}
                     />
                     <span className="relative font-bold text-[#1b9c85] z-10">
-                      ${level.price.toFixed(3)}
+                      ${(typeof level.price === 'number' && !isNaN(level.price) ? level.price : 0).toFixed(3)}
                     </span>
                     <span className="relative text-[var(--color-dark)] font-medium z-10">
                       {level.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                     <span className="relative text-[var(--color-info-dark)] z-10 text-[10px]">
-                      ${totalUsd.toFixed(1)}
+                      ${(typeof totalUsd === 'number' && !isNaN(totalUsd) ? totalUsd : 0).toFixed(1)}
                     </span>
                   </div>
                 );
@@ -187,15 +187,15 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
         {/* Asks Ladder (Sell orders, red depth bars) */}
         <div className="asmr-subcard p-3.5">
           <div className="flex items-center justify-between text-[11px] font-bold text-[#ff0060] pb-2 mb-2 border-b border-[var(--color-light)]">
-            <span>ASKS (SELL)</span>
-            <span>SIZE (SHARES)</span>
-            <span>TOTAL ($)</span>
+            <span>卖单 (ASKS)</span>
+            <span>挂单数量 (份)</span>
+            <span>金额 ($)</span>
           </div>
 
           <div className="space-y-1">
             {asks.length === 0 ? (
               <div className="text-center py-6 text-[var(--color-info-dark)] italic text-[11px]">
-                No active asks in orderbook
+                当前卖盘暂无活跃挂单
               </div>
             ) : (
               asks.slice(0, 8).map((level: OrderBookLevel, idx: number) => {
@@ -208,13 +208,13 @@ export const OrderbookVisualizer: React.FC<OrderbookVisualizerProps> = ({
                       style={{ width: `${fillPct}%` }}
                     />
                     <span className="relative font-bold text-[#ff0060] z-10">
-                      ${level.price.toFixed(3)}
+                      ${(typeof level.price === 'number' && !isNaN(level.price) ? level.price : 0).toFixed(3)}
                     </span>
                     <span className="relative text-[var(--color-dark)] font-medium z-10">
                       {level.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                     <span className="relative text-[var(--color-info-dark)] z-10 text-[10px]">
-                      ${totalUsd.toFixed(1)}
+                      ${(typeof totalUsd === 'number' && !isNaN(totalUsd) ? totalUsd : 0).toFixed(1)}
                     </span>
                   </div>
                 );

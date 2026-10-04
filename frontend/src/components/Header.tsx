@@ -25,6 +25,8 @@ interface HeaderProps {
   onEmergencyHalt?: () => void;
   isDarkMode?: boolean;
   onToggleTheme?: () => void;
+  currentUser?: string;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,6 +43,8 @@ export const Header: React.FC<HeaderProps> = ({
   onEmergencyHalt,
   isDarkMode = false,
   onToggleTheme,
+  currentUser = 'admin',
+  onLogout,
 }) => {
   const isPaper = tradingMode === 'paper';
 
@@ -50,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-extrabold text-[#363949] dark:text-white tracking-tight">
-            Analytics
+            量化监控总览
           </h1>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs font-bold text-[#7d8da1] dark:text-slate-400 uppercase tracking-wider font-mono">
@@ -58,9 +62,9 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
             <span className="text-slate-300 dark:text-slate-700">&bull;</span>
             <span className="text-xs font-extrabold text-[#6c9bcf] font-mono tracking-wide">
-              {activeAsset} PERPETUAL
+              {activeAsset} 现货加权基准
             </span>
-            {compositePrice && compositePrice > 0 && (
+            {typeof compositePrice === 'number' && !isNaN(compositePrice) && compositePrice > 0 && (
               <span className="ml-1 px-2.5 py-0.5 rounded-xl bg-white dark:bg-[#202528] shadow-sm font-mono-num font-bold text-[#1b9c85] text-xs">
                 ${compositePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -69,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Controls, Theme Switcher & User Profile (Matches screenshot!) */}
+      {/* Right: Controls, Theme Switcher & User Profile */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Trading Mode Switcher */}
         <div className="flex items-center p-1 rounded-2xl bg-white dark:bg-[#202528] shadow-[0_0.5rem_1rem_rgba(132,139,200,0.1)] dark:shadow-none">
@@ -114,12 +118,12 @@ export const Header: React.FC<HeaderProps> = ({
           ))}
         </div>
 
-        {/* AsmrProg Iconic Dark/Light Mode Toggle Switch (Matches screenshot!) */}
+        {/* AsmrProg Iconic Dark/Light Mode Toggle Switch */}
         {onToggleTheme && (
           <div
             onClick={onToggleTheme}
             className="flex items-center justify-between w-14 h-8 p-1 rounded-full bg-slate-200 dark:bg-slate-700 cursor-pointer transition-colors shadow-inner"
-            title="Toggle Light / Dark Mode"
+            title="切换深色/浅色模式"
           >
             <div
               className={`flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-[#202528] text-amber-500 shadow-sm transition-transform duration-300 ${
@@ -131,20 +135,20 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* User / Profile Avatar Badge (Matches screenshot "Hey, Reza Admin") */}
+        {/* User / Profile Avatar Badge */}
         <div
           onClick={onOpenAccountManager}
-          className="flex items-center gap-3 p-1.5 pr-4 rounded-full bg-white dark:bg-[#202528] shadow-[0_0.5rem_1rem_rgba(132,139,200,0.1)] dark:shadow-none cursor-pointer hover:bg-slate-50 transition-all"
+          className="flex items-center gap-3 p-1.5 pr-4 rounded-full bg-white dark:bg-[#202528] shadow-[0_0.5rem_1rem_rgba(132,139,200,0.1)] dark:shadow-none cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all"
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#6c9bcf] to-[#1b9c85] p-0.5 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-            {activeAccount ? activeAccount.label.slice(0, 2).toUpperCase() : 'AP'}
+            {currentUser ? currentUser.slice(0, 2).toUpperCase() : (activeAccount ? activeAccount.label.slice(0, 2).toUpperCase() : 'AP')}
           </div>
           <div className="text-left">
             <p className="text-xs font-bold text-[#363949] dark:text-white leading-tight">
-              Hey, {activeAccount ? activeAccount.label : 'Quant Trader'}
+              你好，{currentUser || (activeAccount ? activeAccount.label : '交易员')}
             </p>
             <p className="text-[10px] text-[#7d8da1] dark:text-slate-400 font-medium">
-              {isPaper ? 'Simulation' : 'Mode B Active'}
+              {isPaper ? '模拟盘安全运行' : 'Mode B 实盘防护'}
             </p>
           </div>
         </div>

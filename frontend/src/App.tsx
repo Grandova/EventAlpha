@@ -18,7 +18,8 @@ import { SelfLearningPanel } from './components/SelfLearningPanel';
 import { LiveTradingBlotter } from './components/LiveTradingBlotter';
 import { AccountManagerModal } from './components/AccountManagerModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { api } from './services/api';
+import { LoginPage } from './components/LoginPage';
+import { api, getStoredToken, clearStoredToken } from './services/api';
 import { wsClient } from './services/ws';
 import {
   Asset,
@@ -43,6 +44,11 @@ import {
 export const App: React.FC = () => {
   const [activeAsset, setActiveAsset] = useState<Asset>('BTC');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<string>('admin');
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [spotPrices, setSpotPrices] = useState<PriceSummary[]>([]);
@@ -79,6 +85,59 @@ export const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
+  // Auth verification check on startup
+  useEffect(() => {
+    let isMounted = true;
+    const checkAuth = async () => {
+      try {
+        const status = await api.getAuthStatus();
+        if (!isMounted) return;
+        if (!status.auth_enabled) {
+          setIsAuthenticated(true);
+          setCurrentUser('admin');
+        } else if (status.authenticated) {
+          setIsAuthenticated(true);
+          setCurrentUser(status.username || 'admin');
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        const token = getStoredToken();
+        if (!token) {
+          setIsAuthenticated(false);
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingAuth(false);
+        }
+      }
+    };
+
+    checkAuth();
+
+    const handleAuthRequired = () => {
+      clearStoredToken();
+      setIsAuthenticated(false);
+    };
+
+    window.addEventListener('polyquant_auth_required', handleAuthRequired);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('polyquant_auth_required', handleAuthRequired);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (err) {
+      // ignore
+    }
+    clearStoredToken();
+    setIsAuthenticated(false);
+  };
+
   // Sync mode and accounts from backend on load
   const syncTradingMode = async () => {
     try {
@@ -91,8 +150,10 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    syncTradingMode();
-  }, []);
+    if (isAuthenticated) {
+      syncTradingMode();
+    }
+  }, [isAuthenticated]);
 
   const handleToggleTradingMode = async (newMode: TradingMode) => {
     if (newMode === tradingMode) return;
@@ -159,6 +220,7 @@ export const App: React.FC = () => {
 
   // 1. High frequency polling for live prices & round state (1000ms)
   useEffect(() => {
+    if (!isAuthenticated) return;
     let isMounted = true;
     const pollFast = async () => {
       try {
@@ -195,10 +257,11 @@ export const App: React.FC = () => {
       isMounted = false;
       clearInterval(timer);
     };
-  }, [activeAsset]);
+  }, [activeAsset, isAuthenticated]);
 
   // 2. Medium frequency polling for bankroll, risk, positions & blotter (2000ms)
   useEffect(() => {
+    if (!isAuthenticated) return;
     let isMounted = true;
     const pollMedium = async () => {
       try {
@@ -232,7 +295,7 @@ export const App: React.FC = () => {
       isMounted = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   // 3. Real-time sub-100ms WebSocket Multiplexed Stream
   useEffect(() => {
@@ -299,6 +362,36 @@ export const App: React.FC = () => {
 
   const roundRemaining = market?.remaining_seconds ?? 150;
 
+  // 1. Loading screen while verifying token & session
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#f6f6f9] dark:bg-[#181a1e] flex flex-col items-center justify-center p-4">
+        <div className="relative flex items-center justify-center w-20 h-20 rounded-full border-4 border-[#ff0060] p-1 bg-white dark:bg-[#202528] shadow-lg animate-pulse-ring mb-4">
+          <div className="w-full h-full rounded-full border-2 border-[#ff0060] flex items-center justify-center font-black text-[#ff0060] text-xl">
+            AP
+          </div>
+        </div>
+        <p className="text-xs font-mono font-bold text-[#7d8da1] dark:text-slate-400 tracking-wider animate-pulse">
+          EventAlpha · 系统安全验证中...
+        </p>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated: Render AsmrProg Login Screen
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        onLoginSuccess={(user) => {
+          setIsAuthenticated(true);
+          setCurrentUser(user);
+        }}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f6f6f9] dark:bg-[#181a1e] text-[#363949] dark:text-[#edeffd] flex flex-col lg:flex-row antialiased transition-colors duration-300">
       {/* Left Column: AsmrProg Floating Sidebar */}
@@ -308,6 +401,7 @@ export const App: React.FC = () => {
         activePositionsCount={activePositions.length}
         isLive={wsClient.getStatus()}
         tradingMode={tradingMode}
+        onLogout={handleLogout}
       />
 
       {/* Center Column: Main Workspace */}
@@ -327,26 +421,28 @@ export const App: React.FC = () => {
           onEmergencyHalt={handleEmergencyHalt}
           isDarkMode={isDarkMode}
           onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+          currentUser={currentUser}
+          onLogout={handleLogout}
         />
 
         {/* Dashboard Main View */}
         <main className="space-y-6">
-          <ErrorBoundary fallbackTitle="Module Render Error">
+          <ErrorBoundary fallbackTitle="模块安全隔离异常">
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                 {/* 1. AsmrProg Iconic Top Stat Cards Row with Circular Progress Rings! */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                   <StatCard
-                    title="Active Bankroll"
+                    title="活跃资金池 (Bankroll)"
                     value={
                       tradingMode === 'live' && activeAccount
-                        ? `$${activeAccount.balance_usdc.toFixed(2)}`
-                        : `$${(bankroll?.active_bankroll ?? 10.0).toFixed(2)}`
+                        ? `$${(typeof activeAccount.balance_usdc === 'number' && !isNaN(activeAccount.balance_usdc) ? activeAccount.balance_usdc : 0).toFixed(2)}`
+                        : `$${(typeof bankroll?.active_bankroll === 'number' && !isNaN(bankroll.active_bankroll) ? bankroll.active_bankroll : 10.0).toFixed(2)}`
                     }
                     subtitle={
                       tradingMode === 'live' && activeAccount
                         ? `${activeAccount.label}`
-                        : `Mode B Cap: $${(bankroll?.bankroll_cap ?? 10.0).toFixed(2)}`
+                        : `模式 B 动态硬顶: $${(typeof bankroll?.bankroll_cap === 'number' && !isNaN(bankroll.bankroll_cap) ? bankroll.bankroll_cap : 10.0).toFixed(2)}`
                     }
                     progress={((bankroll?.active_bankroll ?? 10.0) / (bankroll?.bankroll_cap ?? 10.0)) * 100}
                     percentageText="+81%"
@@ -354,18 +450,18 @@ export const App: React.FC = () => {
                   />
 
                   <StatCard
-                    title="Locked Profit"
-                    value={`+$${(bankroll?.locked_profit ?? 0.0).toFixed(2)}`}
-                    subtitle="100% Capital Recovery"
+                    title="已锁定利润金库"
+                    value={`+$${(typeof bankroll?.locked_profit === 'number' && !isNaN(bankroll.locked_profit) ? bankroll.locked_profit : 0.0).toFixed(2)}`}
+                    subtitle="100% 原始本金已锁定隔离"
                     progress={Math.min(100, Math.max(10, ((bankroll?.locked_profit ?? 0.0) / 10.0) * 100))}
                     percentageText={bankroll?.locked_profit ? `+$${bankroll.locked_profit.toFixed(1)}` : '-48%'}
                     accentColor="#ff0060"
                   />
 
                   <StatCard
-                    title="Predictive Win Rate"
-                    value={`${(statistics?.win_rate ?? 0.0).toFixed(1)}%`}
-                    subtitle={`${statistics?.winning_trades ?? 0} Won / ${statistics?.losing_trades ?? 0} Lost`}
+                    title="模型综合预测胜率"
+                    value={`${(typeof statistics?.win_rate === 'number' && !isNaN(statistics.win_rate) ? statistics.win_rate : 0.0).toFixed(1)}%`}
+                    subtitle={`${statistics?.winning_trades ?? 0} 胜 / ${statistics?.losing_trades ?? 0} 负`}
                     progress={statistics?.win_rate ?? 68}
                     percentageText="+21%"
                     accentColor="#6c9bcf"

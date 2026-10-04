@@ -41,30 +41,30 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
         </div>
 
         <h3 className="text-lg font-extrabold text-[#363949] dark:text-white tracking-tight">
-          AsmrProg<span className="text-[#ff0060]">.5M</span>
+          EventAlpha<span className="text-[#ff0060]">.5M</span>
         </h3>
         <p className="text-xs text-[#7d8da1] dark:text-slate-400 font-medium mt-0.5">
-          Autonomous Quant Engine
+          自主量化执行引擎
         </p>
 
         {/* Current Account Status Pill */}
         <div className="mt-4 w-full p-3 rounded-2xl bg-[#f6f6f9] dark:bg-[#181a1e] border border-slate-100 dark:border-slate-800 text-left">
           <div className="flex items-center justify-between text-[11px] font-mono text-[#7d8da1]">
-            <span>ACTIVE TRADER</span>
+            <span>当前交易身份</span>
             <span
               className={`font-bold ${
                 isPaper ? 'text-[#1b9c85]' : 'text-[#ff0060]'
               }`}
             >
-              {isPaper ? 'PAPER' : 'LIVE'}
+              {isPaper ? '模拟盘' : '实盘中'}
             </span>
           </div>
           <div className="mt-1 flex items-center justify-between">
             <span className="text-xs font-bold text-[#363949] dark:text-white truncate max-w-[120px]">
-              {activeAccount ? activeAccount.label : 'Guest Simulation'}
+              {activeAccount ? activeAccount.label : '免登录模拟盘'}
             </span>
             <span className="text-xs font-bold font-mono text-[#1b9c85]">
-              ${activeAccount ? activeAccount.balance_usdc.toFixed(2) : '10.00'} U
+              ${(typeof activeAccount?.balance_usdc === 'number' && !isNaN(activeAccount.balance_usdc) ? activeAccount.balance_usdc : 10.0).toFixed(2)} U
             </span>
           </div>
         </div>
@@ -74,7 +74,7 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
       <div className="space-y-3">
         <div className="flex items-center justify-between px-2">
           <h3 className="text-base font-extrabold text-[#363949] dark:text-white">
-            Reminders
+            风控与核心机制
           </h3>
           <button className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-[#7d8da1] transition-colors">
             <Bell className="w-4 h-4" />
@@ -89,10 +89,10 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
             </div>
             <div className="truncate">
               <h4 className="text-xs font-bold text-[#363949] dark:text-white truncate">
-                Mode B Capital Guard
+                模式 B 资金防线
               </h4>
               <p className="text-[10px] text-[#7d8da1] dark:text-slate-400 font-mono">
-                Floor: $2.00 | Cap: $10.00
+                保护底线: $2.00 | 动态硬顶: $10.00
               </p>
             </div>
           </div>
@@ -112,10 +112,10 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
             </div>
             <div className="truncate">
               <h4 className="text-xs font-bold text-[#363949] dark:text-white truncate group-hover:text-[#ff0060] transition-colors">
-                Emergency Kill Switch
+                紧急熔断保护闸
               </h4>
               <p className="text-[10px] text-[#7d8da1] dark:text-slate-400 font-mono">
-                Instant CLOB Abort
+                秒级撤单并切回模拟盘
               </p>
             </div>
           </div>
@@ -132,10 +132,10 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
             </div>
             <div className="truncate">
               <h4 className="text-xs font-bold text-[#363949] dark:text-white truncate">
-                Continuous Online SGD
+                在线增量学习引擎
               </h4>
               <p className="text-[10px] text-[#7d8da1] dark:text-slate-400 font-mono">
-                Auto-Adapt Every 5M Round
+                每轮结算自适应进化权重
               </p>
             </div>
           </div>
@@ -150,7 +150,7 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
           className="w-full py-3.5 px-4 rounded-3xl border-2 border-dashed border-[#6c9bcf] text-[#6c9bcf] text-xs font-bold flex items-center justify-center gap-2 hover:bg-[#6c9bcf]/10 hover:border-solid transition-all cursor-pointer shadow-sm"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Polymarket Account</span>
+          <span>绑定 Polymarket 实盘账户</span>
         </button>
       </div>
     </div>

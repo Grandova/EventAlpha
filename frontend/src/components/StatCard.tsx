@@ -28,7 +28,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   const strokeWidth = 6;
   const circumference = 2 * Math.PI * radius;
   // clamped progress 0-100
-  const normalizedProgress = Math.min(100, Math.max(0, progress));
+  const safeProgress = typeof progress === 'number' && !isNaN(progress) ? progress : 0;
+  const normalizedProgress = Math.min(100, Math.max(0, safeProgress));
   const strokeDashoffset = circumference - (normalizedProgress / 100) * circumference;
 
   const displayPercent = percentageText || `${normalizedProgress > 0 ? '+' : ''}${Math.round(normalizedProgress)}%`;

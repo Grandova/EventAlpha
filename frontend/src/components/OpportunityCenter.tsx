@@ -19,22 +19,22 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
 
   const actionConfig = {
     BUY_UP: {
-      label: 'BUY UP (LONG 5M)',
+      label: '买入看涨 UP (做多 5M)',
       bg: 'bg-[#1b9c85]/10 border-[#1b9c85]/30 text-[#1b9c85]',
       badge: 'bg-[#1b9c85] text-white font-extrabold',
     },
     BUY_DOWN: {
-      label: 'BUY DOWN (SHORT 5M)',
+      label: '买入看跌 DOWN (做空 5M)',
       bg: 'bg-[#ff0060]/10 border-[#ff0060]/30 text-[#ff0060]',
       badge: 'bg-[#ff0060] text-white font-extrabold',
     },
     SKIP: {
-      label: 'SKIP (NO TRADE)',
+      label: '观望 SKIP (不交易)',
       bg: 'bg-[#f6f6f9] dark:bg-[#181a1e] border-slate-200 dark:border-slate-800 text-[#7d8da1]',
       badge: 'bg-slate-200 dark:bg-slate-700 text-[#7d8da1] font-bold',
     },
   }[action] ?? {
-    label: 'SKIP',
+    label: '观望 SKIP',
     bg: 'bg-[#f6f6f9] dark:bg-[#181a1e] border-slate-200 dark:border-slate-800 text-[#7d8da1]',
     badge: 'bg-slate-200 dark:bg-slate-700 text-[#7d8da1] font-bold',
   };
@@ -45,11 +45,11 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-[#6c9bcf]" />
           <h2 className="text-xs font-bold text-[#7d8da1] dark:text-slate-400 uppercase tracking-wider">
-            Strategy Engine & Scoring Rubric
+            策略决策引擎与多因子评分
           </h2>
         </div>
         <span className="text-[10px] text-[#7d8da1] font-mono">
-          7 Hard Gates &bull; Score [0, 100]
+          7道严苛安全门槛 &bull; 综合得分 [0, 100]
         </span>
       </div>
 
@@ -61,7 +61,7 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
           </div>
           <div>
             <div className="text-xs font-bold text-[#363949] dark:text-white">
-              Confidence:{' '}
+              模型置信度:{' '}
               <span className="uppercase font-mono text-[#6c9bcf]">
                 {signal?.confidence ?? prediction?.confidence ?? 'LOW'}
               </span>
@@ -73,12 +73,12 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
         {/* Opportunity Score Indicator */}
         <div className="flex items-center gap-3 bg-white dark:bg-[#202528] px-3.5 py-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
           <div>
-            <span className="text-[10px] text-[#7d8da1] uppercase font-semibold block">Score</span>
-            <span className="text-xl font-black text-[#363949] dark:text-white font-mono-num">{score.toFixed(1)}</span>
+            <span className="text-[10px] text-[#7d8da1] uppercase font-semibold block">综合评分</span>
+            <span className="text-xl font-black text-[#363949] dark:text-white font-mono-num">{(typeof score === 'number' && !isNaN(score) ? score : 0).toFixed(1)}</span>
             <span className="text-[10px] text-[#7d8da1]">/100</span>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-[#7d8da1] uppercase font-semibold block">Tier</span>
+            <span className="text-[10px] text-[#7d8da1] uppercase font-semibold block">等级</span>
             <span
               className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-md ${
                 score >= 80
@@ -100,9 +100,9 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
         <div className="bg-[#f6f6f9] dark:bg-[#181a1e] border border-slate-100 dark:border-slate-800 p-3.5 rounded-2xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-[#363949] dark:text-white uppercase tracking-wide">
-              7 Hard Filter Gates
+              7道严苛安全硬门槛
             </span>
-            <span className="text-[10px] text-[#7d8da1] font-mono">Fail-Closed</span>
+            <span className="text-[10px] text-[#7d8da1] font-mono">违背即关闸</span>
           </div>
 
           <div className="space-y-1.5">
@@ -128,7 +128,7 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
               ))
             ) : (
               <div className="text-xs text-[#7d8da1] py-3 text-center font-mono">
-                No active gate evaluation yet.
+                暂无活跃门槛评估数据。
               </div>
             )}
           </div>
@@ -138,17 +138,17 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
         <div className="bg-[#f6f6f9] dark:bg-[#181a1e] border border-slate-100 dark:border-slate-800 p-3.5 rounded-2xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-[#363949] dark:text-white uppercase tracking-wide">
-              Scoring Breakdown
+              多因子评分细则
             </span>
-            <span className="text-[10px] text-[#7d8da1] font-mono">Max 100 Pts</span>
+            <span className="text-[10px] text-[#7d8da1] font-mono">满分 100 分</span>
           </div>
 
           <div className="space-y-2.5 text-xs font-medium">
             <div>
               <div className="flex justify-between text-[#7d8da1] dark:text-slate-400 mb-1">
-                <span>Probability Confidence</span>
+                <span>模型胜率置信度得分</span>
                 <span className="font-mono-num font-bold text-[#363949] dark:text-white">
-                  {breakdown?.probability_points?.toFixed(1) ?? 0.0} pts
+                  {(breakdown?.probability_points ?? 0).toFixed(1)} 分
                 </span>
               </div>
               <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -161,9 +161,9 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
 
             <div>
               <div className="flex justify-between text-[#7d8da1] dark:text-slate-400 mb-1">
-                <span>Net Edge vs Costs</span>
+                <span>扣除滑点手续费净期望</span>
                 <span className="font-mono-num font-bold text-[#363949] dark:text-white">
-                  {breakdown?.edge_points?.toFixed(1) ?? 0.0} pts
+                  {(breakdown?.edge_points ?? 0).toFixed(1)} 分
                 </span>
               </div>
               <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -176,9 +176,9 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
 
             <div>
               <div className="flex justify-between text-[#7d8da1] dark:text-slate-400 mb-1">
-                <span>OrderBook Imbalance (OBI)</span>
+                <span>订单簿微观买卖盘失衡</span>
                 <span className="font-mono-num font-bold text-[#363949] dark:text-white">
-                  {breakdown?.obi_points?.toFixed(1) ?? 0.0} pts
+                  {(breakdown?.obi_points ?? 0).toFixed(1)} 分
                 </span>
               </div>
               <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">

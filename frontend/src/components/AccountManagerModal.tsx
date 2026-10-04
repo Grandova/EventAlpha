@@ -88,7 +88,8 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
           acc.id === id ? { ...acc, balance_usdc: res.balance_usdc } : acc
         )
       );
-      setSuccessMsg(`余额刷新成功: $${res.balance_usdc.toFixed(2)} USDC`);
+      const bal = typeof res.balance_usdc === 'number' && !isNaN(res.balance_usdc) ? res.balance_usdc : 0;
+      setSuccessMsg(`余额刷新成功: $${bal.toFixed(2)} USDC`);
     } catch (err: any) {
       setError(err.message || '刷新余额失败');
     } finally {
@@ -297,7 +298,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                             Polygon USDC
                           </div>
                           <div className="text-base font-extrabold font-mono text-[#1b9c85]">
-                            ${acc.balance_usdc.toFixed(2)}
+                            ${(typeof acc.balance_usdc === 'number' && !isNaN(acc.balance_usdc) ? acc.balance_usdc : 0).toFixed(2)}
                           </div>
                         </div>
 
