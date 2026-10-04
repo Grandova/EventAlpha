@@ -140,7 +140,7 @@ pub async fn handle_auth_me(
     }
 
     (
-        StatusCode::UNAUTHORIZED,
+        StatusCode::OK,
         Json(AuthStatusResponse {
             authenticated: false,
             auth_enabled: true,

@@ -139,11 +139,15 @@ function update_app() {
 
     cd "$SRC_DIR"
     echo -e "${CYAN}Pulling latest git changes...${NC}"
-    git pull || true
+    git fetch origin master 2>/dev/null || true
+    git reset --hard origin/master 2>/dev/null || git pull || true
 
-    echo -e "${CYAN}Rebuilding Frontend...${NC}"
-    cd "$SRC_DIR/frontend"
-    npm run build
+    echo -e "${CYAN}Updating Frontend Assets...${NC}"
+    if [ -d "$SRC_DIR/frontend/dist" ]; then
+        rm -rf "$APP_DIR/frontend/dist"
+        cp -r "$SRC_DIR/frontend/dist" "$APP_DIR/frontend/dist"
+        echo -e "${GREEN}✓ Frontend Chinese production assets deployed!${NC}"
+    fi
 
     echo -e "${CYAN}Rebuilding Backend...${NC}"
     cd "$SRC_DIR/backend"

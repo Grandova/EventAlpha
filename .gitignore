@@ -4,7 +4,9 @@
 /data/*.db-shm
 .env
 node_modules/
-dist/
+# dist/ (allow frontend/dist to be tracked in git for zero-dependency Linux deployment)
+!frontend/dist/
+!frontend/dist/**
 __pycache__/
 *.pyc
 .pytest_cache/

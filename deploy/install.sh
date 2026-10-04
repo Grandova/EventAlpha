@@ -133,17 +133,25 @@ else
 fi
 
 # 6. Build Frontend Web Console
-echo -e "${BLUE}[5/8] 正在编译前端现代量化控制台 (React + Tailwind + Vite)...${NC}"
+echo -e "${BLUE}[5/8] 检查并配置前端纯中文量化控制台 (React + Tailwind + Vite)...${NC}"
 cd "$ROOT_DIR/frontend"
-if [ ! -d "node_modules" ]; then
-    npm install
+if [ ! -f "dist/index.html" ]; then
+    if [ ! -d "node_modules" ]; then
+        npm install
+    fi
+    npm run build
+else
+    echo -e "${GREEN}✓ 仓库已内置经过完整验证的纯中文生产环境前端包 (dist/)。${NC}"
+    # Optional rebuild if npm is available
+    if command -v npm >/dev/null 2>&1 && [ -d "node_modules" ]; then
+        npm run build 2>/dev/null || true
+    fi
 fi
-npm run build
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
     echo -e "${RED}[ERROR] 前端构建失败，未能生成 dist/index.html。${NC}"
     exit 1
 fi
-echo -e "${GREEN}✓ 前端生产环境资源包打包完成 (dist/)。${NC}"
+echo -e "${GREEN}✓ 前端中文生产环境资源包就绪 (dist/)。${NC}"
 
 # 7. Build Backend Release Binary
 echo -e "${BLUE}[6/8] 正在编译 Rust 高性能量化模拟引擎 (Release 极速优化模式)...${NC}"

@@ -218,10 +218,54 @@ pub fn create_router(state: AppState) -> Router {
     let router = if let Some(path) = dist_path {
         tracing::info!("Serving frontend SPA static assets from {:?}", path);
         let index_file = path.join("index.html");
-        router.fallback_service(
-            ServeDir::new(&path)
-                .not_found_service(ServeFile::new(index_file)),
-        )
+        let index_file_root = index_file.clone();
+        let index_file_html = index_file.clone();
+
+        router
+            .route(
+                "/",
+                get({
+                    move || async move {
+                        match tokio::fs::read_to_string(&index_file_root).await {
+                            Ok(html) => (
+                                StatusCode::OK,
+                                [
+                                    ("content-type", "text/html; charset=utf-8"),
+                                    ("cache-control", "no-cache, no-store, must-revalidate, max-age=0"),
+                                    ("pragma", "no-cache"),
+                                    ("expires", "0"),
+                                ],
+                                html,
+                            ).into_response(),
+                            Err(_) => handle_root_fallback().await.into_response(),
+                        }
+                    }
+                }),
+            )
+            .route(
+                "/index.html",
+                get({
+                    move || async move {
+                        match tokio::fs::read_to_string(&index_file_html).await {
+                            Ok(html) => (
+                                StatusCode::OK,
+                                [
+                                    ("content-type", "text/html; charset=utf-8"),
+                                    ("cache-control", "no-cache, no-store, must-revalidate, max-age=0"),
+                                    ("pragma", "no-cache"),
+                                    ("expires", "0"),
+                                ],
+                                html,
+                            ).into_response(),
+                            Err(_) => handle_root_fallback().await.into_response(),
+                        }
+                    }
+                }),
+            )
+            .fallback_service(
+                ServeDir::new(&path)
+                    .not_found_service(ServeFile::new(index_file)),
+            )
     } else {
         router.route("/", get(handle_root_fallback))
     };
