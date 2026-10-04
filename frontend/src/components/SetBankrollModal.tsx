@@ -33,7 +33,16 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
         setAmount(currentBankroll.active_bankroll.toString());
         setCap(currentBankroll.bankroll_cap.toString());
         setMinFloor(currentBankroll.minimum_bankroll.toString());
+      } else {
+        api.getBankroll().then((b) => {
+          if (b) {
+            setAmount(b.active_bankroll.toString());
+            setCap(b.bankroll_cap.toString());
+            setMinFloor(b.minimum_bankroll.toString());
+          }
+        }).catch(() => {});
       }
+
       if (currentRisk) {
         setDailyLossLimit(currentRisk.daily_loss_limit.toString());
         setMaxConsecutive(currentRisk.max_consecutive_losses.toString());
@@ -47,7 +56,7 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
       }
       setError(null);
     }
-  }, [isOpen, currentBankroll, currentRisk]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

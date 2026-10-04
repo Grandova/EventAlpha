@@ -28,7 +28,7 @@ export const UnlockProfitModal: React.FC<UnlockProfitModalProps> = ({
       setAmount(lockedProfit > 0 ? lockedProfit.toFixed(2) : '0');
       setError(null);
     }
-  }, [isOpen, lockedProfit]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
