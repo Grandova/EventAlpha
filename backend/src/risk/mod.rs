@@ -103,18 +103,33 @@ impl RiskManager {
 
         // 5. Active Bankroll Check
         if state.active_bankroll < requested_stake {
-            return Err(format!(
-                "Insufficient active bankroll: ${:.2} available < ${:.2} requested",
-                state.active_bankroll, requested_stake
-            ));
+            if self.is_live {
+                return Err(format!(
+                    "实盘可用余额不足：当前可用 ${:.2} USDC < 请求下注 ${:.2} USDC",
+                    state.active_bankroll, requested_stake
+                ));
+            } else {
+                return Err(format!(
+                    "Insufficient active bankroll: ${:.2} available < ${:.2} requested",
+                    state.active_bankroll, requested_stake
+                ));
+            }
         }
 
         // 6. Minimum Bankroll Floor Protection
         if (state.active_bankroll - requested_stake) < state.minimum_bankroll {
-            return Err(format!(
-                "Order would breach minimum bankroll floor: (${:.2} - ${:.2}) < ${:.2}",
-                state.active_bankroll, requested_stake, state.minimum_bankroll
-            ));
+            if self.is_live {
+                let rem = (state.active_bankroll - requested_stake).max(0.0);
+                return Err(format!(
+                    "实盘风控拦截：下注金额 (${:.2}) 超过安全余量，执行后剩余余额 (${:.2}) 将低于风控保护底线 (${:.2})。可调小单笔下注（如 $0.50），或在【实盘风控设置】中将资金底线 (Floor) 设为 $0.00",
+                    requested_stake, rem, state.minimum_bankroll
+                ));
+            } else {
+                return Err(format!(
+                    "Order would breach minimum bankroll floor: (${:.2} - ${:.2}) < ${:.2}",
+                    state.active_bankroll, requested_stake, state.minimum_bankroll
+                ));
+            }
         }
 
         Ok(())

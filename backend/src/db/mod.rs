@@ -229,10 +229,10 @@ impl Database {
                     }
                 }
                 let total = active + locked;
-                let min_floor = 0.50;
-                let is_halted = active <= min_floor && active_account.is_some() && active_account.as_ref().unwrap().balance_usdc > 0.0;
+                let min_floor = 0.00;
+                let is_halted = active <= min_floor && active_account.is_some() && active_account.as_ref().unwrap().balance_usdc <= 0.0;
                 let halt_reason = if is_halted {
-                    Some(format!("实盘可用资金 (${:.2}) 低于最低保护底线 (${:.2})", active, min_floor))
+                    Some("实盘可用资金已耗尽 ($0.00 USDC)".to_string())
                 } else {
                     None
                 };

@@ -295,7 +295,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
           {/* Quick Stake Selector & Custom Input */}
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1">
-              {[1, 2, 5, 10].map((amt) => (
+              {[0.5, 1, 2, 5].map((amt) => (
                 <button
                   key={amt}
                   type="button"
