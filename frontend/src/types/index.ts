@@ -57,6 +57,11 @@ export interface CompositePriceSnapshot {
   timestamp_ms: number;
   composite_price: number;
   open_price?: number;
+  poly_current_price?: number;
+  price_binance?: number;
+  price_coinbase?: number;
+  price_okx?: number;
+  price_bybit?: number;
   return_1s: number;
   return_3s: number;
   return_5s: number;
@@ -110,6 +115,7 @@ export interface MarketDisplayInfo {
   down_bid?: number;
   down_ask?: number;
   open_price?: number;
+  poly_current_price?: number;
   remaining_seconds: number;
 }
 

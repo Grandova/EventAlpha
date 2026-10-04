@@ -66,26 +66,31 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
     setIsLoadingHistory(true);
 
     api
-      .getCompositePriceHistory(asset, 300)
+      .getPolymarketPriceHistory(asset)
       .then((data) => {
         if (!isMounted) return;
         if (Array.isArray(data) && data.length > 0) {
           setHistory(data);
         } else {
-          const curPrice = composite?.composite_price ?? 100.0;
-          const now = Date.now();
-          const seed: PriceHistoryPoint[] = [];
-          for (let i = 30; i >= 0; i--) {
-            seed.push({
-              timestamp_ms: now - i * 5000,
-              price: curPrice * (1 + Math.sin(i / 3) * 0.0005),
-            });
-          }
-          setHistory(seed);
+          return api.getCompositePriceHistory(asset, 300).then((compData) => {
+            if (!isMounted) return;
+            if (Array.isArray(compData) && compData.length > 0) {
+              setHistory(compData);
+            }
+          });
         }
       })
       .catch(() => {
         if (!isMounted) return;
+        api
+          .getCompositePriceHistory(asset, 300)
+          .then((compData) => {
+            if (!isMounted) return;
+            if (Array.isArray(compData) && compData.length > 0) {
+              setHistory(compData);
+            }
+          })
+          .catch(() => {});
       })
       .finally(() => {
         if (isMounted) setIsLoadingHistory(false);
@@ -96,14 +101,15 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
     };
   }, [asset]);
 
-  // 2. Real-time tick injection
+  // 2. Real-time tick injection (prioritizing Polymarket official live price)
   useEffect(() => {
-    if (!composite || typeof composite.composite_price !== 'number' || isNaN(composite.composite_price)) {
+    const rawPrice = composite?.poly_current_price ?? composite?.composite_price;
+    if (typeof rawPrice !== 'number' || isNaN(rawPrice) || rawPrice <= 0) {
       return;
     }
 
-    const price = composite.composite_price;
-    const now = composite.timestamp_ms || Date.now();
+    const price = rawPrice;
+    const now = composite?.timestamp_ms || Date.now();
 
     setHistory((prev) => {
       if (prev.length === 0) {
@@ -119,7 +125,7 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
       }
       return updated;
     });
-  }, [composite?.composite_price, composite?.timestamp_ms]);
+  }, [composite?.poly_current_price, composite?.composite_price, composite?.timestamp_ms]);
 
   // 3. Technical Indicator Calculations: MA(7) & EMA(25)
   const chartData = useMemo(() => {
@@ -163,9 +169,22 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
-  const currentPrice = composite?.composite_price ?? (history.length > 0 ? history[history.length - 1].price : 0);
+  // 1. Polymarket official price (Chainlink 60s TWAP)
+  const polyPrice = composite?.poly_current_price ?? market?.poly_current_price;
+  const currentPolyPrice = (polyPrice && polyPrice > 0)
+    ? polyPrice
+    : (history.length > 0 ? history[history.length - 1].price : (composite?.composite_price ?? 0));
+
+  // 2. Multi-exchange composite spot price (Binance, Coinbase, OKX, Bybit combined)
+  const compositeSpotPrice = composite?.composite_price ?? 0;
+
+  // Basis / spread between multi-exchange composite spot and Poly official price
+  const basis = (compositeSpotPrice > 0 && currentPolyPrice > 0)
+    ? compositeSpotPrice - currentPolyPrice
+    : 0;
+
   const openPrice = composite?.open_price ?? market?.open_price;
-  const deltaPrice = openPrice && openPrice > 0 ? currentPrice - openPrice : 0;
+  const deltaPrice = openPrice && openPrice > 0 ? currentPolyPrice - openPrice : 0;
   const deltaPct = openPrice && openPrice > 0 ? (deltaPrice / openPrice) * 100 : (composite?.distance_percent ?? 0);
   const isUp = deltaPrice >= 0;
 
@@ -333,22 +352,22 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
         </div>
       </div>
 
-      {/* 2. Official Polymarket Price Header: 目标价格 (Strike) & 当前价格 (Current Price) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-baseline gap-6 sm:gap-8">
+      {/* 2. Official Polymarket Price Header: 目标价格 (Strike) & 当前价格 (Poly官方) & 综合现货 (4所结合) */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-6 sm:gap-8">
           {/* Target / Strike Price */}
           <div>
-            <span className="text-[11px] font-bold text-[#7d8da1] block font-mono">
-              目标价格
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-[#7d8da1] block font-mono">
+                目标价格
+              </span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono font-medium">
+                Strike
+              </span>
+            </div>
             <span className="text-2xl lg:text-3xl font-extrabold font-mono-num text-[#363949] dark:text-slate-100 tracking-tight">
               ${openPrice && openPrice > 0
                 ? openPrice.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
-                : currentPrice > 0
-                ? currentPrice.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })
@@ -356,11 +375,14 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
             </span>
           </div>
 
-          {/* Current Live Price & Delta */}
+          {/* Current Live Price & Delta (Based on Polymarket official price) */}
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-amber-500 block font-mono">
-                当前价格
+              <span className="text-[11px] font-bold text-amber-500 block font-mono flex items-center gap-1">
+                <span>当前价格</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold uppercase">
+                  Poly 官方
+                </span>
               </span>
               {/* Dollar Delta Pill */}
               <span
@@ -379,13 +401,61 @@ export const AssetPriceChart: React.FC<AssetPriceChartProps> = ({
             <span className={`text-2xl lg:text-3xl font-black font-mono-num tracking-tight ${
               isUp ? 'text-amber-500 dark:text-amber-400' : 'text-[#ff0060]'
             }`}>
-              ${currentPrice > 0
-                ? currentPrice.toLocaleString(undefined, {
+              ${currentPolyPrice > 0
+                ? currentPolyPrice.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })
                 : '--'}
             </span>
+          </div>
+
+          {/* Multi-Exchange Combined Spot Price (旁边再显示几个交易所结合起来的价格) */}
+          <div className="border-l border-slate-200 dark:border-slate-800 pl-4 sm:pl-6">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-[#6c9bcf] block font-mono flex items-center gap-1">
+                <span>综合现货</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#6c9bcf]/15 text-[#6c9bcf] font-bold">
+                  4所结合
+                </span>
+              </span>
+              {compositeSpotPrice > 0 && currentPolyPrice > 0 && (
+                <span
+                  className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                  title="多所综合现货与 Polymarket 官方计价的实时基差"
+                >
+                  基差 {basis >= 0 ? '+' : ''}${basis.toFixed(2)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl lg:text-3xl font-extrabold font-mono-num text-[#363949] dark:text-slate-200 tracking-tight">
+                ${compositeSpotPrice > 0
+                  ? compositeSpotPrice.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  : '--'}
+              </span>
+            </div>
+            {/* Breakdown of the 4 exchanges */}
+            <div className="flex items-center gap-2 mt-0.5 text-[10px] font-mono text-[#7d8da1]">
+              <span title="Binance (40% 权重)">
+                BN: {composite?.price_binance ? `$${composite.price_binance.toFixed(1)}` : '--'}
+              </span>
+              <span>·</span>
+              <span title="Coinbase (25% 权重)">
+                CB: {composite?.price_coinbase ? `$${composite.price_coinbase.toFixed(1)}` : '--'}
+              </span>
+              <span>·</span>
+              <span title="OKX (25% 权重)">
+                OKX: {composite?.price_okx ? `$${composite.price_okx.toFixed(1)}` : '--'}
+              </span>
+              <span>·</span>
+              <span title="Bybit (10% 权重)">
+                BY: {composite?.price_bybit ? `$${composite.price_bybit.toFixed(1)}` : '--'}
+              </span>
+            </div>
           </div>
         </div>
 

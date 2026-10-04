@@ -26,6 +26,7 @@ import {
   PaperPosition,
   PolymarketAccountPublic,
   BankrollState,
+  CompositePriceSnapshot,
 } from '../types';
 import { api } from '../services/api';
 
@@ -44,6 +45,7 @@ interface PolymarketRoundCardProps {
   onOpenSetBankroll?: (mode?: 'paper' | 'live') => void;
   onOpenAccountManager?: () => void;
   currentSpotPrice?: number;
+  composite?: CompositePriceSnapshot | null;
 }
 
 export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
@@ -61,6 +63,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   onOpenSetBankroll,
   onOpenAccountManager,
   currentSpotPrice,
+  composite,
 }) => {
   const isPaper = tradingMode === 'paper';
   const [stakeInput, setStakeInput] = useState<string>(() => {
@@ -222,15 +225,22 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   const officialPolymarketUrl = `https://polymarket.com/event/${polymarketSlug}`;
 
   // Price to Beat benchmark calculations
-  const openPrice = market?.open_price;
-  const spotPrice = currentSpotPrice;
-  const priceDiff = (typeof openPrice === 'number' && typeof spotPrice === 'number' && openPrice > 0)
-    ? spotPrice - openPrice
+  const openPrice = market?.open_price ?? composite?.open_price;
+  const polyPrice = market?.poly_current_price ?? composite?.poly_current_price;
+  const spotPrice = composite?.composite_price ?? currentSpotPrice;
+  const effectiveCurrentPrice = (polyPrice && polyPrice > 0) ? polyPrice : spotPrice;
+  const priceDiff = (typeof openPrice === 'number' && typeof effectiveCurrentPrice === 'number' && openPrice > 0)
+    ? effectiveCurrentPrice - openPrice
     : null;
   const priceDiffPct = (priceDiff !== null && openPrice && openPrice > 0)
     ? (priceDiff / openPrice) * 100
     : null;
   const isUpWinning = priceDiff !== null ? priceDiff >= 0 : null;
+
+  // Basis between 4-exchange spot and Poly official
+  const basis = (typeof spotPrice === 'number' && typeof polyPrice === 'number' && spotPrice > 0 && polyPrice > 0)
+    ? spotPrice - polyPrice
+    : null;
 
   const impliedUp = (book?.implied_prob_up ?? market?.up_price ?? 0.50) * 100;
   const impliedDown = (book?.implied_prob_down ?? market?.down_price ?? 0.50) * 100;
@@ -308,25 +318,45 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
         </div>
       </div>
 
-      {/* Official Benchmark Strip: Price to Beat vs Current Spot Price */}
+      {/* Official Benchmark Strip: Price to Beat vs Poly Official vs Multi-Exchange Spot */}
       <div className="mb-3.5 p-3 rounded-2xl bg-slate-50 dark:bg-[#181a1e] border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-[#7d8da1] dark:text-slate-400 font-medium">
-            🎯 目标价格 (Price to Beat):
-          </span>
-          <span className="font-mono-num font-extrabold text-[#363949] dark:text-white text-sm">
-            {typeof openPrice === 'number' && openPrice > 0 ? `$${openPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '获取基准中...'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 font-mono">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="text-[#7d8da1] dark:text-slate-400 font-medium">当前现货:</span>
-            <span className="font-extrabold text-sm text-[#363949] dark:text-white">
-              {typeof spotPrice === 'number' && spotPrice > 0 ? `$${spotPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
+            <span className="text-[#7d8da1] dark:text-slate-400 font-medium">
+              🎯 目标基准:
+            </span>
+            <span className="font-mono-num font-extrabold text-[#363949] dark:text-white text-sm">
+              {typeof openPrice === 'number' && openPrice > 0 ? `$${openPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '获取基准中...'}
             </span>
           </div>
 
+          <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-700 pl-3">
+            <span className="text-amber-500 font-medium flex items-center gap-1">
+              ⚡ Poly官方现价:
+            </span>
+            <span className="font-mono-num font-extrabold text-sm text-amber-500 dark:text-amber-400">
+              {typeof polyPrice === 'number' && polyPrice > 0
+                ? `$${polyPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : (typeof spotPrice === 'number' && spotPrice > 0 ? `$${spotPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--')}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-700 pl-3">
+            <span className="text-[#6c9bcf] font-medium">
+              🌐 4所综合现货:
+            </span>
+            <span className="font-mono-num font-extrabold text-sm text-[#363949] dark:text-slate-200">
+              {typeof spotPrice === 'number' && spotPrice > 0 ? `$${spotPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
+            </span>
+            {basis !== null && (
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                基差 {basis >= 0 ? '+' : ''}${basis.toFixed(2)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 font-mono">
           {priceDiff !== null && priceDiffPct !== null && (
             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black ${
               isUpWinning

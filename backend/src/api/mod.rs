@@ -154,6 +154,8 @@ pub struct MarketDisplayInfo {
     pub market: Polymarket5mMarket,
     pub remaining_seconds: i64,
     #[serde(default)]
+    pub poly_current_price: Option<f64>,
+    #[serde(default)]
     pub up_price: Option<f64>,
     #[serde(default)]
     pub down_price: Option<f64>,
@@ -200,6 +202,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/collector/prices", get(handle_collector_prices))
         .route("/api/v1/polymarket/markets", get(handle_polymarket_markets))
         .route("/api/v1/polymarket/book/{asset}", get(handle_polymarket_book))
+        .route("/api/v1/polymarket/price-history/{asset}", get(handle_polymarket_price_history))
         .route("/api/v1/polymarket/resolutions", get(handle_polymarket_resolutions))
         .route("/api/v1/composite/price/{asset}", get(handle_composite_price))
         .route("/api/v1/composite/history/{asset}", get(handle_composite_history))
@@ -674,9 +677,11 @@ async fn handle_polymarket_markets(
             } else {
                 (None, None, None, None, None, None)
             };
+            let poly_current_price = state.polymarket.discovery().get_latest_poly_price(m.asset);
             MarketDisplayInfo {
                 market: m,
                 remaining_seconds: rem,
+                poly_current_price,
                 up_price,
                 down_price,
                 up_bid,
@@ -707,6 +712,34 @@ async fn handle_polymarket_book(
         Some(summary) => Ok(Json(summary)),
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+async fn handle_polymarket_price_history(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+) -> Result<Json<Vec<crate::composite::PriceHistoryPoint>>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let now_ms = Utc::now().timestamp_millis();
+    let (window_start_ms, _) = crate::polymarket::market_discovery::MarketDiscoveryEngine::calculate_5m_window(now_ms);
+    let start_epoch_sec = window_start_ms / 1000;
+
+    if let Some(poly_pts) = crate::polymarket::market_discovery::fetch_polymarket_price_history(asset, start_epoch_sec).await {
+        let pts: Vec<crate::composite::PriceHistoryPoint> = poly_pts
+            .into_iter()
+            .map(|p| crate::composite::PriceHistoryPoint {
+                timestamp_ms: p.timestamp,
+                price: p.value,
+            })
+            .collect();
+        if !pts.is_empty() {
+            return Ok(Json(pts));
+        }
+    }
+
+    Ok(Json(state.composite.get_price_history(asset, Some(300))))
 }
 
 async fn handle_polymarket_resolutions(

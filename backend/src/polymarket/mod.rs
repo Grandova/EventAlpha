@@ -195,10 +195,23 @@ impl PolymarketManager {
                         .ensure_active_market(asset, now_ms, current_spot_price)
                         .await
                     {
-                        // Ensure open price is continuously synchronized with the official Polymarket benchmark (目标价格)
+                        // Ensure open price and live current price are continuously synchronized with official Polymarket benchmark (目标价格 & 当前价格)
                         let (window_start_ms, _) = market_discovery::MarketDiscoveryEngine::calculate_5m_window(now_ms);
                         let start_epoch_sec = window_start_ms / 1000;
-                        if let Some(official_open) = market_discovery::fetch_candle_open_price(asset, start_epoch_sec).await {
+
+                        if let Some(pts) = market_discovery::fetch_polymarket_price_history(asset, start_epoch_sec).await {
+                            if let Some(first_pt) = pts.first() {
+                                if first_pt.value > 0.0 {
+                                    let _ = discovery.update_open_price(asset, first_pt.value).await;
+                                    market.open_price = Some(first_pt.value);
+                                }
+                            }
+                            if let Some(last_pt) = pts.last() {
+                                if last_pt.value > 0.0 {
+                                    discovery.set_latest_poly_price(asset, last_pt.value, last_pt.timestamp);
+                                }
+                            }
+                        } else if let Some(official_open) = market_discovery::fetch_candle_open_price(asset, start_epoch_sec).await {
                             let needs_update = match market.open_price {
                                 Some(existing) => (existing - official_open).abs() > 0.001,
                                 None => true,

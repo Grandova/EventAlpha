@@ -687,6 +687,7 @@ export const App: React.FC = () => {
                       activeAccount={activeAccount}
                       liveBankroll={liveBankroll}
                       paperBankroll={bankroll}
+                      composite={composite}
                       currentSpotPrice={composite?.composite_price}
                       onOpenSetBankroll={(poolMode) => {
                         setBankrollModalMode(poolMode || tradingMode);

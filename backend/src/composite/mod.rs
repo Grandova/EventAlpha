@@ -23,6 +23,16 @@ pub struct CompositePriceSnapshot {
     pub asset: Asset,
     pub timestamp_ms: i64,
     pub composite_price: f64,
+    #[serde(default)]
+    pub poly_current_price: Option<f64>,
+    #[serde(default)]
+    pub price_binance: Option<f64>,
+    #[serde(default)]
+    pub price_coinbase: Option<f64>,
+    #[serde(default)]
+    pub price_okx: Option<f64>,
+    #[serde(default)]
+    pub price_bybit: Option<f64>,
     pub open_price: Option<f64>,
     pub distance_from_open: Option<f64>,
     pub distance_percent: Option<f64>,
@@ -153,29 +163,37 @@ impl CompositePriceEngine {
 
         // Cross-exchange spreads against Binance
         let binance_mid = exchange_mids.get(&Exchange::Binance).copied();
-        let spread_binance_okx = match (binance_mid, exchange_mids.get(&Exchange::Okx)) {
+        let okx_mid = exchange_mids.get(&Exchange::Okx).copied();
+        let coinbase_mid = exchange_mids.get(&Exchange::Coinbase).copied();
+        let bybit_mid = exchange_mids.get(&Exchange::Bybit).copied();
+
+        let spread_binance_okx = match (binance_mid, okx_mid) {
             (Some(b), Some(o)) => Some(b - o),
             _ => None,
         };
-        let spread_binance_bybit = match (binance_mid, exchange_mids.get(&Exchange::Bybit)) {
+        let spread_binance_bybit = match (binance_mid, bybit_mid) {
             (Some(b), Some(by)) => Some(b - by),
             _ => None,
         };
-        let spread_binance_coinbase = match (binance_mid, exchange_mids.get(&Exchange::Coinbase)) {
+        let spread_binance_coinbase = match (binance_mid, coinbase_mid) {
             (Some(b), Some(c)) => Some(b - c),
             _ => None,
         };
 
+        // Polymarket official live price (Chainlink 60s TWAP)
+        let poly_current_price = self.discovery.get_latest_poly_price(asset);
+
         // Leading exchange identification: exchange with fastest response matching trend
         let leading_exchange = Self::identify_leading_exchange(&self.collector, asset);
 
-        // Active 5M round benchmark distance
+        // Active 5M round benchmark distance (prioritizing Poly official price if available)
         let active_market = self.discovery.get_active_market(asset);
         let open_price = active_market.and_then(|m| m.open_price);
 
+        let effective_current = poly_current_price.unwrap_or(composite_price);
         let (distance_from_open, distance_percent, distance_to_vol_ratio) = match open_price {
             Some(open) if open > 0.0 => {
-                let dist = composite_price - open;
+                let dist = effective_current - open;
                 let pct = (dist / open) * 100.0;
                 let vol = realized_vol_60s.max(0.0001);
                 let ratio = (pct / 100.0) / vol;
@@ -188,6 +206,11 @@ impl CompositePriceEngine {
             asset,
             timestamp_ms: now_ms,
             composite_price,
+            poly_current_price,
+            price_binance: binance_mid,
+            price_coinbase: coinbase_mid,
+            price_okx: okx_mid,
+            price_bybit: bybit_mid,
             open_price,
             distance_from_open,
             distance_percent,

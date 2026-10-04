@@ -236,9 +236,48 @@ pub async fn fetch_candle_open_price(asset: Asset, start_epoch_sec: i64) -> Opti
     None
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PolymarketPriceHistoryPoint {
+    pub timestamp: i64,
+    pub value: f64,
+}
+
+/// Fetch official real-time price history points for this 5-minute round from Polymarket.
+/// The last point represents the official Polymarket current price (Chainlink 60s TWAP).
+pub async fn fetch_polymarket_price_history(
+    asset: Asset,
+    start_epoch_sec: i64,
+) -> Option<Vec<PolymarketPriceHistoryPoint>> {
+    let sym = match asset {
+        Asset::BTC => "BTC",
+        Asset::ETH => "ETH",
+        Asset::SOL => "SOL",
+    };
+    let end_epoch_sec = start_epoch_sec + 300;
+    let url = format!(
+        "https://polymarket.com/api/crypto/price-history?symbol={}&eventStartTime={}&endDate={}&variant=fiveminute&twapEnabled=true&twapLookbackSeconds=60",
+        sym, start_epoch_sec, end_epoch_sec
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(3000))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .build()
+        .ok()?;
+
+    let resp = client.get(&url).send().await.ok()?;
+    if resp.status().is_success() {
+        if let Ok(points) = resp.json::<Vec<PolymarketPriceHistoryPoint>>().await {
+            return Some(points);
+        }
+    }
+    None
+}
+
 #[derive(Clone)]
 pub struct MarketDiscoveryEngine {
     active_markets: Arc<DashMap<Asset, Polymarket5mMarket>>,
+    latest_poly_prices: Arc<DashMap<Asset, (f64, i64)>>,
     db: Arc<Database>,
 }
 
@@ -246,8 +285,17 @@ impl MarketDiscoveryEngine {
     pub fn new(db: Arc<Database>) -> Self {
         Self {
             active_markets: Arc::new(DashMap::new()),
+            latest_poly_prices: Arc::new(DashMap::new()),
             db,
         }
+    }
+
+    pub fn set_latest_poly_price(&self, asset: Asset, price: f64, timestamp_ms: i64) {
+        self.latest_poly_prices.insert(asset, (price, timestamp_ms));
+    }
+
+    pub fn get_latest_poly_price(&self, asset: Asset) -> Option<f64> {
+        self.latest_poly_prices.get(&asset).map(|e| e.0)
     }
 
     /// Calculate epoch-aligned 5-minute round timestamps

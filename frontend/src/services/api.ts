@@ -111,6 +111,8 @@ export const api = {
   getPolymarketMarkets: () => fetchJson<MarketDisplayInfo[]>('/api/v1/polymarket/markets'),
   getPolymarketBook: (asset: Asset) =>
     fetchJson<MarketBookSummary>(`/api/v1/polymarket/book/${asset}`),
+  getPolymarketPriceHistory: (asset: Asset) =>
+    fetchJson<PriceHistoryPoint[]>(`/api/v1/polymarket/price-history/${asset}`),
 
   // Features & Models
   getFeaturesLatest: (asset: Asset) =>
