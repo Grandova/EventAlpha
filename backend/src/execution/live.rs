@@ -7,12 +7,16 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::polymarket::clob_client::PolymarketClobHttpClient;
+use crate::polymarket::market_discovery::MarketDiscoveryEngine;
+use crate::polymarket::orderbook::PolymarketBookEngine;
 use crate::types::{Asset, MarketSide, PredictionSignal, RealOrder, SignalAction, TradingMode};
 
 #[derive(Clone)]
 pub struct LiveExecutionEngine {
     db: Arc<Database>,
     clob_client: Arc<PolymarketClobHttpClient>,
+    discovery: Arc<SyncRwLock<Option<Arc<MarketDiscoveryEngine>>>>,
+    book_engine: Arc<SyncRwLock<Option<Arc<PolymarketBookEngine>>>>,
     mode: Arc<RwLock<TradingMode>>,
     max_live_stake: f64,
     order_tx: broadcast::Sender<RealOrder>,
@@ -26,12 +30,33 @@ impl LiveExecutionEngine {
         Self {
             db,
             clob_client,
+            discovery: Arc::new(SyncRwLock::new(None)),
+            book_engine: Arc::new(SyncRwLock::new(None)),
             mode: Arc::new(RwLock::new(TradingMode::Paper)),
             max_live_stake: 10.0, // Default hard ceiling: max $10 per live trade
             order_tx,
             is_auto_trading_enabled: Arc::new(SyncRwLock::new(true)),
             live_risk: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn with_market_engines(
+        self,
+        discovery: Arc<MarketDiscoveryEngine>,
+        book_engine: Arc<PolymarketBookEngine>,
+    ) -> Self {
+        *self.discovery.write() = Some(discovery);
+        *self.book_engine.write() = Some(book_engine);
+        self
+    }
+
+    pub fn set_market_engines(
+        &self,
+        discovery: Arc<MarketDiscoveryEngine>,
+        book_engine: Arc<PolymarketBookEngine>,
+    ) {
+        *self.discovery.write() = Some(discovery);
+        *self.book_engine.write() = Some(book_engine);
     }
 
     pub async fn set_risk_manager(&self, risk: Arc<crate::risk::RiskManager>) {
@@ -153,15 +178,39 @@ impl LiveExecutionEngine {
             }
         };
 
-        // Determine token_id for the market outcome
-        let token_id = format!("{}_{}", signal.market_id, outcome_str);
+        // Determine token_id for the market outcome from active discovery
+        let active_market = self.discovery.read().as_ref().and_then(|d| d.get_active_market(signal.asset));
+        let token_id = if let Some(ref m) = active_market {
+            match target_side {
+                MarketSide::Up => m.up_token_id.clone(),
+                MarketSide::Down => m.down_token_id.clone(),
+            }
+        } else {
+            format!("{}_{}", signal.market_id, outcome_str)
+        };
 
-        // Enforce hard stake ceiling
-        let requested_price = match target_side {
-            MarketSide::Up => signal.market_implied_up.unwrap_or(signal.fair_value_up),
-            MarketSide::Down => 1.0 - signal.market_implied_up.unwrap_or(signal.fair_value_up),
-        }
-        .clamp(0.05, 0.95);
+        // Determine quote price from real orderbook best ask
+        let m_id = active_market.as_ref().map(|m| m.id.as_str()).unwrap_or(&signal.market_id);
+        let quote_price = if let Some(engine) = self.book_engine.read().as_ref() {
+            if let Some(summary) = engine.get_market_summary(m_id, signal.asset) {
+                match target_side {
+                    MarketSide::Up => summary.up_book.best_ask.unwrap_or(signal.market_implied_up.unwrap_or(signal.fair_value_up)),
+                    MarketSide::Down => summary.down_book.best_ask.unwrap_or(1.0 - signal.market_implied_up.unwrap_or(signal.fair_value_up)),
+                }
+            } else {
+                match target_side {
+                    MarketSide::Up => signal.market_implied_up.unwrap_or(signal.fair_value_up),
+                    MarketSide::Down => 1.0 - signal.market_implied_up.unwrap_or(signal.fair_value_up),
+                }
+            }
+        } else {
+            match target_side {
+                MarketSide::Up => signal.market_implied_up.unwrap_or(signal.fair_value_up),
+                MarketSide::Down => 1.0 - signal.market_implied_up.unwrap_or(signal.fair_value_up),
+            }
+        };
+
+        let requested_price = (quote_price + 0.01).clamp(0.01, 0.99);
         let stake = self.max_live_stake.min(1.0); // Safe $1 default stake
         let size = (stake / requested_price).max(1.0);
 
@@ -271,11 +320,37 @@ impl LiveExecutionEngine {
             MarketSide::Down => "DOWN",
         };
 
-        let token_id = format!("{}_{}", market_id, outcome_str);
+        // Resolve active market and the true 77-digit CLOB token ID
+        let active_market = self.discovery.read().as_ref().and_then(|d| d.get_active_market(asset));
+        let token_id = if let Some(ref m) = active_market {
+            match side {
+                MarketSide::Up => m.up_token_id.clone(),
+                MarketSide::Down => m.down_token_id.clone(),
+            }
+        } else {
+            format!("{}_{}", market_id, outcome_str)
+        };
+
+        // Determine quote price from real orderbook best ask
+        let m_id = active_market.as_ref().map(|m| m.id.as_str()).unwrap_or(market_id);
+        let quote_price = if let Some(engine) = self.book_engine.read().as_ref() {
+            if let Some(summary) = engine.get_market_summary(m_id, asset) {
+                match side {
+                    MarketSide::Up => summary.up_book.best_ask.unwrap_or(summary.implied_prob_up),
+                    MarketSide::Down => summary.down_book.best_ask.unwrap_or(summary.implied_prob_down),
+                }
+            } else {
+                0.50
+            }
+        } else {
+            0.50
+        };
+
+        // For FOK order to execute cleanly on CLOB against best ask, buffer by 1 cent
+        let requested_price = (quote_price + 0.01).clamp(0.01, 0.99);
 
         // Requested stake capped by max_live_stake
         let requested_stake = stake.unwrap_or(1.0).clamp(0.1, self.max_live_stake);
-        let requested_price = 0.50; // Fallback price estimation
         let size = (requested_stake / requested_price).max(1.0);
 
         // Pre-trade Live Risk Check for manual orders

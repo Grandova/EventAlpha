@@ -86,6 +86,7 @@ export interface Polymarket5mMarket {
   status: string;
   up_token_id: string;
   down_token_id: string;
+  slug?: string;
   up_price: number;
   down_price: number;
   open_price?: number;
@@ -95,14 +96,19 @@ export interface MarketDisplayInfo {
   id: string;
   condition_id: string;
   asset: Asset;
+  slug?: string;
   question: string;
   start_time_ms: number;
   end_time_ms: number;
   status: string;
   up_token_id: string;
   down_token_id: string;
-  up_price: number;
-  down_price: number;
+  up_price?: number;
+  down_price?: number;
+  up_bid?: number;
+  up_ask?: number;
+  down_bid?: number;
+  down_ask?: number;
   open_price?: number;
   remaining_seconds: number;
 }

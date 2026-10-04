@@ -13,6 +13,9 @@ import {
   ShieldAlert,
   Wallet,
   SlidersHorizontal,
+  ExternalLink,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import {
   MarketDisplayInfo,
@@ -40,6 +43,7 @@ interface PolymarketRoundCardProps {
   paperBankroll?: BankrollState | null;
   onOpenSetBankroll?: (mode?: 'paper' | 'live') => void;
   onOpenAccountManager?: () => void;
+  currentSpotPrice?: number;
 }
 
 export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
@@ -56,6 +60,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   paperBankroll,
   onOpenSetBankroll,
   onOpenAccountManager,
+  currentSpotPrice,
 }) => {
   const isPaper = tradingMode === 'paper';
   const [stakeInput, setStakeInput] = useState<string>(() => {
@@ -213,16 +218,30 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   const secs = remainingSecs % 60;
   const timerStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
+  const polymarketSlug = market?.slug || `${activeAsset.toLowerCase()}-updown-5m`;
+  const officialPolymarketUrl = `https://polymarket.com/event/${polymarketSlug}`;
+
+  // Price to Beat benchmark calculations
+  const openPrice = market?.open_price;
+  const spotPrice = currentSpotPrice;
+  const priceDiff = (typeof openPrice === 'number' && typeof spotPrice === 'number' && openPrice > 0)
+    ? spotPrice - openPrice
+    : null;
+  const priceDiffPct = (priceDiff !== null && openPrice && openPrice > 0)
+    ? (priceDiff / openPrice) * 100
+    : null;
+  const isUpWinning = priceDiff !== null ? priceDiff >= 0 : null;
+
   const impliedUp = (book?.implied_prob_up ?? market?.up_price ?? 0.50) * 100;
   const impliedDown = (book?.implied_prob_down ?? market?.down_price ?? 0.50) * 100;
 
   const modelUp = (prediction?.calibrated_p_up ?? 0.50) * 100;
   const modelDown = (prediction?.calibrated_p_down ?? 0.50) * 100;
 
-  const upBid = book?.up_book?.best_bid ?? market?.up_price ?? 0.50;
-  const upAsk = book?.up_book?.best_ask ?? (upBid + 0.01);
-  const downBid = book?.down_book?.best_bid ?? market?.down_price ?? 0.50;
-  const downAsk = book?.down_book?.best_ask ?? (downBid + 0.01);
+  const upBid = book?.up_book?.best_bid ?? market?.up_bid ?? market?.up_price ?? 0.50;
+  const upAsk = book?.up_book?.best_ask ?? market?.up_ask ?? (upBid + 0.01);
+  const downBid = book?.down_book?.best_bid ?? market?.down_bid ?? market?.down_price ?? 0.50;
+  const downAsk = book?.down_book?.best_ask ?? market?.down_ask ?? (downBid + 0.01);
 
   const spreadUp = book?.up_book?.spread ?? (upAsk - upBid);
   const totalLiquidity = (book?.up_book?.total_bid_depth_usdc ?? 500) + (book?.down_book?.total_bid_depth_usdc ?? 500);
@@ -230,18 +249,28 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   return (
     <div className="asmr-card p-6 h-full flex flex-col justify-between">
       {/* Header: Market Question & 5M Countdown Timer */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-extrabold bg-[#6c9bcf]/15 text-[#6c9bcf] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">
-              Polymarket 5M
+              Polymarket 5M 官方期权
             </span>
             <span className="text-xs text-[#7d8da1] dark:text-slate-400 font-mono">
               ID: {market?.id ? market.id.slice(0, 16) : '等待市场中...'}
             </span>
+            <a
+              href={officialPolymarketUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#6c9bcf]/15 text-[#6c9bcf] hover:bg-[#6c9bcf]/25 hover:text-blue-500 transition-all cursor-pointer"
+              title="在 Polymarket 官网打开本轮合约盘口"
+            >
+              <span>官网原盘 ↗</span>
+              <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
-          <h3 className="text-base font-extrabold text-[#363949] dark:text-white mt-1 tracking-tight">
-            {market?.question ?? '进行中的 5 分钟加密货币涨跌期权合约'}
+          <h3 className="text-base font-extrabold text-[#363949] dark:text-white mt-1.5 tracking-tight flex items-center gap-2">
+            {market?.question ?? `${activeAsset} 5 分钟涨跌交割合约`}
           </h3>
         </div>
 
@@ -276,6 +305,41 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
               style={{ width: `${progressPct}%` }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Official Benchmark Strip: Price to Beat vs Current Spot Price */}
+      <div className="mb-3.5 p-3 rounded-2xl bg-slate-50 dark:bg-[#181a1e] border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-[#7d8da1] dark:text-slate-400 font-medium">
+            🎯 官方基准价 (Price to Beat):
+          </span>
+          <span className="font-mono-num font-extrabold text-[#363949] dark:text-white text-sm">
+            {typeof openPrice === 'number' && openPrice > 0 ? `$${openPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '获取基准中...'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[#7d8da1] dark:text-slate-400 font-medium">当前现货:</span>
+            <span className="font-extrabold text-sm text-[#363949] dark:text-white">
+              {typeof spotPrice === 'number' && spotPrice > 0 ? `$${spotPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
+            </span>
+          </div>
+
+          {priceDiff !== null && priceDiffPct !== null && (
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black ${
+              isUpWinning
+                ? 'bg-emerald-500/15 text-[#1b9c85]'
+                : 'bg-rose-500/15 text-[#ff0060]'
+            }`}>
+              {isUpWinning ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+              <span>{priceDiff >= 0 ? '+' : ''}${priceDiff.toFixed(2)} ({priceDiffPct >= 0 ? '+' : ''}{priceDiffPct.toFixed(3)}%)</span>
+              <span className="text-[10px] px-1 py-0.2 bg-white/40 dark:bg-black/20 rounded ml-1 font-bold">
+                {isUpWinning ? '看涨 (UP) 胜出' : '看跌 (DOWN) 胜出'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

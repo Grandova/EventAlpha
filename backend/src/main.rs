@@ -160,6 +160,9 @@ async fn main() -> Result<()> {
     let live_execution = Arc::new(poly_quant_backend::execution::LiveExecutionEngine::new(
         db.clone(),
         clob_http.clone(),
+    ).with_market_engines(
+        polymarket.discovery().clone(),
+        polymarket.book_engine(),
     ));
     live_execution.set_risk_manager(live_risk.clone()).await;
 

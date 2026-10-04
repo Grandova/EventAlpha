@@ -5,17 +5,59 @@ pub mod resolution;
 
 use chrono::Utc;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast;
 use tracing::info;
 
 use crate::collector::CollectorManager;
 use crate::config::AppConfig;
 use crate::db::Database;
-use crate::types::{Asset, PolymarketTick};
+use crate::types::{Asset, MarketSide, OrderBookLevel, PolymarketTick};
 pub use clob_client::{PolymarketClobHttpClient, ClobOrderResponse};
 use market_discovery::MarketDiscoveryEngine;
 use orderbook::PolymarketBookEngine;
 use resolution::{MarketResolvedEvent, ResolutionEngine};
+
+/// Fetch real live L2 orderbook for a Polymarket token ID directly from CLOB API
+pub async fn fetch_clob_orderbook(
+    client: &reqwest::Client,
+    token_id: &str,
+) -> Option<(Vec<OrderBookLevel>, Vec<OrderBookLevel>)> {
+    if token_id.is_empty() || token_id.ends_with("_UP") || token_id.ends_with("_DOWN") {
+        return None;
+    }
+    let url = format!("https://clob.polymarket.com/book?token_id={}", token_id);
+    let resp = client.get(&url).send().await.ok()?;
+    let val: serde_json::Value = resp.json().await.ok()?;
+
+    let mut bids = Vec::new();
+    if let Some(bids_arr) = val.get("bids").and_then(|b| b.as_array()) {
+        for b in bids_arr {
+            let price = b.get("price").and_then(|p| p.as_str()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            let size = b.get("size").and_then(|s| s.as_str()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            if price > 0.0 && size > 0.0 {
+                bids.push(OrderBookLevel { price, size });
+            }
+        }
+    }
+
+    let mut asks = Vec::new();
+    if let Some(asks_arr) = val.get("asks").and_then(|a| a.as_array()) {
+        for a in asks_arr {
+            let price = a.get("price").and_then(|p| p.as_str()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            let size = a.get("size").and_then(|s| s.as_str()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+            if price > 0.0 && size > 0.0 {
+                asks.push(OrderBookLevel { price, size });
+            }
+        }
+    }
+
+    if bids.is_empty() && asks.is_empty() {
+        None
+    } else {
+        Some((bids, asks))
+    }
+}
 
 #[derive(Clone)]
 pub struct PolymarketManager {
@@ -47,6 +89,14 @@ impl PolymarketManager {
         let book_engine = self.book_engine.clone();
         let resolution = self.resolution.clone();
         let poly_tx = self.poly_tick_tx.clone();
+
+        let http_client = reqwest::Client::builder()
+            .timeout(Duration::from_millis(2500))
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(10)
+            .build()
+            .unwrap_or_default();
 
         // 1. Spawn CLOB WebSocket client in background
         tokio::spawn(clob_client::run_polymarket_clob_collector(
@@ -122,18 +172,33 @@ impl PolymarketManager {
                             }
                         }
 
-                        // 3. Maintain / seed orderbook implied probabilities
-                        let implied_p = match (market.open_price, current_spot_price) {
-                            (Some(open), Some(curr)) if open > 0.0 && curr.is_finite() && open.is_finite() => {
-                                // Heuristic implied probability based on distance and volatility
-                                let diff_pct = ((curr - open) / open).clamp(-0.5, 0.5);
-                                (0.50 + diff_pct * 50.0).clamp(0.05, 0.95)
-                            }
-                            _ => 0.50,
-                        };
+                        // 4. Fetch REAL Polymarket CLOB orderbooks for UP & DOWN tokens concurrently
+                        let (up_book_res, down_book_res) = tokio::join!(
+                            fetch_clob_orderbook(&http_client, &market.up_token_id),
+                            fetch_clob_orderbook(&http_client, &market.down_token_id)
+                        );
 
-                        // Continuously update orderbook ladder with real-time implied probability and spot movements
-                        book_engine.seed_fallback_ladder(asset, implied_p, now_ms);
+                        let mut has_real_book = false;
+                        if let Some((bids, asks)) = up_book_res {
+                            book_engine.update_book(&market.up_token_id, asset, MarketSide::Up, bids, asks, now_ms);
+                            has_real_book = true;
+                        }
+                        if let Some((bids, asks)) = down_book_res {
+                            book_engine.update_book(&market.down_token_id, asset, MarketSide::Down, bids, asks, now_ms);
+                            has_real_book = true;
+                        }
+
+                        // Fallback to theoretical ladder ONLY if CLOB returned no depth
+                        if !has_real_book {
+                            let implied_p = match (market.open_price, current_spot_price) {
+                                (Some(open), Some(curr)) if open > 0.0 && curr.is_finite() && open.is_finite() => {
+                                    let diff_pct = ((curr - open) / open).clamp(-0.5, 0.5);
+                                    (0.50 + diff_pct * 50.0).clamp(0.05, 0.95)
+                                }
+                                _ => 0.50,
+                            };
+                            book_engine.seed_fallback_ladder(asset, implied_p, now_ms);
+                        }
 
                         // 4. Construct and broadcast PolymarketTick
                         if let Some(summary) = book_engine.get_market_summary(&market.id, asset) {

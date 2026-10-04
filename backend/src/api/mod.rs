@@ -80,7 +80,13 @@ impl AppState {
         start_time_ms: i64,
     ) -> Self {
         let clob_http = Arc::new(crate::polymarket::PolymarketClobHttpClient::default());
-        let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
+        let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(
+            db.clone(),
+            clob_http,
+        ).with_market_engines(
+            polymarket.discovery().clone(),
+            polymarket.book_engine(),
+        ));
         let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
         let live_risk = Arc::new(crate::risk::RiskManager::new_live(
             config.bankroll.clone(),
@@ -147,6 +153,18 @@ pub struct MarketDisplayInfo {
     #[serde(flatten)]
     pub market: Polymarket5mMarket,
     pub remaining_seconds: i64,
+    #[serde(default)]
+    pub up_price: Option<f64>,
+    #[serde(default)]
+    pub down_price: Option<f64>,
+    #[serde(default)]
+    pub up_bid: Option<f64>,
+    #[serde(default)]
+    pub up_ask: Option<f64>,
+    #[serde(default)]
+    pub down_bid: Option<f64>,
+    #[serde(default)]
+    pub down_ask: Option<f64>,
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -643,9 +661,28 @@ async fn handle_polymarket_markets(
         .into_iter()
         .map(|m| {
             let rem = m.remaining_seconds(now_ms);
+            let summary = state.polymarket.book_engine().get_market_summary(&m.id, m.asset);
+            let (up_price, down_price, up_bid, up_ask, down_bid, down_ask) = if let Some(s) = summary {
+                (
+                    s.up_book.mid.or(s.up_book.best_ask),
+                    s.down_book.mid.or(s.down_book.best_ask),
+                    s.up_book.best_bid,
+                    s.up_book.best_ask,
+                    s.down_book.best_bid,
+                    s.down_book.best_ask,
+                )
+            } else {
+                (None, None, None, None, None, None)
+            };
             MarketDisplayInfo {
                 market: m,
                 remaining_seconds: rem,
+                up_price,
+                down_price,
+                up_bid,
+                up_ask,
+                down_bid,
+                down_ask,
             }
         })
         .collect();
@@ -1576,7 +1613,13 @@ assets: ["BTC", "ETH", "SOL"]
         let replay = Arc::new(ReplayEngine::new(db.clone(), models.clone(), strategy.clone()));
 
         let clob_http = Arc::new(crate::polymarket::PolymarketClobHttpClient::default());
-        let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
+        let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(
+            db.clone(),
+            clob_http,
+        ).with_market_engines(
+            polymarket.discovery().clone(),
+            polymarket.book_engine(),
+        ));
         let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
 
         let live_risk = Arc::new(RiskManager::new_live(

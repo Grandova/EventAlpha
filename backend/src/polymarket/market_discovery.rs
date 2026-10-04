@@ -40,6 +40,68 @@ impl Polymarket5mMarket {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GammaMarketInfo {
+    pub question: String,
+    pub condition_id: String,
+    pub slug: String,
+    pub up_token_id: String,
+    pub down_token_id: String,
+    pub up_price: Option<f64>,
+    pub down_price: Option<f64>,
+}
+
+/// Fetch real live 5-minute market metadata from Polymarket official Gamma API
+pub async fn fetch_gamma_market_info(asset: Asset, start_epoch_sec: i64) -> Option<GammaMarketInfo> {
+    let sym = asset.to_string().to_lowercase();
+    let slug = format!("{}-updown-5m-{}", sym, start_epoch_sec);
+    let url = format!("https://gamma-api.polymarket.com/events?slug={}", slug);
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .build()
+        .ok()?;
+
+    let resp = client.get(&url).send().await.ok()?;
+    let events: Vec<serde_json::Value> = resp.json().await.ok()?;
+    let event = events.first()?;
+    let markets = event.get("markets")?.as_array()?;
+    let market = markets.first()?;
+
+    let question = market.get("question")?.as_str()?.to_string();
+    let condition_id = market.get("conditionId")?.as_str()?.to_string();
+    let slug = market.get("slug")?.as_str()?.to_string();
+
+    let tokens_str = market.get("clobTokenIds")?.as_str()?;
+    let tokens: Vec<String> = serde_json::from_str(tokens_str).ok()?;
+    let up_token_id = tokens.get(0)?.clone();
+    let down_token_id = tokens.get(1)?.clone();
+
+    let mut up_price = None;
+    let mut down_price = None;
+    if let Some(outcome_str) = market.get("outcomePrices").and_then(|v| v.as_str()) {
+        if let Ok(prices) = serde_json::from_str::<Vec<String>>(outcome_str) {
+            if let Some(p) = prices.get(0).and_then(|s| s.parse::<f64>().ok()) {
+                up_price = Some(p);
+            }
+            if let Some(p) = prices.get(1).and_then(|s| s.parse::<f64>().ok()) {
+                down_price = Some(p);
+            }
+        }
+    }
+
+    Some(GammaMarketInfo {
+        question,
+        condition_id,
+        slug,
+        up_token_id,
+        down_token_id,
+        up_price,
+        down_price,
+    })
+}
+
 /// Query the deterministic 5-minute candle open price from Coinbase USD (Polymarket resolution benchmark)
 /// or Binance Kline fallback.
 pub async fn fetch_candle_open_price(asset: Asset, start_epoch_sec: i64) -> Option<f64> {
@@ -145,17 +207,20 @@ impl MarketDiscoveryEngine {
 
         let market_id = format!("{}-5M-{}", asset, start_epoch_sec);
 
-        // Check if cached active market matches the current window
+        // Check if cached active market matches the current window and has valid real token
         if let Some(entry) = self.active_markets.get(&asset) {
-            if entry.id == market_id && entry.status == MarketStatus::Active {
+            if entry.id == market_id && entry.status == MarketStatus::Active && !entry.up_token_id.ends_with("_UP") {
                 return Ok(entry.clone());
             }
         }
 
+        // 1. Fetch real Polymarket Gamma market info
+        let gamma_info = fetch_gamma_market_info(asset, start_epoch_sec).await;
+
         // Query database to see if this round was already recorded
         let row_opt = sqlx::query(
             r#"
-            SELECT id, condition_id, asset, slug, question, start_time, end_time, open_price, final_price, status, resolution, created_at, updated_at
+            SELECT id, condition_id, asset, slug, question, start_time, end_time, open_price, final_price, status, resolution, up_token_id, down_token_id, created_at, updated_at
             FROM markets
             WHERE id = ?
             "#,
@@ -181,8 +246,34 @@ impl MarketDiscoveryEngine {
                 _ => Resolution::Void,
             });
 
-            let up_token = format!("{}_{}_UP", market_id, asset);
-            let down_token = format!("{}_{}_DOWN", market_id, asset);
+            let mut up_token: String = row.try_get("up_token_id").unwrap_or_else(|_| format!("{}_{}_UP", market_id, asset));
+            let mut down_token: String = row.try_get("down_token_id").unwrap_or_else(|_| format!("{}_{}_DOWN", market_id, asset));
+            let mut question: String = row.get("question");
+            let mut condition_id: String = row.get("condition_id");
+            let mut slug: String = row.get("slug");
+
+            // Upgrade placeholder tokens to real Gamma tokens if available
+            if (up_token.ends_with("_UP") || up_token.is_empty()) && gamma_info.is_some() {
+                let g = gamma_info.as_ref().unwrap();
+                up_token = g.up_token_id.clone();
+                down_token = g.down_token_id.clone();
+                question = g.question.clone();
+                condition_id = g.condition_id.clone();
+                slug = g.slug.clone();
+
+                let _ = sqlx::query(
+                    "UPDATE markets SET question = ?, condition_id = ?, slug = ?, up_token_id = ?, down_token_id = ?, updated_at = ? WHERE id = ?"
+                )
+                .bind(&question)
+                .bind(&condition_id)
+                .bind(&slug)
+                .bind(&up_token)
+                .bind(&down_token)
+                .bind(now_ms)
+                .bind(&market_id)
+                .execute(self.db.pool())
+                .await;
+            }
 
             let mut open_p: Option<f64> = row.get("open_price");
             if open_p.is_none() {
@@ -200,10 +291,10 @@ impl MarketDiscoveryEngine {
 
             let market = Polymarket5mMarket {
                 id: row.get("id"),
-                condition_id: row.get("condition_id"),
+                condition_id,
                 asset,
-                slug: row.get("slug"),
-                question: row.get("question"),
+                slug,
+                question,
                 start_time_ms: row.get("start_time"),
                 end_time_ms: row.get("end_time"),
                 open_price: open_p,
@@ -220,12 +311,24 @@ impl MarketDiscoveryEngine {
             return Ok(market);
         }
 
-        // Create new 5-minute market round
-        let slug = format!("{}-updown-5m-{}", asset.to_string().to_lowercase(), start_epoch_sec);
-        let question = format!("Will {} be Up or Down in the next 5 minutes?", asset);
-        let condition_id = format!("0x{:x}", md5_or_hash(&market_id));
-        let up_token = format!("{}_{}_UP", market_id, asset);
-        let down_token = format!("{}_{}_DOWN", market_id, asset);
+        // Create new 5-minute market round with Gamma metadata or fallback
+        let (question, condition_id, slug, up_token, down_token) = if let Some(ref g) = gamma_info {
+            (
+                g.question.clone(),
+                g.condition_id.clone(),
+                g.slug.clone(),
+                g.up_token_id.clone(),
+                g.down_token_id.clone(),
+            )
+        } else {
+            (
+                format!("Will {} be Up or Down in the next 5 minutes?", asset),
+                format!("0x{:x}", md5_or_hash(&market_id)),
+                format!("{}-updown-5m-{}", asset.to_string().to_lowercase(), start_epoch_sec),
+                format!("{}_{}_UP", market_id, asset),
+                format!("{}_{}_DOWN", market_id, asset),
+            )
+        };
 
         // Resolve open price from passed reference (e.g. Coinbase spot) or fallback to candle API
         let initial_open_price = current_reference_price.or(
@@ -234,8 +337,8 @@ impl MarketDiscoveryEngine {
 
         sqlx::query(
             r#"
-            INSERT INTO markets (id, condition_id, asset, slug, question, start_time, end_time, open_price, final_price, status, resolution, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active', NULL, ?, ?)
+            INSERT INTO markets (id, condition_id, asset, slug, question, start_time, end_time, open_price, final_price, status, resolution, up_token_id, down_token_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'active', NULL, ?, ?, ?, ?)
             "#,
         )
         .bind(&market_id)
@@ -246,6 +349,8 @@ impl MarketDiscoveryEngine {
         .bind(window_start_ms)
         .bind(window_end_ms)
         .bind(initial_open_price)
+        .bind(&up_token)
+        .bind(&down_token)
         .bind(now_ms)
         .bind(now_ms)
         .execute(self.db.pool())
@@ -271,8 +376,9 @@ impl MarketDiscoveryEngine {
         };
 
         info!(
-            "Discovered/Initialized new 5M Market: {} | Open Price: {:?} | Remaining: {}s",
-            market.id,
+            "🎯 Real 5M Polymarket Initialized: {} | Token: {} | Open Price: {:?} | Remaining: {}s",
+            market.question,
+            market.up_token_id,
             market.open_price,
             market.remaining_seconds(now_ms)
         );

@@ -83,6 +83,20 @@ impl Database {
             .await
             .context("Failed to execute live bankroll migrations (0003)")?;
 
+        // 4. Ensure up_token_id and down_token_id columns exist in markets table
+        let has_tokens = sqlx::query("SELECT up_token_id FROM markets LIMIT 1")
+            .fetch_one(&self.pool)
+            .await
+            .is_ok();
+        if !has_tokens {
+            let _ = sqlx::query("ALTER TABLE markets ADD COLUMN up_token_id TEXT")
+                .execute(&self.pool)
+                .await;
+            let _ = sqlx::query("ALTER TABLE markets ADD COLUMN down_token_id TEXT")
+                .execute(&self.pool)
+                .await;
+        }
+
         Ok(())
     }
 
