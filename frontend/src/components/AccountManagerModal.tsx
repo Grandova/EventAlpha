@@ -358,6 +358,34 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
                 </button>
               </div>
 
+              {/* Guidance on where to get API Key, Secret and Passphrase */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <span>💡 凭据获取指南（为什么官网 Relayer 页面只有 API 密钥和地址？）</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  Polymarket 官方存在两种不同用途的密钥体系：
+                </p>
+                <ul className="text-[11px] list-disc list-inside space-y-1 text-slate-600 dark:text-slate-300 pl-1">
+                  <li>
+                    <strong className="text-amber-600 dark:text-amber-400">Relayer API Keys（您当前创建的）</strong>：仅用于链上免 Gas 中继代付，官方页面仅提供 Key 和地址，<strong>无法用于订单簿交易撮合</strong>。
+                  </li>
+                  <li>
+                    <strong className="text-emerald-600 dark:text-emerald-400">Builders API Keys（推荐直接获取）</strong>：用于 CLOB 挂单买卖撮合，官方会一次性直接提供 <strong>API Key、Secret、Passphrase</strong> 三件套！
+                  </li>
+                </ul>
+                <div className="pt-1 flex items-center justify-between">
+                  <a
+                    href="https://polymarket.com/settings?tab=builder"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#6c9bcf] hover:underline cursor-pointer"
+                  >
+                    🔗 官网直达: Settings → Builders 凭据生成页 (polymarket.com/settings?tab=builder) ↗
+                  </a>
+                </div>
+              </div>
+
               <form onSubmit={handleFormSubmit} className="space-y-3.5">
                 <div>
                   <label className="block text-xs font-semibold text-[#7d8da1] mb-1">
