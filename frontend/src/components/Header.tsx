@@ -89,90 +89,120 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Controls, Theme Switcher & User Profile */}
       <div className="flex flex-wrap items-center gap-2.5">
-        {/* Paper Auto-Trading Independent Switch */}
-        {onTogglePaperAutoTrading ? (
-          <button
-            onClick={() => onTogglePaperAutoTrading(!isPaperAutoTradingEnabled)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
-              isPaperAutoTradingEnabled
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
-                : 'bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-[#7d8da1] hover:bg-slate-200'
-            }`}
-            title={isPaperAutoTradingEnabled ? '点击暂停模拟盘自动买入' : '点击开启模拟盘自动买入'}
-          >
-            {isPaperAutoTradingEnabled ? (
+        {/* Context-Aware Auto-Trading Switch: Strictly Separate Paper vs Live */}
+        {isPaper ? (
+          onTogglePaperAutoTrading ? (
+            <button
+              onClick={() => onTogglePaperAutoTrading(!isPaperAutoTradingEnabled)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
+                isPaperAutoTradingEnabled
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
+                  : 'bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-[#7d8da1] hover:bg-slate-200'
+              }`}
+              title={isPaperAutoTradingEnabled ? '点击暂停模拟盘自动买入' : '点击开启模拟盘自动买入'}
+            >
+              {isPaperAutoTradingEnabled ? (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-[#1b9c85] text-[#1b9c85]" />
+                  <span>🎮 模拟自动交易: 开启</span>
+                </>
+              ) : (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-slate-400 text-slate-400" />
+                  <span>🎮 模拟自动交易: 暂停</span>
+                </>
+              )}
+            </button>
+          ) : onToggleAutoTrading ? (
+            <button
+              onClick={() => onToggleAutoTrading(!isAutoTradingEnabled)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
+                isAutoTradingEnabled
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
+                  : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
+              }`}
+            >
+              {isAutoTradingEnabled ? '🎮 模拟自动: 开启' : '🎮 模拟自动: 暂停'}
+            </button>
+          ) : null
+        ) : (
+          /* Live Trading Mode Controls */
+          <div className="flex items-center gap-2">
+            {activeAccount ? (
               <>
-                <Play className="w-3.5 h-3.5 fill-[#1b9c85] text-[#1b9c85]" />
-                <span>模拟自动: 开启</span>
+                {onToggleLiveAutoTrading && (
+                  <button
+                    onClick={() => onToggleLiveAutoTrading(!isLiveAutoTradingEnabled)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
+                      isLiveAutoTradingEnabled
+                        ? 'bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-[#ff0060] hover:bg-rose-100'
+                        : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
+                    }`}
+                    title={isLiveAutoTradingEnabled ? '点击暂停实盘 CLOB 自动下单' : '点击开启实盘 CLOB 自动下单'}
+                  >
+                    {isLiveAutoTradingEnabled ? (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-[#ff0060] text-[#ff0060]" />
+                        <span>⚡ 实盘自动: 开启</span>
+                      </>
+                    ) : (
+                      <>
+                        <Pause className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                        <span>⚡ 实盘自动: 暂停</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {/* Active Live Account Quick Balance Capsule */}
+                <button
+                  onClick={onOpenAccountManager}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-white dark:bg-[#202528] border border-rose-200 dark:border-rose-900/60 text-[#363949] dark:text-white shadow-sm hover:border-[#ff0060] transition-colors cursor-pointer"
+                  title="点击管理实盘账户与链上授权"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#1b9c85]" />
+                  <span className="font-mono text-[#6c9bcf]">{activeAccount.label}</span>
+                  <span className="font-mono font-extrabold text-[#1b9c85]">
+                    ${(typeof activeAccount.balance_usdc === 'number' ? activeAccount.balance_usdc : 0).toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-[#7d8da1]">USDC</span>
+                </button>
               </>
             ) : (
-              <>
-                <Pause className="w-3.5 h-3.5 fill-slate-400 text-slate-400" />
-                <span>模拟自动: 暂停</span>
-              </>
+              <button
+                onClick={onOpenAccountManager}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 shadow-sm hover:bg-amber-100 cursor-pointer animate-pulse"
+                title="实盘模式下需配置并激活 Polymarket API 密钥与私钥"
+              >
+                <OctagonAlert className="w-3.5 h-3.5 text-amber-500" />
+                <span>⚠️ 未绑定实盘账户 (点击绑定)</span>
+              </button>
             )}
-          </button>
-        ) : onToggleAutoTrading ? (
-          <button
-            onClick={() => onToggleAutoTrading(!isAutoTradingEnabled)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
-              isAutoTradingEnabled
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-[#1b9c85] hover:bg-emerald-100'
-                : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
-            }`}
-          >
-            {isAutoTradingEnabled ? '模拟自动: 开启' : '模拟自动: 暂停'}
-          </button>
-        ) : null}
-
-        {/* Live Auto-Trading Independent Switch */}
-        {onToggleLiveAutoTrading && (
-          <button
-            onClick={() => onToggleLiveAutoTrading(!isLiveAutoTradingEnabled)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-extrabold shadow-sm transition-all cursor-pointer ${
-              isLiveAutoTradingEnabled
-                ? 'bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-[#ff0060] hover:bg-rose-100'
-                : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
-            }`}
-            title={isLiveAutoTradingEnabled ? '点击暂停实盘 CLOB 自动下单' : '点击开启实盘 CLOB 自动下单'}
-          >
-            {isLiveAutoTradingEnabled ? (
-              <>
-                <Play className="w-3.5 h-3.5 fill-[#ff0060] text-[#ff0060]" />
-                <span>实盘自动: 开启</span>
-              </>
-            ) : (
-              <>
-                <Pause className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                <span>实盘自动: 暂停</span>
-              </>
-            )}
-          </button>
+          </div>
         )}
 
         {/* Trading Mode Switcher */}
-        <div className="flex items-center p-1 rounded-2xl bg-white dark:bg-[#202528] shadow-[0_0.5rem_1rem_rgba(132,139,200,0.1)] dark:shadow-none">
+        <div className="flex items-center p-1 rounded-2xl bg-white dark:bg-[#202528] shadow-[0_0.5rem_1rem_rgba(132,139,200,0.1)] dark:shadow-none border border-slate-100 dark:border-slate-800">
           <button
             onClick={() => onToggleTradingMode && onToggleTradingMode('paper')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               isPaper
-                ? 'bg-[#1b9c85] text-white shadow-md shadow-[#1b9c85]/20'
+                ? 'bg-[#1b9c85] text-white shadow-md shadow-[#1b9c85]/20 font-extrabold'
                 : 'text-[#7d8da1] hover:text-[#363949]'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>模拟盘</span>
+            <span>🎮 模拟盘</span>
           </button>
           <button
             onClick={() => onToggleTradingMode && onToggleTradingMode('live')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               !isPaper
-                ? 'bg-[#ff0060] text-white shadow-md shadow-[#ff0060]/20 animate-pulse'
+                ? 'bg-[#ff0060] text-white shadow-md shadow-[#ff0060]/20 font-extrabold animate-pulse'
                 : 'text-[#7d8da1] hover:text-[#ff0060]'
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span>实盘</span>
+            <span>⚡ 实盘</span>
           </button>
         </div>
 

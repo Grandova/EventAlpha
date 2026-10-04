@@ -656,10 +656,25 @@ export const App: React.FC = () => {
                       activeAsset={activeAsset}
                       activePositions={activePositions}
                       isAutoTradingEnabled={isAutoTradingEnabled}
+                      activeAccount={activeAccount}
+                      liveBankroll={liveBankroll}
+                      paperBankroll={bankroll}
+                      onOpenSetBankroll={(poolMode) => {
+                        setBankrollModalMode(poolMode || tradingMode);
+                        setIsBankrollModalOpen(true);
+                      }}
+                      onOpenAccountManager={() => setIsAccountModalOpen(true)}
                       onTradeExecuted={() => {
                         api.getActivePositions().then(setActivePositions).catch(() => {});
                         api.getPaperOrders(20).then(setRecentOrders).catch(() => {});
-                        api.getBankroll().then(setBankroll).catch(() => {});
+                        api.getBankroll('paper').then(setBankroll).catch(() => {});
+                        api.getBankroll('live').then(setLiveBankroll).catch(() => {});
+                        if (activeAccount) {
+                          api.getAccounts().then((accs) => {
+                            const found = accs.find((a) => a.id === activeAccount.id);
+                            if (found) setActiveAccount(found);
+                          }).catch(() => {});
+                        }
                       }}
                     />
                   </div>
@@ -778,6 +793,8 @@ export const App: React.FC = () => {
           <RightProfileWidget
             activeAccount={activeAccount}
             tradingMode={tradingMode}
+            paperBankroll={bankroll}
+            liveBankroll={liveBankroll}
             onOpenAccountManager={() => setIsAccountModalOpen(true)}
             onEmergencyHalt={handleEmergencyHalt}
           />

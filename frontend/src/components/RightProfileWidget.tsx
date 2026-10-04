@@ -10,13 +10,15 @@ import {
   Wallet,
   Zap,
 } from 'lucide-react';
-import { PolymarketAccountPublic, TradingMode } from '../types';
+import { PolymarketAccountPublic, TradingMode, BankrollState } from '../types';
 
 interface RightProfileWidgetProps {
   activeAccount: PolymarketAccountPublic | null;
   tradingMode: TradingMode;
   onOpenAccountManager: () => void;
   onEmergencyHalt?: () => void;
+  paperBankroll?: BankrollState | null;
+  liveBankroll?: BankrollState | null;
 }
 
 export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
@@ -24,6 +26,8 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
   tradingMode,
   onOpenAccountManager,
   onEmergencyHalt,
+  paperBankroll,
+  liveBankroll,
 }) => {
   const isPaper = tradingMode === 'paper';
 
@@ -47,24 +51,28 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
           自主量化执行引擎
         </p>
 
-        {/* Current Account Status Pill */}
+        {/* Current Account Status Pill: Completely Separated Paper vs Live */}
         <div className="mt-4 w-full p-3 rounded-2xl bg-[#f6f6f9] dark:bg-[#181a1e] border border-slate-100 dark:border-slate-800 text-left">
           <div className="flex items-center justify-between text-[11px] font-mono text-[#7d8da1]">
-            <span>当前交易身份</span>
+            <span>当前交易环境</span>
             <span
               className={`font-bold ${
                 isPaper ? 'text-[#1b9c85]' : 'text-[#ff0060]'
               }`}
             >
-              {isPaper ? '模拟盘' : '实盘中'}
+              {isPaper ? '🎮 模拟沙盒' : '⚡ 实盘交易'}
             </span>
           </div>
           <div className="mt-1 flex items-center justify-between">
-            <span className="text-xs font-bold text-[#363949] dark:text-white truncate max-w-[120px]">
-              {activeAccount ? activeAccount.label : '免登录模拟盘'}
+            <span className="text-xs font-bold text-[#363949] dark:text-white truncate max-w-[130px]" title={isPaper ? '免登录虚拟沙盒' : (activeAccount ? activeAccount.label : '未绑定实盘账户')}>
+              {isPaper ? '虚拟沙盒账户' : (activeAccount ? activeAccount.label : '未绑定账户')}
             </span>
-            <span className="text-xs font-bold font-mono text-[#1b9c85]">
-              ${(typeof activeAccount?.balance_usdc === 'number' && !isNaN(activeAccount.balance_usdc) ? activeAccount.balance_usdc : 10.0).toFixed(2)} U
+            <span className={`text-xs font-bold font-mono ${isPaper ? 'text-[#1b9c85]' : 'text-[#ff0060]'}`}>
+              {isPaper
+                ? `$${(typeof paperBankroll?.active_bankroll === 'number' ? paperBankroll.active_bankroll : 10.0).toFixed(2)} U`
+                : (activeAccount
+                    ? `$${(typeof activeAccount.balance_usdc === 'number' ? activeAccount.balance_usdc : (liveBankroll?.active_bankroll ?? 0.0)).toFixed(2)} U`
+                    : '$0.00 U')}
             </span>
           </div>
         </div>
@@ -144,13 +152,17 @@ export const RightProfileWidget: React.FC<RightProfileWidgetProps> = ({
           </button>
         </div>
 
-        {/* Add Account / Reminder Dashed Button (Exact screenshot button!) */}
+        {/* Add / Manage Account Button */}
         <button
           onClick={onOpenAccountManager}
-          className="w-full py-3.5 px-4 rounded-3xl border-2 border-dashed border-[#6c9bcf] text-[#6c9bcf] text-xs font-bold flex items-center justify-center gap-2 hover:bg-[#6c9bcf]/10 hover:border-solid transition-all cursor-pointer shadow-sm"
+          className={`w-full py-3.5 px-4 rounded-3xl border-2 border-dashed text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm ${
+            !isPaper && !activeAccount
+              ? 'border-amber-400 text-amber-600 bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-100 animate-pulse'
+              : 'border-[#6c9bcf] text-[#6c9bcf] hover:bg-[#6c9bcf]/10 hover:border-solid'
+          }`}
         >
           <Plus className="w-4 h-4" />
-          <span>绑定 Polymarket 实盘账户</span>
+          <span>{activeAccount ? `管理实盘账户 (${activeAccount.label})` : '绑定 Polymarket 实盘账户'}</span>
         </button>
       </div>
     </div>

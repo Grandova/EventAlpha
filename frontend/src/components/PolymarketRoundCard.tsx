@@ -1,6 +1,29 @@
 import React, { useState } from 'react';
-import { Timer, ArrowUpRight, ArrowDownRight, Zap, CheckCircle2, AlertCircle, Loader2, BookmarkCheck, PauseCircle } from 'lucide-react';
-import { MarketDisplayInfo, MarketBookSummary, ModelPrediction, Asset, TradingMode, PaperPosition } from '../types';
+import {
+  Timer,
+  ArrowUpRight,
+  ArrowDownRight,
+  Zap,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  BookmarkCheck,
+  PauseCircle,
+  ShieldCheck,
+  ShieldAlert,
+  Wallet,
+  SlidersHorizontal,
+} from 'lucide-react';
+import {
+  MarketDisplayInfo,
+  MarketBookSummary,
+  ModelPrediction,
+  Asset,
+  TradingMode,
+  PaperPosition,
+  PolymarketAccountPublic,
+  BankrollState,
+} from '../types';
 import { api } from '../services/api';
 
 interface PolymarketRoundCardProps {
@@ -12,6 +35,11 @@ interface PolymarketRoundCardProps {
   activePositions?: PaperPosition[];
   isAutoTradingEnabled?: boolean;
   onTradeExecuted?: () => void;
+  activeAccount?: PolymarketAccountPublic | null;
+  liveBankroll?: BankrollState | null;
+  paperBankroll?: BankrollState | null;
+  onOpenSetBankroll?: (mode?: 'paper' | 'live') => void;
+  onOpenAccountManager?: () => void;
 }
 
 export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
@@ -23,10 +51,47 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   activePositions = [],
   isAutoTradingEnabled = true,
   onTradeExecuted,
+  activeAccount,
+  liveBankroll,
+  paperBankroll,
+  onOpenSetBankroll,
+  onOpenAccountManager,
 }) => {
-  const [stakeInput, setStakeInput] = useState<string>('1.0');
+  const isPaper = tradingMode === 'paper';
+  const [stakeInput, setStakeInput] = useState<string>(isPaper ? '5.0' : '0.5');
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [execStatus, setExecStatus] = useState<{ success: boolean; msg: string } | null>(null);
+
+  // Financial safety calculations
+  const paperBalance = typeof paperBankroll?.active_bankroll === 'number' ? paperBankroll.active_bankroll : 10.0;
+  const liveBalance = typeof activeAccount?.balance_usdc === 'number'
+    ? activeAccount.balance_usdc
+    : (typeof liveBankroll?.active_bankroll === 'number' ? liveBankroll.active_bankroll : 0.0);
+  const minFloor = typeof liveBankroll?.minimum_bankroll === 'number'
+    ? liveBankroll.minimum_bankroll
+    : (typeof liveBankroll?.min_floor === 'number' ? liveBankroll.min_floor : 0.0);
+  const maxUsableLive = Math.max(0, liveBalance - minFloor);
+
+  const parsedStake = parseFloat(stakeInput);
+  const isValidStake = !isNaN(parsedStake) && parsedStake > 0;
+
+  // Real-time pre-flight validation check
+  let preflightError: string | null = null;
+  if (!isPaper) {
+    if (!activeAccount) {
+      preflightError = '未检测到绑定的实盘账户，请先添加并激活账户';
+    } else if (!isValidStake) {
+      preflightError = '请输入大于 0 的有效下单金额';
+    } else if (parsedStake > maxUsableLive) {
+      preflightError = `下注金额 ($${parsedStake.toFixed(2)}) 超过最大可用余量 ($${maxUsableLive.toFixed(2)})！(余额 $${liveBalance.toFixed(2)} - 底线 $${minFloor.toFixed(2)})`;
+    }
+  } else {
+    if (!isValidStake) {
+      preflightError = '请输入大于 0 的有效下单金额';
+    } else if (parsedStake > paperBalance) {
+      preflightError = `下注金额 ($${parsedStake.toFixed(2)}) 超过模拟盘可用本金 ($${paperBalance.toFixed(2)})`;
+    }
+  }
 
   // Check if there is an active OPEN position for this round / asset
   const currentPosition = activePositions.find(
@@ -39,15 +104,16 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       return;
     }
 
-    const finalStake = parseFloat(stakeInput);
-    if (isNaN(finalStake) || finalStake <= 0) {
-      setExecStatus({ success: false, msg: '请输入大于 0 的有效下单金额' });
+    if (preflightError) {
+      setExecStatus({ success: false, msg: preflightError });
       return;
     }
 
-    if (tradingMode === 'live') {
+    const finalStake = parsedStake;
+
+    if (!isPaper) {
       const confirmed = window.confirm(
-        `⚠️ 实盘下单二次确认：\n\n标的: ${activeAsset} 5M\n方向: ${side === 'UP' ? '看涨 (UP)' : '看跌 (DOWN)'}\n下注金额: $${finalStake.toFixed(2)} USDC\n\n该操作将以真实资金向 Polymarket CLOB 下单撮合，确认继续？`
+        `⚡ 实盘真金下单确认：\n\n账户: ${activeAccount?.label || '默认'}\n标的: ${activeAsset} 5M\n方向: ${side === 'UP' ? '看涨 (UP)' : '看跌 (DOWN)'}\n下注金额: $${finalStake.toFixed(2)} USDC\n当前账户余额: $${liveBalance.toFixed(2)} USDC\n\n该操作将以真实资金向 Polymarket CLOB 发送真实订单，确认提交？`
       );
       if (!confirmed) return;
     }
@@ -66,7 +132,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       if (res.success) {
         setExecStatus({
           success: true,
-          msg: res.message || `手动下单成功！(${side} $${finalStake.toFixed(2)})`,
+          msg: res.message || `${isPaper ? '🎮 模拟' : '⚡ 实盘'}下单成功！(${side} $${finalStake.toFixed(2)})`,
         });
         if (onTradeExecuted) {
           onTradeExecuted();
@@ -80,7 +146,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       setIsExecuting(false);
       setTimeout(() => {
         setExecStatus((prev) => (prev?.success ? null : prev));
-      }, 6000);
+      }, 7000);
     }
   };
   const remainingSecs = market?.remaining_seconds ?? 0;
@@ -155,6 +221,93 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Mode Status Strip: Live Cockpit vs Paper Sandbox */}
+      {!isPaper ? (
+        activeAccount ? (
+          <div className="mb-4 p-2.5 px-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ff0060] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ff0060]"></span>
+              </span>
+              <span className="font-extrabold text-[#ff0060] flex items-center gap-1">
+                <Zap className="h-3.5 w-3.5" /> 实盘 CLOB 撮合
+              </span>
+              <span className="text-[#7d8da1]">|</span>
+              <span className="text-[#363949] dark:text-white font-medium">
+                账户: <strong className="text-[#6c9bcf] font-bold">{activeAccount.label}</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 font-mono">
+              <span className="text-[#7d8da1] dark:text-slate-400">
+                链上余额: <strong className="text-[#1b9c85] font-extrabold">${liveBalance.toFixed(2)}</strong> USDC
+              </span>
+              <span className="text-[#7d8da1] dark:text-slate-400">
+                安全底线: <strong className="text-amber-500 font-bold">${minFloor.toFixed(2)}</strong>
+              </span>
+              <span className="text-[#363949] dark:text-white font-bold">
+                可用额度: <strong className="text-[#1b9c85]">${maxUsableLive.toFixed(2)}</strong>
+              </span>
+              {onOpenSetBankroll && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSetBankroll('live')}
+                  className="text-[11px] text-[#6c9bcf] hover:underline cursor-pointer flex items-center gap-0.5"
+                  title="修改实盘安全底线与风控参数"
+                >
+                  <SlidersHorizontal className="h-3 w-3" /> 调整底线
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+              <span className="font-bold text-amber-700 dark:text-amber-400">
+                当前处于实盘交易模式，但尚未绑定或激活实盘账户，无法向 Polymarket CLOB 发送真实订单
+              </span>
+            </div>
+            {onOpenAccountManager && (
+              <button
+                type="button"
+                onClick={onOpenAccountManager}
+                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-sm text-xs cursor-pointer whitespace-nowrap ml-2"
+              >
+                立即绑定账户
+              </button>
+            )}
+          </div>
+        )
+      ) : (
+        <div className="mb-4 p-2.5 px-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#1b9c85]" />
+            <span className="font-extrabold text-[#1b9c85]">
+              🎮 模拟演练沙盒
+            </span>
+            <span className="text-[#7d8da1] dark:text-slate-400">
+              零真金风险 · 本地撮合验证模型预期
+            </span>
+          </div>
+          <div className="flex items-center gap-3 font-mono">
+            <span className="text-[#7d8da1] dark:text-slate-400">
+              模拟可用资金: <strong className="text-[#1b9c85] font-extrabold">${paperBalance.toFixed(2)}</strong> USDC
+            </span>
+            {onOpenSetBankroll && (
+              <button
+                type="button"
+                onClick={() => onOpenSetBankroll('paper')}
+                className="text-[11px] text-[#6c9bcf] hover:underline cursor-pointer flex items-center gap-0.5"
+                title="调整模拟盘本金预设"
+              >
+                <SlidersHorizontal className="h-3 w-3" /> 设置本金
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Orderbook Prices & Microstructure Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -247,8 +400,12 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
         </div>
       </div>
 
-      {/* Manual Quick Trade Panel */}
-      <div className="mt-4 p-3.5 bg-slate-50 dark:bg-[#181a1e] rounded-2xl border border-slate-200/70 dark:border-slate-800 space-y-2.5">
+      {/* Manual Quick Trade Panel: Separated Paper vs Live Experience */}
+      <div className={`mt-4 p-4 rounded-2xl border space-y-3 transition-colors ${
+        isPaper
+          ? 'bg-slate-50 dark:bg-[#181a1e] border-slate-200/70 dark:border-slate-800'
+          : 'bg-rose-50/30 dark:bg-rose-950/10 border-rose-200/50 dark:border-rose-900/30'
+      }`}>
         {/* Active Open Position Badge (If User Already Has a Position In This Round) */}
         {currentPosition ? (
           <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 dark:bg-emerald-950/30 flex items-center justify-between text-xs">
@@ -277,43 +434,80 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
         {!isAutoTradingEnabled && (
           <div className="p-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
             <PauseCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            <span>策略自动交易已暂停，您仍可通过下方按钮随时手动快速下注</span>
+            <span>{isPaper ? '模拟盘' : '实盘'}自动下单已暂停，您仍可通过下方按钮随时手动快速下注</span>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <Zap className="h-4 w-4 text-amber-500" />
-            <span className="text-xs font-bold text-[#363949] dark:text-white">
-              手动快速下单
-            </span>
-            <span className="text-[10px] text-[#7d8da1] font-mono">
-              ({tradingMode === 'live' ? '⚡ Polymarket 实盘' : '🛡️ 模拟盘撮合'})
-            </span>
+        {/* Top Control Bar: Mode Title & Quick Stake Selectors */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <div className={`p-1.5 rounded-xl ${isPaper ? 'bg-emerald-500/15 text-[#1b9c85]' : 'bg-rose-500/15 text-[#ff0060]'}`}>
+              <Zap className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-[#363949] dark:text-white">
+                  {isPaper ? '🎮 模拟盘快速下单' : '⚡ 实盘 CLOB 极速下单'}
+                </span>
+                <span className="text-[10px] text-[#7d8da1] font-mono">
+                  ({isPaper ? '无真金风险' : '真实链上资金'})
+                </span>
+              </div>
+              <p className="text-[10px] text-[#7d8da1] font-mono">
+                {isPaper
+                  ? `模拟本金: $${paperBalance.toFixed(2)} USDC`
+                  : (activeAccount
+                      ? `可用额度: $${maxUsableLive.toFixed(2)} USDC (总余额 $${liveBalance.toFixed(2)} - 底线 $${minFloor.toFixed(2)})`
+                      : '请先绑定并激活实盘账户')}
+              </p>
+            </div>
           </div>
 
           {/* Quick Stake Selector & Custom Input */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex items-center gap-1">
-              {[0.5, 1, 2, 5].map((amt) => (
+              {(isPaper
+                ? [1, 2, 5, 10, 20]
+                : (maxUsableLive <= 2.0
+                    ? [0.5, 1.0]
+                    : maxUsableLive <= 5.0
+                    ? [0.5, 1.0, 2.0, 5.0]
+                    : [0.5, 1.0, 2.0, 5.0, 10.0])
+              ).map((amt) => (
                 <button
                   key={amt}
                   type="button"
                   onClick={() => setStakeInput(amt.toString())}
-                  className={`px-2 py-0.5 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
+                  className={`px-2 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
                     parseFloat(stakeInput) === amt
-                      ? 'bg-[#6c9bcf] text-white border-[#6c9bcf] shadow-sm'
+                      ? (isPaper ? 'bg-[#1b9c85] text-white border-[#1b9c85] shadow-sm' : 'bg-[#ff0060] text-white border-[#ff0060] shadow-sm')
                       : 'bg-white dark:bg-[#202528] text-[#7d8da1] border-slate-200 dark:border-slate-700 hover:text-[#363949]'
                   }`}
                 >
                   ${amt}
                 </button>
               ))}
+
+              {/* In Live Mode: One-click "Max Usable" button */}
+              {!isPaper && maxUsableLive > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStakeInput(maxUsableLive.toFixed(2))}
+                  className={`px-2 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
+                    parseFloat(stakeInput) === maxUsableLive
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-100'
+                  }`}
+                  title="一键填入实盘最大安全可用额度"
+                >
+                  全部可用 (${maxUsableLive.toFixed(2)})
+                </button>
+              )}
             </div>
 
             {/* Custom Stake Input Box */}
             <div className="relative flex items-center">
-              <span className="absolute left-2 text-[11px] font-mono font-semibold text-[#7d8da1]">$</span>
+              <span className="absolute left-2.5 text-[11px] font-mono font-semibold text-[#7d8da1]">$</span>
               <input
                 type="number"
                 step="any"
@@ -321,59 +515,119 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
                 placeholder="自定义"
                 value={stakeInput}
                 onChange={(e) => setStakeInput(e.target.value)}
-                className="w-16 pl-4 pr-1 py-0.5 text-[11px] font-mono font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#202528] text-[#363949] dark:text-white focus:outline-none focus:border-[#6c9bcf]"
+                className={`w-20 pl-5 pr-2 py-1 text-[11px] font-mono font-bold rounded-lg border bg-white dark:bg-[#202528] text-[#363949] dark:text-white focus:outline-none ${
+                  preflightError
+                    ? 'border-rose-400 focus:border-rose-500'
+                    : 'border-slate-200 dark:border-slate-700 focus:border-[#6c9bcf]'
+                }`}
                 title="输入自定义下注金额 (USDC)"
               />
             </div>
           </div>
         </div>
 
-        {/* Action Buttons: Buy UP / Buy DOWN */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <button
-            type="button"
-            disabled={isExecuting || !market}
-            onClick={() => handleManualOrder('UP')}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-sm transition disabled:opacity-50 cursor-pointer"
-          >
-            {isExecuting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ArrowUpRight className="h-4 w-4" />
-            )}
-            <span>买入看涨 UP (${parseFloat(stakeInput) > 0 ? parseFloat(stakeInput).toFixed(2) : '1.00'})</span>
-          </button>
+        {/* Real-time Preflight Validation or Clearance Alert */}
+        {preflightError ? (
+          <div className="p-2.5 px-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-[#ff0060] flex items-center gap-2 font-bold animate-fade-in">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{preflightError}</span>
+          </div>
+        ) : !isPaper && isValidStake ? (
+          <div className="p-2 px-3 rounded-xl bg-slate-100 dark:bg-[#202528] border border-slate-200/80 dark:border-slate-800 text-[11px] text-[#7d8da1] font-mono flex items-center justify-between">
+            <span>
+              预计下单后剩余可用: <strong className="text-[#363949] dark:text-white font-bold">${(maxUsableLive - parsedStake).toFixed(2)} USDC</strong>
+            </span>
+            <span className="text-[#1b9c85] font-bold">✓ 满足安全余量要求 (安全底线: ${minFloor.toFixed(2)})</span>
+          </div>
+        ) : null}
 
-          <button
-            type="button"
-            disabled={isExecuting || !market}
-            onClick={() => handleManualOrder('DOWN')}
-            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#ff0060] hover:bg-[#e00055] text-white font-extrabold text-xs shadow-sm transition disabled:opacity-50 cursor-pointer"
-          >
-            {isExecuting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ArrowDownRight className="h-4 w-4" />
-            )}
-            <span>买入看跌 DOWN (${parseFloat(stakeInput) > 0 ? parseFloat(stakeInput).toFixed(2) : '1.00'})</span>
-          </button>
-        </div>
+        {/* Action Buttons: Buy UP / Buy DOWN (Strictly Differentiated between Paper and Live) */}
+        {isPaper ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              disabled={isExecuting || !market || !!preflightError}
+              onClick={() => handleManualOrder('UP')}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-sm transition disabled:opacity-40 cursor-pointer"
+            >
+              {isExecuting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ArrowUpRight className="h-4 w-4" />
+              )}
+              <span>🎮 模拟买入 看涨 UP (${isValidStake ? parsedStake.toFixed(2) : '5.00'})</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isExecuting || !market || !!preflightError}
+              onClick={() => handleManualOrder('DOWN')}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#ff0060] hover:bg-[#e00055] text-white font-extrabold text-xs shadow-sm transition disabled:opacity-40 cursor-pointer"
+            >
+              {isExecuting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ArrowDownRight className="h-4 w-4" />
+              )}
+              <span>🎮 模拟买入 看跌 DOWN (${isValidStake ? parsedStake.toFixed(2) : '5.00'})</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              disabled={isExecuting || !market || !!preflightError || !activeAccount}
+              onClick={() => handleManualOrder('UP')}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition disabled:opacity-40 disabled:from-slate-400 disabled:to-slate-400 cursor-pointer"
+              title={preflightError || '向 Polymarket CLOB 发送真实看涨买单'}
+            >
+              {isExecuting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Zap className="h-3.5 w-3.5 text-amber-300" />
+              )}
+              <span>⚡ 实盘买入 看涨 UP (${isValidStake ? parsedStake.toFixed(2) : '0.50'})</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isExecuting || !market || !!preflightError || !activeAccount}
+              onClick={() => handleManualOrder('DOWN')}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-[#ff0060] hover:from-rose-700 hover:to-[#e00055] text-white font-extrabold text-xs shadow-md shadow-[#ff0060]/20 transition disabled:opacity-40 disabled:from-slate-400 disabled:to-slate-400 cursor-pointer"
+              title={preflightError || '向 Polymarket CLOB 发送真实看跌买单'}
+            >
+              {isExecuting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Zap className="h-3.5 w-3.5 text-amber-300" />
+              )}
+              <span>⚡ 实盘买入 看跌 DOWN (${isValidStake ? parsedStake.toFixed(2) : '0.50'})</span>
+            </button>
+          </div>
+        )}
 
         {/* Feedback Alert */}
         {execStatus && (
           <div
-            className={`mt-2 p-2 rounded-xl text-xs flex items-center gap-1.5 font-medium animate-fade-in ${
+            className={`p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 font-medium animate-fade-in ${
               execStatus.success
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#1b9c85] border border-emerald-200 dark:border-emerald-800'
                 : 'bg-rose-50 dark:bg-rose-950/40 text-[#ff0060] border border-rose-200 dark:border-rose-900'
             }`}
           >
-            {execStatus.success ? (
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            ) : (
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              {execStatus.success ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 shrink-0" />
+              )}
+              <span>{execStatus.msg}</span>
+            </div>
+            {!isPaper && !execStatus.success && (
+              <span className="text-[10px] text-[#7d8da1] shrink-0 font-normal">
+                (请在下方实盘成交流水中点击 [查看详情] 排查原因)
+              </span>
             )}
-            <span>{execStatus.msg}</span>
           </div>
         )}
       </div>

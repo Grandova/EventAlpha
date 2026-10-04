@@ -237,6 +237,7 @@ export interface BankrollState {
   locked_profit: number;
   total_equity: number;
   minimum_bankroll: number;
+  min_floor?: number;
   mode: 'capital_recovery' | 'profit_isolation';
   daily_loss_current: number;
   consecutive_losses: number;

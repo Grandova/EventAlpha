@@ -64,9 +64,11 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
     }
   }, [isOpen, mode]);
 
-  // Load paper initial data
+  // Load initial data ONLY when modal transitions from closed to open
+  // This prevents 2000ms background polling in App.tsx from clobbering user input!
   useEffect(() => {
     if (!isOpen) return;
+
     if (currentBankroll) {
       setPaperAmount(currentBankroll.active_bankroll.toString());
       setPaperCap(currentBankroll.bankroll_cap.toString());
@@ -92,11 +94,7 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
         }
       }).catch(() => {});
     }
-  }, [isOpen, currentBankroll, currentRisk]);
 
-  // Load live initial data
-  useEffect(() => {
-    if (!isOpen) return;
     if (liveBankroll) {
       setLiveCap(liveBankroll.bankroll_cap.toString());
       setLiveMinFloor(liveBankroll.minimum_bankroll.toString());
@@ -120,7 +118,7 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
         }
       }).catch(() => {});
     }
-  }, [isOpen, liveBankroll, liveRisk]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
