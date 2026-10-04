@@ -116,7 +116,9 @@ function restart_service() {
 }
 
 function show_log() {
-    if command -v journalctl >/dev/null 2>&1 && [ -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
+    if [ -f "$APP_DIR/logs/service.log" ]; then
+        tail -f -n "${1:-100}" "$APP_DIR/logs/service.log"
+    elif command -v journalctl >/dev/null 2>&1 && [ -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
         journalctl -u "$SERVICE_NAME" -f -n "${1:-100}"
     elif [ -f "$APP_DIR/logs/polyquant.log" ]; then
         tail -f -n "${1:-100}" "$APP_DIR/logs/polyquant.log"

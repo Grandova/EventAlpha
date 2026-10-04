@@ -247,7 +247,8 @@ systemctl restart "$SERVICE_NAME"
 sleep 2
 
 # Verify running
-PUBLIC_IP=$(curl -s -m 2 https://api.ipify.org || echo "YOUR_SERVER_IP")
+PUBLIC_IP=$(curl -s -m 2 https://api.ipify.org || echo "")
+LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || ip -4 addr show eth0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
 PORT=8080
 
 echo ""
@@ -256,7 +257,13 @@ echo -e "${GREEN}${BOLD}      🎉 POLYQUANT 5M 模拟量化系统在 LINUX 上�
 echo -e "${GREEN}${BOLD}==================================================================${NC}"
 echo ""
 echo -e "核心服务状态:   ${GREEN}${BOLD}RUNNING (systemd 守护运行中)${NC}"
-echo -e "访问控制台地址: ${CYAN}${BOLD}http://$PUBLIC_IP:$PORT${NC} (或 http://127.0.0.1:$PORT)"
+if [ -n "$LAN_IP" ] && [ "$LAN_IP" != "127.0.0.1" ]; then
+    echo -e "局域网访问地址: ${CYAN}${BOLD}http://$LAN_IP:$PORT${NC} (同一路由器/局域网电脑手机直接访问)"
+fi
+if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "$LAN_IP" ]; then
+    echo -e "公网访问地址:   ${CYAN}${BOLD}http://$PUBLIC_IP:$PORT${NC} (云服务器公网/或已做路由器端口映射)"
+fi
+echo -e "本机访问地址:   ${BLUE}http://127.0.0.1:$PORT${NC}"
 echo -e "健康检查 API:   ${BLUE}http://127.0.0.1:$PORT/api/v1/health${NC}"
 echo -e "WebSocket 接口: ${BLUE}ws://127.0.0.1:$PORT/api/v1/ws${NC}"
 echo -e "配置文件路径:   ${YELLOW}$INSTALL_PREFIX/config/config.yaml${NC}"
