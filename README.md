@@ -93,6 +93,11 @@ cd EventAlpha
 
 # 2. 执行一键安装脚本（自动安装所有依赖、编译前后端、注册系统服务）
 sudo bash install.sh
+
+# 3. 后续升级更新（若此前已安装过，任选其一即可）：
+polyquant update          # 方式一：直接运行全局快捷更新命令
+# 或：
+cd ~/EventAlpha && git pull && sudo bash install.sh   # 方式二：手动拉取并重新部署
 ```
 
 **安装脚本将全自动完成以下工作：**

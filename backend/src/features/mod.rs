@@ -247,6 +247,17 @@ impl FeatureEngine {
     }
 
     async fn flush_features_to_db(db: &Database, buffer: &[FeatureSnapshot]) {
+        if buffer.is_empty() {
+            return;
+        }
+        let mut tx = match db.pool().begin().await {
+            Ok(tx) => tx,
+            Err(e) => {
+                tracing::warn!("Failed to begin transaction for features flush: {:?}", e);
+                return;
+            }
+        };
+
         for snap in buffer {
             let json_vec = snap.to_json();
             let now = Utc::now().timestamp_millis();
@@ -260,8 +271,12 @@ impl FeatureEngine {
             .bind(snap.timestamp_ms)
             .bind(&json_vec)
             .bind(now)
-            .execute(db.pool())
+            .execute(&mut *tx)
             .await;
+        }
+
+        if let Err(e) = tx.commit().await {
+            tracing::warn!("Failed to commit transaction for features flush: {:?}", e);
         }
     }
 

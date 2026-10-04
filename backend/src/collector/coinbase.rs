@@ -128,8 +128,8 @@ pub async fn run_coinbase_collector(
         info!("Connecting to Coinbase WebSocket stream...");
         freshness.set_connected(Exchange::Coinbase, false);
 
-        match connect_async(COINBASE_WS_URL).await {
-            Ok((ws_stream, _)) => {
+        match tokio::time::timeout(Duration::from_secs(5), connect_async(COINBASE_WS_URL)).await {
+            Ok(Ok((ws_stream, _))) => {
                 info!("Successfully connected to Coinbase WebSocket.");
                 freshness.set_connected(Exchange::Coinbase, true);
                 backoff_secs = 1;
@@ -203,8 +203,11 @@ pub async fn run_coinbase_collector(
                     }
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to connect to Coinbase WebSocket: {:?}. Retrying in {}s...", e, backoff_secs);
+            }
+            Err(_) => {
+                warn!("Timeout (5s) connecting to Coinbase WebSocket. Retrying in {}s...", backoff_secs);
             }
         }
 

@@ -66,8 +66,8 @@ pub async fn run_polymarket_clob_collector(
 
         info!("Connecting to Polymarket CLOB WebSocket: {}", POLYMARKET_CLOB_WS_URL);
 
-        match connect_async(POLYMARKET_CLOB_WS_URL).await {
-            Ok((ws_stream, _)) => {
+        match tokio::time::timeout(Duration::from_secs(5), connect_async(POLYMARKET_CLOB_WS_URL)).await {
+            Ok(Ok((ws_stream, _))) => {
                 info!("Successfully connected to Polymarket CLOB WebSocket.");
                 backoff_secs = 1;
 
@@ -136,8 +136,11 @@ pub async fn run_polymarket_clob_collector(
                     }
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to connect to Polymarket CLOB WebSocket: {:?}. Retrying in {}s...", e, backoff_secs);
+            }
+            Err(_) => {
+                warn!("Timeout (5s) connecting to Polymarket CLOB WebSocket. Retrying in {}s...", backoff_secs);
             }
         }
 

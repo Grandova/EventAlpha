@@ -131,6 +131,7 @@ pub fn create_router(state: AppState) -> Router {
         .allow_headers(Any);
 
     let router = Router::new()
+        .route("/health", get(handle_health))
         .route("/api/v1/health", get(handle_health))
         .route("/api/v1/safety", get(handle_safety))
         .route("/api/v1/config", get(handle_config))
@@ -216,7 +217,7 @@ pub fn create_router(state: AppState) -> Router {
                 .not_found_service(ServeFile::new(index_file)),
         )
     } else {
-        router
+        router.route("/", get(handle_root_fallback))
     };
 
     router
@@ -224,6 +225,14 @@ pub fn create_router(state: AppState) -> Router {
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn handle_root_fallback() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "text/html; charset=utf-8")],
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>PolyQuant Engine</title></head><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f8fafc"><h2>PolyQuant 5M Quant Simulation Engine Online</h2><p>Mode: Safe Paper Trading</p><p>Check Health API: <a href="/api/v1/health" style="color:#38bdf8">/api/v1/health</a></p></body></html>"#,
+    )
 }
 
 async fn handle_health(State(state): State<AppState>) -> Json<HealthResponse> {

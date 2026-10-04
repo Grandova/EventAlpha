@@ -118,6 +118,17 @@ impl CollectorManager {
     }
 
     async fn flush_ticks_to_db(db: &Database, ticks: &[MarketTick]) {
+        if ticks.is_empty() {
+            return;
+        }
+        let mut tx = match db.pool().begin().await {
+            Ok(tx) => tx,
+            Err(e) => {
+                tracing::warn!("Failed to begin transaction for ticks flush: {:?}", e);
+                return;
+            }
+        };
+
         for tick in ticks {
             let ex_str = tick.exchange.to_string();
             let _ = sqlx::query(
@@ -136,8 +147,12 @@ impl CollectorManager {
             .bind(tick.volume_24h)
             .bind(tick.latency_ms)
             .bind(tick.receive_timestamp_ms)
-            .execute(db.pool())
+            .execute(&mut *tx)
             .await;
+        }
+
+        if let Err(e) = tx.commit().await {
+            tracing::warn!("Failed to commit transaction for ticks flush: {:?}", e);
         }
     }
 

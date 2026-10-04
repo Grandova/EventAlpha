@@ -97,7 +97,6 @@ impl FreshnessTracker {
         ];
 
         let mut exchange_healths = Vec::new();
-        let mut all_fresh = true;
 
         for &ex in &target_exchanges {
             // Find ticks received for this exchange
@@ -121,9 +120,6 @@ impl FreshnessTracker {
 
             let latency = if count > 0 { avg_latency / count } else { 0 };
             let is_stale = latest_update == 0 || (now - latest_update) > self.stale_timeout_ms as i64;
-            if is_stale {
-                all_fresh = false;
-            }
 
             exchange_healths.push(ExchangeHealth {
                 exchange: ex,
@@ -135,8 +131,11 @@ impl FreshnessTracker {
             });
         }
 
+        let connected_count = exchange_healths.iter().filter(|e| e.connected && !e.is_stale).count();
+        let is_system_fresh = connected_count >= 1;
+
         FreshnessReport {
-            is_system_fresh: all_fresh,
+            is_system_fresh,
             stale_timeout_ms: self.stale_timeout_ms,
             exchanges: exchange_healths,
             timestamp_ms: now,

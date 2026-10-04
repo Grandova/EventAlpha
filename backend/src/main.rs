@@ -10,7 +10,7 @@ use poly_quant_backend::config::AppConfig;
 use poly_quant_backend::db::Database;
 use poly_quant_backend::safety::SafetyGuard;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<()> {
     // 1. Initialize environment variables from .env if present
     dotenvy::dotenv().ok();

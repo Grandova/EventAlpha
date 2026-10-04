@@ -64,10 +64,12 @@ impl PolymarketManager {
                 let now_ms = Utc::now().timestamp_millis();
 
                 for &asset in &assets {
-                    // Get current reference spot price from collectors (e.g. Binance / OKX)
+                    // Get current reference spot price from collectors (Binance / OKX / Bybit / Coinbase)
                     let current_spot_price = collector
                         .get_latest_tick(crate::types::Exchange::Binance, asset)
                         .or_else(|| collector.get_latest_tick(crate::types::Exchange::Okx, asset))
+                        .or_else(|| collector.get_latest_tick(crate::types::Exchange::Bybit, asset))
+                        .or_else(|| collector.get_latest_tick(crate::types::Exchange::Coinbase, asset))
                         .map(|t| t.mid);
 
                     // 1. Ensure market is initialized for current window

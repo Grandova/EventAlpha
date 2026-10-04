@@ -128,8 +128,8 @@ pub async fn run_binance_collector(
         info!("Connecting to Binance WebSocket stream...");
         freshness.set_connected(Exchange::Binance, false);
 
-        match connect_async(BINANCE_STREAM_URL).await {
-            Ok((ws_stream, _)) => {
+        match tokio::time::timeout(Duration::from_secs(5), connect_async(BINANCE_STREAM_URL)).await {
+            Ok(Ok((ws_stream, _))) => {
                 info!("Successfully connected to Binance WebSocket.");
                 freshness.set_connected(Exchange::Binance, true);
                 backoff_secs = 1;
@@ -194,8 +194,11 @@ pub async fn run_binance_collector(
                     }
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to connect to Binance WebSocket: {:?}. Retrying in {}s...", e, backoff_secs);
+            }
+            Err(_) => {
+                warn!("Timeout (5s) connecting to Binance WebSocket. Retrying in {}s...", backoff_secs);
             }
         }
 

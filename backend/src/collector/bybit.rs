@@ -145,8 +145,8 @@ pub async fn run_bybit_collector(
         info!("Connecting to Bybit WebSocket stream...");
         freshness.set_connected(Exchange::Bybit, false);
 
-        match connect_async(BYBIT_WS_URL).await {
-            Ok((ws_stream, _)) => {
+        match tokio::time::timeout(Duration::from_secs(5), connect_async(BYBIT_WS_URL)).await {
+            Ok(Ok((ws_stream, _))) => {
                 info!("Successfully connected to Bybit WebSocket.");
                 freshness.set_connected(Exchange::Bybit, true);
                 backoff_secs = 1;
@@ -226,8 +226,11 @@ pub async fn run_bybit_collector(
                     }
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to connect to Bybit WebSocket: {:?}. Retrying in {}s...", e, backoff_secs);
+            }
+            Err(_) => {
+                warn!("Timeout (5s) connecting to Bybit WebSocket. Retrying in {}s...", backoff_secs);
             }
         }
 
