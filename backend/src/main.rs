@@ -131,8 +131,10 @@ async fn main() -> Result<()> {
         polymarket.book_engine(),
     ));
     execution.set_risk_manager(risk.clone()).await;
+    execution.load_active_positions_from_db().await;
     execution.start(strategy.subscribe_signals());
     execution.start_resolution_listener(polymarket.subscribe_resolutions());
+    execution.start_position_expiry_audit();
 
     // 16. Initialize Polymarket CLOB Client and Live Execution Engine
     let clob_http = Arc::new(poly_quant_backend::polymarket::PolymarketClobHttpClient::default());

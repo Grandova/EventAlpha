@@ -72,7 +72,41 @@ impl PolymarketManager {
                         .or_else(|| collector.get_latest_tick(crate::types::Exchange::Coinbase, asset))
                         .map(|t| t.mid);
 
-                    // 1. Ensure market is initialized for current window
+                    // 1. Check if the currently active market for this asset has expired BEFORE creating a new one!
+                    if let Some(active_market) = discovery.get_active_market(asset) {
+                        if active_market.is_expired(now_ms) && active_market.status == crate::types::MarketStatus::Active {
+                            let open_p = active_market.open_price.unwrap_or_else(|| current_spot_price.unwrap_or(0.0));
+                            let final_p = current_spot_price.unwrap_or(open_p);
+                            if open_p > 0.0 && final_p > 0.0 {
+                                info!(
+                                    "🔔 5M Round EXPIRED for {}: {} | Open: {:.2}, Final: {:.2} | Resolving market...",
+                                    asset, active_market.id, open_p, final_p
+                                );
+                                let _ = resolution
+                                    .resolve_market(&active_market.id, asset, open_p, final_p, now_ms)
+                                    .await;
+                            }
+                        }
+                    }
+
+                    // 2. Also sweep any expired active markets in SQLite DB (recovers unclosed rounds after restart)
+                    if let Ok(expired_markets) = resolution.get_unsettled_expired_markets(asset, now_ms).await {
+                        for (exp_id, maybe_open) in expired_markets {
+                            let open_p = maybe_open.unwrap_or_else(|| current_spot_price.unwrap_or(0.0));
+                            let final_p = current_spot_price.unwrap_or(open_p);
+                            if open_p > 0.0 && final_p > 0.0 {
+                                info!(
+                                    "🔔 Sweeping historical un-settled market {}: Open={:.2}, Final={:.2}",
+                                    exp_id, open_p, final_p
+                                );
+                                let _ = resolution
+                                    .resolve_market(&exp_id, asset, open_p, final_p, now_ms)
+                                    .await;
+                            }
+                        }
+                    }
+
+                    // 3. Ensure market is initialized for current window
                     if let Ok(mut market) = discovery
                         .ensure_active_market(asset, now_ms, current_spot_price)
                         .await
@@ -82,18 +116,6 @@ impl PolymarketManager {
                             if let Some(spot) = current_spot_price {
                                 let _ = discovery.set_open_price(asset, spot).await;
                                 market.open_price = Some(spot);
-                            }
-                        }
-
-                        // 2. Check if current market expired => Trigger settlement
-                        if market.is_expired(now_ms) {
-                            if let (Some(open_p), Some(final_p)) = (market.open_price, current_spot_price) {
-                                let _ = resolution
-                                    .resolve_market(&market.id, asset, open_p, final_p, now_ms)
-                                    .await;
-
-                                // Roll forward to new active market round
-                                let _ = discovery.ensure_active_market(asset, now_ms, Some(final_p)).await;
                             }
                         }
 

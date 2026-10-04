@@ -124,6 +124,36 @@ impl ResolutionEngine {
         Ok(event)
     }
 
+    /// Find any expired markets in SQLite that have not yet been resolved
+    pub async fn get_unsettled_expired_markets(
+        &self,
+        asset: Asset,
+        now_ms: i64,
+    ) -> Result<Vec<(String, Option<f64>)>> {
+        use sqlx::Row;
+        let rows = sqlx::query(
+            r#"
+            SELECT id, open_price
+            FROM markets
+            WHERE asset = ? AND status = 'active' AND end_time <= ?
+            ORDER BY end_time ASC
+            "#,
+        )
+        .bind(asset.to_string())
+        .bind(now_ms)
+        .fetch_all(self.db.pool())
+        .await
+        .context("Failed to query unsettled expired markets")?;
+
+        let mut results = Vec::new();
+        for r in rows {
+            let id: String = r.get("id");
+            let open_price: Option<f64> = r.get("open_price");
+            results.push((id, open_price));
+        }
+        Ok(results)
+    }
+
     /// Query recently resolved markets from database
     pub async fn get_recently_resolved(&self, limit: i64) -> Result<Vec<MarketResolvedEvent>> {
         let rows = sqlx::query(

@@ -563,6 +563,51 @@ impl Database {
         Ok(positions)
     }
 
+    /// Retrieve a single position by position_id
+    pub async fn get_position(&self, position_id: &str) -> Result<Option<crate::types::PaperPosition>> {
+        let row_opt = sqlx::query(
+            r#"
+            SELECT position_id, market_id, asset, side, entry_time,
+                   entry_price, stake, shares, status, settled_at, created_at
+            FROM paper_positions
+            WHERE position_id = ?
+            "#,
+        )
+        .bind(position_id)
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to query position by id")?;
+
+        match row_opt {
+            Some(r) => {
+                let asset_str: String = r.get("asset");
+                let asset: crate::types::Asset = asset_str.parse().unwrap_or(crate::types::Asset::BTC);
+                let side_str: String = r.get("side");
+                let side = if side_str.to_uppercase() == "UP" {
+                    crate::types::MarketSide::Up
+                } else {
+                    crate::types::MarketSide::Down
+                };
+
+                Ok(Some(crate::types::PaperPosition {
+                    position_id: r.get("position_id"),
+                    order_id: "".to_string(),
+                    market_id: r.get("market_id"),
+                    asset,
+                    side,
+                    entry_time_ms: r.get("entry_time"),
+                    entry_price: r.get("entry_price"),
+                    stake: r.get("stake"),
+                    shares: r.get("shares"),
+                    status: r.get("status"),
+                    settled_at_ms: r.get("settled_at"),
+                    created_at_ms: r.get("created_at"),
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Retrieve all positions history
     pub async fn get_positions_history(&self, limit: i64) -> Result<Vec<crate::types::PaperPosition>> {
         let rows = sqlx::query(

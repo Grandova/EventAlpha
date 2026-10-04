@@ -298,7 +298,10 @@ impl PaperExecutionEngine {
     ) -> Result<Option<PaperResult>, String> {
         let position = match self.active_positions.get(position_id) {
             Some(p) => p.clone(),
-            None => return Ok(None),
+            None => match self.db.get_position(position_id).await {
+                Ok(Some(p)) => p,
+                _ => return Ok(None),
+            },
         };
 
         if position.status != "OPEN" {
@@ -429,12 +432,21 @@ impl PaperExecutionEngine {
         &self,
         event: &MarketResolvedEvent,
     ) -> Result<Vec<PaperResult>, String> {
-        let matching_pos_ids: Vec<String> = self
+        let mut matching_pos_ids: Vec<String> = self
             .active_positions
             .iter()
             .filter(|entry| entry.value().market_id == event.market_id && entry.value().status == "OPEN")
             .map(|entry| entry.key().clone())
             .collect();
+
+        // Also check database for any OPEN positions belonging to this market
+        if let Ok(db_positions) = self.db.get_active_positions().await {
+            for p in db_positions {
+                if p.market_id == event.market_id && !matching_pos_ids.contains(&p.position_id) {
+                    matching_pos_ids.push(p.position_id);
+                }
+            }
+        }
 
         let mut results = Vec::new();
         for pos_id in matching_pos_ids {
@@ -448,6 +460,19 @@ impl PaperExecutionEngine {
         Ok(results)
     }
 
+    /// Load persisted active open positions from SQLite into memory on system launch
+    pub async fn load_active_positions_from_db(&self) {
+        if let Ok(positions) = self.db.get_active_positions().await {
+            let count = positions.len();
+            for p in positions {
+                self.active_positions.insert(p.position_id.clone(), p);
+            }
+            if count > 0 {
+                info!("Loaded {} active open positions from database into memory.", count);
+            }
+        }
+    }
+
     /// Background listener for Polymarket market resolution events
     pub fn start_resolution_listener(
         &self,
@@ -458,6 +483,63 @@ impl PaperExecutionEngine {
         tokio::spawn(async move {
             while let Ok(event) = resolution_rx.recv().await {
                 let _ = engine.handle_market_resolved(&event).await;
+            }
+        });
+    }
+
+    /// Periodically audits open positions to ensure none are left un-settled past 5 minutes
+    pub fn start_position_expiry_audit(&self) {
+        let engine = self.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(5));
+            loop {
+                ticker.tick().await;
+                let now_ms = Utc::now().timestamp_millis();
+                if let Ok(open_positions) = engine.db.get_active_positions().await {
+                    for pos in open_positions {
+                        // If position has been open longer than 5 minutes + 10s grace
+                        if now_ms >= pos.entry_time_ms + 310_000 {
+                            use sqlx::Row;
+                            let market_row = sqlx::query(
+                                "SELECT status, resolution, open_price, final_price FROM markets WHERE id = ?"
+                            )
+                            .bind(&pos.market_id)
+                            .fetch_optional(engine.db.pool())
+                            .await;
+
+                            if let Ok(Some(r)) = market_row {
+                                let status: String = r.get("status");
+                                if status == "resolved" {
+                                    let res_str: Option<String> = r.get("resolution");
+                                    let res = match res_str.as_deref() {
+                                        Some("UP") => Resolution::Up,
+                                        Some("DOWN") => Resolution::Down,
+                                        _ => Resolution::Void,
+                                    };
+                                    info!("Audit auto-settling position {} for resolved market {} as {:?}", pos.position_id, pos.market_id, res);
+                                    let _ = engine.settle_position(&pos.position_id, res, now_ms).await;
+                                } else {
+                                    let open_p: Option<f64> = r.get("open_price");
+                                    let final_p: Option<f64> = r.get("final_price");
+                                    let open_val = open_p.unwrap_or(pos.entry_price);
+                                    let final_val = final_p.unwrap_or(open_val);
+                                    let res = if final_val > open_val {
+                                        Resolution::Up
+                                    } else if final_val < open_val {
+                                        Resolution::Down
+                                    } else {
+                                        Resolution::Void
+                                    };
+                                    info!("Audit auto-resolving expired market {} and settling position {} as {:?}", pos.market_id, pos.position_id, res);
+                                    let _ = engine.settle_position(&pos.position_id, res, now_ms).await;
+                                }
+                            } else {
+                                info!("Audit refunding orphaned position {} as VOID", pos.position_id);
+                                let _ = engine.settle_position(&pos.position_id, Resolution::Void, now_ms).await;
+                            }
+                        }
+                    }
+                }
             }
         });
     }
