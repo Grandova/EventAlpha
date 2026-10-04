@@ -22,8 +22,21 @@ export const ActiveMarketsRow: React.FC<ActiveMarketsRowProps> = ({
   ];
 
   const getPrice = (a: Asset) => {
-    const p = spotPrices.find((sp) => sp.asset === a);
-    const val = p ? (p.price ?? (p as any).mid ?? (p as any).last) : undefined;
+    let p: any = null;
+    if (Array.isArray(spotPrices)) {
+      p = spotPrices.find((sp) => sp && sp.asset === a);
+    } else if (spotPrices && typeof spotPrices === 'object') {
+      const assetMap = (spotPrices as any)[a];
+      if (assetMap) {
+        if (typeof assetMap.price === 'number') {
+          p = assetMap;
+        } else if (typeof assetMap === 'object') {
+          const firstExch = Object.values(assetMap)[0] as any;
+          if (firstExch) p = firstExch;
+        }
+      }
+    }
+    const val = p ? (p.price ?? p.mid ?? p.last) : undefined;
     return typeof val === 'number' && !isNaN(val)
       ? `$${val.toLocaleString(undefined, { minimumFractionDigits: a === 'BTC' ? 1 : 2, maximumFractionDigits: a === 'BTC' ? 1 : 2 })}`
       : '--';

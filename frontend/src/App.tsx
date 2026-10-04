@@ -236,11 +236,33 @@ export const App: React.FC = () => {
 
         if (!isMounted) return;
 
-        if (prices.status === 'fulfilled') setSpotPrices(prices.value);
+        if (prices.status === 'fulfilled') {
+          const val = prices.value;
+          if (Array.isArray(val)) {
+            setSpotPrices(val);
+          } else if (val && typeof val === 'object') {
+            const list: PriceSummary[] = [];
+            for (const exchMap of Object.values(val)) {
+              if (exchMap && typeof exchMap === 'object') {
+                if ('price' in exchMap) {
+                  list.push(exchMap as any);
+                } else {
+                  for (const item of Object.values(exchMap as any)) {
+                    if (item && typeof item === 'object') {
+                      list.push(item as any);
+                    }
+                  }
+                }
+              }
+            }
+            setSpotPrices(list);
+          }
+        }
         if (comp.status === 'fulfilled') setComposite(comp.value);
         if (markets.status === 'fulfilled') {
-          const match = markets.value.find((m) => m.asset === activeAsset) || markets.value[0];
-          setMarket(match || null);
+          const mList = Array.isArray(markets.value) ? markets.value : [];
+          const match = mList.find((m) => m && m.asset === activeAsset) || mList[0] || null;
+          setMarket(match);
         }
         if (bk.status === 'fulfilled') setBook(bk.value);
         if (feat.status === 'fulfilled') setFeatures(feat.value);
@@ -280,9 +302,9 @@ export const App: React.FC = () => {
         if (hlth.status === 'fulfilled') setHealth(hlth.value);
         if (br.status === 'fulfilled') setBankroll(br.value);
         if (rsk.status === 'fulfilled') setRisk(rsk.value);
-        if (pos.status === 'fulfilled') setActivePositions(pos.value);
-        if (ord.status === 'fulfilled') setRecentOrders(ord.value);
-        if (res.status === 'fulfilled') setSettledResults(res.value);
+        if (pos.status === 'fulfilled') setActivePositions(Array.isArray(pos.value) ? pos.value : []);
+        if (ord.status === 'fulfilled') setRecentOrders(Array.isArray(ord.value) ? ord.value : []);
+        if (res.status === 'fulfilled') setSettledResults(Array.isArray(res.value) ? res.value : []);
         if (stat.status === 'fulfilled') setStatistics(stat.value);
       } catch (err) {
         // network error
