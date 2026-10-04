@@ -3,6 +3,7 @@ import {
   HealthResponse,
   PriceSummary,
   CompositePriceSnapshot,
+  PriceHistoryPoint,
   MarketDisplayInfo,
   MarketBookSummary,
   FeatureSnapshot,
@@ -101,6 +102,8 @@ export const api = {
   getCollectorPrices: () => fetchJson<PriceSummary[]>('/api/v1/collector/prices'),
   getCompositePrice: (asset: Asset) =>
     fetchJson<CompositePriceSnapshot>(`/api/v1/composite/price/${asset}`),
+  getCompositePriceHistory: (asset: Asset, limitSecs = 300) =>
+    fetchJson<PriceHistoryPoint[]>(`/api/v1/composite/history/${asset}?limit_secs=${limitSecs}`),
   getAllCompositePrices: () =>
     fetchJson<Record<string, CompositePriceSnapshot>>('/api/v1/composite/all'),
 

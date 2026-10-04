@@ -47,10 +47,16 @@ export interface PriceSummary {
   age_ms?: number;
 }
 
+export interface PriceHistoryPoint {
+  timestamp_ms: number;
+  price: number;
+}
+
 export interface CompositePriceSnapshot {
   asset: Asset;
   timestamp_ms: number;
   composite_price: number;
+  open_price?: number;
   return_1s: number;
   return_3s: number;
   return_5s: number;
@@ -82,6 +88,7 @@ export interface Polymarket5mMarket {
   down_token_id: string;
   up_price: number;
   down_price: number;
+  open_price?: number;
 }
 
 export interface MarketDisplayInfo {
@@ -96,6 +103,7 @@ export interface MarketDisplayInfo {
   down_token_id: string;
   up_price: number;
   down_price: number;
+  open_price?: number;
   remaining_seconds: number;
 }
 

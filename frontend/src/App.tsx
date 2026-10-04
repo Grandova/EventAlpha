@@ -3,6 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { StatCard } from './components/StatCard';
 import { ActiveMarketsRow } from './components/ActiveMarketsRow';
+import { CurrencyTabBar } from './components/CurrencyTabBar';
+import { AssetPriceChart } from './components/AssetPriceChart';
 import { RightProfileWidget } from './components/RightProfileWidget';
 import { PolymarketRoundCard } from './components/PolymarketRoundCard';
 import { OpportunityCenter } from './components/OpportunityCenter';
@@ -60,6 +62,9 @@ export const App: React.FC = () => {
   const [features, setFeatures] = useState<FeatureSnapshot | null>(null);
   const [prediction, setPrediction] = useState<ModelPrediction | null>(null);
   const [signal, setSignal] = useState<PredictionSignal | null>(null);
+  const [allComposite, setAllComposite] = useState<Record<string, CompositePriceSnapshot>>({});
+  const [allSignals, setAllSignals] = useState<Record<string, PredictionSignal>>({});
+  const [allPredictions, setAllPredictions] = useState<Record<string, ModelPrediction>>({});
   const [bankroll, setBankroll] = useState<BankrollState | null>(null);
   const [risk, setRisk] = useState<RiskStatus | null>(null);
   const [liveBankroll, setLiveBankroll] = useState<BankrollState | null>(null);
@@ -389,7 +394,7 @@ export const App: React.FC = () => {
     let isMounted = true;
     const pollMedium = async () => {
       try {
-        const [hlth, br, rsk, lbr, lrsk, pos, ord, res, stat] = await Promise.allSettled([
+        const [hlth, br, rsk, lbr, lrsk, pos, ord, res, stat, allComp, allSig, allPred] = await Promise.allSettled([
           api.getHealth(),
           api.getBankroll('paper'),
           api.getRiskStatus('paper'),
@@ -399,6 +404,9 @@ export const App: React.FC = () => {
           api.getPaperOrders(20),
           api.getPaperResults(50),
           api.getPaperStatistics(),
+          api.getAllCompositePrices(),
+          api.getAllLatestSignals(),
+          api.getAllPredictions(),
         ]);
 
         if (!isMounted) return;
@@ -412,6 +420,9 @@ export const App: React.FC = () => {
         if (ord.status === 'fulfilled') setRecentOrders(Array.isArray(ord.value) ? ord.value : []);
         if (res.status === 'fulfilled') setSettledResults(Array.isArray(res.value) ? res.value : []);
         if (stat.status === 'fulfilled') setStatistics(stat.value);
+        if (allComp.status === 'fulfilled') setAllComposite(allComp.value || {});
+        if (allSig.status === 'fulfilled') setAllSignals(allSig.value || {});
+        if (allPred.status === 'fulfilled') setAllPredictions(allPred.value || {});
       } catch (err) {
         // network error
       }
@@ -636,18 +647,35 @@ export const App: React.FC = () => {
                 </div>
 
                 {/* 2. Active Markets & 5M Rounds (Matches AsmrProg "New Users" row!) */}
-                <ActiveMarketsRow
+                {/* 2. Independent Multi-Currency Trading Desk Navigation */}
+                <CurrencyTabBar
                   activeAsset={activeAsset}
                   onSelectAsset={setActiveAsset}
                   spotPrices={spotPrices}
+                  allComposite={allComposite}
+                  allSignals={allSignals}
+                  allPredictions={allPredictions}
                   remainingSeconds={roundRemaining}
                   enabledAssets={enabledAssets}
                   onToggleEnabledAsset={handleToggleEnabledAsset}
                 />
 
-                {/* 3. Polymarket 5M Round & AI Opportunity Center */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-6">
+                {/* 3. Dedicated Asset Trading Desk: Left = Price Chart & Indicators & Predictions; Right = Polymarket 5M Round */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                  {/* Left: Real-time Price Chart, Technical Indicators, and AI Model Predictions */}
+                  <div className="xl:col-span-7">
+                    <AssetPriceChart
+                      asset={activeAsset}
+                      composite={composite}
+                      features={features}
+                      prediction={prediction}
+                      signal={signal}
+                      market={market}
+                    />
+                  </div>
+
+                  {/* Right: Dedicated Polymarket 5M Round & Manual Order Cockpit */}
+                  <div className="xl:col-span-5">
                     <PolymarketRoundCard
                       market={market}
                       book={book}
@@ -678,10 +706,10 @@ export const App: React.FC = () => {
                       }}
                     />
                   </div>
-                  <div className="lg:col-span-6">
-                    <OpportunityCenter signal={signal} prediction={prediction} />
-                  </div>
                 </div>
+
+                {/* 4. AI Opportunity Center */}
+                <OpportunityCenter signal={signal} prediction={prediction} />
 
                 {/* 4. Recent Orders Table (Matches AsmrProg "Recent Orders" table!) */}
                 {tradingMode === 'live' ? (

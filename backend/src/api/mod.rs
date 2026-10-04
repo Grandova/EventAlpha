@@ -184,6 +184,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/polymarket/book/{asset}", get(handle_polymarket_book))
         .route("/api/v1/polymarket/resolutions", get(handle_polymarket_resolutions))
         .route("/api/v1/composite/price/{asset}", get(handle_composite_price))
+        .route("/api/v1/composite/history/{asset}", get(handle_composite_history))
         .route("/api/v1/composite/all", get(handle_composite_all))
         .route("/api/v1/features/latest/{asset}", get(handle_features_latest))
         .route("/api/v1/features/all", get(handle_features_all))
@@ -697,6 +698,23 @@ async fn handle_composite_price(
         Some(snapshot) => Ok(Json(snapshot)),
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HistoryQuery {
+    pub limit_secs: Option<i64>,
+}
+
+async fn handle_composite_history(
+    State(state): State<AppState>,
+    Path(asset_str): Path<String>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<crate::composite::PriceHistoryPoint>>, StatusCode> {
+    let Ok(asset) = asset_str.parse::<Asset>() else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    Ok(Json(state.composite.get_price_history(asset, query.limit_secs)))
 }
 
 async fn handle_composite_all(

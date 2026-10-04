@@ -10,7 +10,13 @@ use crate::collector::CollectorManager;
 use crate::polymarket::market_discovery::MarketDiscoveryEngine;
 use crate::types::{Asset, Exchange};
 
-const MAX_HISTORY_SECS: i64 = 120;
+const MAX_HISTORY_SECS: i64 = 600;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PriceHistoryPoint {
+    pub timestamp_ms: i64,
+    pub price: f64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompositePriceSnapshot {
@@ -287,6 +293,29 @@ impl CompositePriceEngine {
 
     pub fn get_latest_snapshot(&self, asset: Asset) -> Option<CompositePriceSnapshot> {
         self.latest_snapshots.get(&asset).map(|s| s.clone())
+    }
+
+    pub fn get_price_history(&self, asset: Asset, limit_secs: Option<i64>) -> Vec<PriceHistoryPoint> {
+        let secs = limit_secs.unwrap_or(300).min(MAX_HISTORY_SECS);
+        let cutoff_ms = Utc::now().timestamp_millis() - (secs * 1000);
+        if let Some(hist) = self.price_history.get(&asset) {
+            let filtered: Vec<PriceHistoryPoint> = hist
+                .iter()
+                .filter(|(ts, _)| *ts >= cutoff_ms)
+                .map(|(ts, p)| PriceHistoryPoint {
+                    timestamp_ms: *ts,
+                    price: *p,
+                })
+                .collect();
+            if filtered.len() > 300 {
+                let step = (filtered.len() as f64 / 300.0).ceil() as usize;
+                filtered.into_iter().step_by(step.max(1)).collect()
+            } else {
+                filtered
+            }
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn get_all_snapshots(&self) -> HashMap<String, CompositePriceSnapshot> {
