@@ -312,7 +312,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
       <div className="mb-3.5 p-3 rounded-2xl bg-slate-50 dark:bg-[#181a1e] border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-[#7d8da1] dark:text-slate-400 font-medium">
-            🎯 官方基准价 (Price to Beat):
+            🎯 目标价格 (Price to Beat):
           </span>
           <span className="font-mono-num font-extrabold text-[#363949] dark:text-white text-sm">
             {typeof openPrice === 'number' && openPrice > 0 ? `$${openPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '获取基准中...'}

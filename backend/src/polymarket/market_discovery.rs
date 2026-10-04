@@ -102,9 +102,72 @@ pub async fn fetch_gamma_market_info(asset: Asset, start_epoch_sec: i64) -> Opti
     })
 }
 
-/// Query the deterministic 5-minute candle open price from Coinbase USD (Polymarket resolution benchmark)
-/// or Binance Kline fallback.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PolymarketCryptoPriceResponse {
+    pub open_price: Option<f64>,
+    pub close_price: Option<f64>,
+    pub timestamp: Option<i64>,
+    pub completed: Option<bool>,
+    pub incomplete: Option<bool>,
+    pub cached: Option<bool>,
+}
+
+/// Query the official Polymarket crypto price endpoint for 5m Chainlink TWAP benchmark.
+/// This endpoint returns the exact `openPrice` (Price to Beat / 目标价格) and `closePrice`
+/// as displayed on polymarket.com/zh/event/{slug}.
+pub async fn fetch_polymarket_crypto_price(
+    asset: Asset,
+    start_epoch_sec: i64,
+) -> Option<PolymarketCryptoPriceResponse> {
+    let sym = match asset {
+        Asset::BTC => "BTC",
+        Asset::ETH => "ETH",
+        Asset::SOL => "SOL",
+    };
+    let end_epoch_sec = start_epoch_sec + 300;
+    let url = format!(
+        "https://polymarket.com/api/crypto/crypto-price?symbol={}&eventStartTime={}&endDate={}&variant=fiveminute&twapEnabled=true&twapLookbackSeconds=60",
+        sym, start_epoch_sec, end_epoch_sec
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(3000))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .build()
+        .ok()?;
+
+    let resp = client.get(&url).send().await.ok()?;
+    if resp.status().is_success() {
+        if let Ok(data) = resp.json::<PolymarketCryptoPriceResponse>().await {
+            return Some(data);
+        }
+    }
+    None
+}
+
+/// Query the deterministic 5-minute candle open price.
+/// Priority 1: Official Polymarket crypto-price API (exact Chainlink TWAP benchmark / 目标价格).
+/// Priority 2: Coinbase USD candle open.
+/// Priority 3: Binance Kline fallback.
 pub async fn fetch_candle_open_price(asset: Asset, start_epoch_sec: i64) -> Option<f64> {
+    // 1. Official Polymarket Chainlink TWAP benchmark (Priority 1)
+    if let Some(poly_price) = fetch_polymarket_crypto_price(asset, start_epoch_sec).await {
+        if let Some(open) = poly_price.open_price {
+            if open > 0.0 {
+                return Some(open);
+            }
+        }
+    }
+    // If the current round openPrice hasn't populated yet, check if the previous round's closePrice is available
+    if let Some(prev_price) = fetch_polymarket_crypto_price(asset, start_epoch_sec - 300).await {
+        if let Some(close) = prev_price.close_price {
+            if close > 0.0 {
+                return Some(close);
+            }
+        }
+    }
+
     let cb_symbol = match asset {
         Asset::BTC => "BTC-USD",
         Asset::ETH => "ETH-USD",
@@ -120,7 +183,7 @@ pub async fn fetch_candle_open_price(asset: Asset, start_epoch_sec: i64) -> Opti
         Err(_) => return None,
     };
 
-    // 1. Try Coinbase REST API candles (Polymarket official USD benchmark)
+    // 2. Try Coinbase REST API candles (USD benchmark fallback)
     let cb_url = format!(
         "https://api.exchange.coinbase.com/products/{}/candles?granularity=300",
         cb_symbol
@@ -143,7 +206,7 @@ pub async fn fetch_candle_open_price(asset: Asset, start_epoch_sec: i64) -> Opti
         }
     }
 
-    // 2. Fallback: Binance Kline
+    // 3. Fallback: Binance Kline
     let binance_sym = match asset {
         Asset::BTC => "BTCUSDT",
         Asset::ETH => "ETHUSDT",
@@ -276,9 +339,24 @@ impl MarketDiscoveryEngine {
             }
 
             let mut open_p: Option<f64> = row.get("open_price");
-            if open_p.is_none() {
-                let fetched = current_reference_price.or(fetch_candle_open_price(asset, start_epoch_sec).await);
-                if let Some(p) = fetched {
+            // Check official Polymarket crypto-price API to align open_price (目标价格 / Price to Beat)
+            let official_open = fetch_candle_open_price(asset, start_epoch_sec).await;
+            if let Some(p) = official_open {
+                let should_update = match open_p {
+                    Some(cur) => (cur - p).abs() > 0.001,
+                    None => true,
+                };
+                if should_update {
+                    let _ = sqlx::query("UPDATE markets SET open_price = ?, updated_at = ? WHERE id = ?")
+                        .bind(p)
+                        .bind(now_ms)
+                        .bind(&market_id)
+                        .execute(self.db.pool())
+                        .await;
+                    open_p = Some(p);
+                }
+            } else if open_p.is_none() {
+                if let Some(p) = current_reference_price {
                     let _ = sqlx::query("UPDATE markets SET open_price = ?, updated_at = ? WHERE id = ?")
                         .bind(p)
                         .bind(now_ms)
@@ -330,10 +408,9 @@ impl MarketDiscoveryEngine {
             )
         };
 
-        // Resolve open price from passed reference (e.g. Coinbase spot) or fallback to candle API
-        let initial_open_price = current_reference_price.or(
-            fetch_candle_open_price(asset, start_epoch_sec).await
-        );
+        // Resolve open price: Priority 1 is official Polymarket crypto price endpoint (Chainlink TWAP 目标价格)
+        let initial_open_price = fetch_candle_open_price(asset, start_epoch_sec).await
+            .or(current_reference_price);
 
         sqlx::query(
             r#"
@@ -407,6 +484,30 @@ impl MarketDiscoveryEngine {
                 )
                 .bind(open_price)
                 .bind(Utc::now().timestamp_millis())
+                .bind(&entry.id)
+                .execute(self.db.pool())
+                .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Update open price of active market to official Polymarket benchmark price if deviated or missing
+    pub async fn update_open_price(&self, asset: Asset, open_price: f64) -> Result<()> {
+        if let Some(mut entry) = self.active_markets.get_mut(&asset) {
+            let should_update = match entry.open_price {
+                Some(existing) => (existing - open_price).abs() > 0.001,
+                None => true,
+            };
+            if should_update {
+                entry.open_price = Some(open_price);
+                let now_ms = Utc::now().timestamp_millis();
+                entry.updated_at_ms = now_ms;
+                sqlx::query(
+                    "UPDATE markets SET open_price = ?, updated_at = ? WHERE id = ?"
+                )
+                .bind(open_price)
+                .bind(now_ms)
                 .bind(&entry.id)
                 .execute(self.db.pool())
                 .await?;

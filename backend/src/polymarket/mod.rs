@@ -125,11 +125,24 @@ impl PolymarketManager {
                     // 1. Check if the currently active market for this asset has expired BEFORE creating a new one!
                     if let Some(active_market) = discovery.get_active_market(asset) {
                         if active_market.is_expired(now_ms) && active_market.status == crate::types::MarketStatus::Active {
-                            let open_p = active_market.open_price.unwrap_or_else(|| current_spot_price.unwrap_or(0.0));
-                            let final_p = current_spot_price.unwrap_or(open_p);
+                            let start_epoch_sec = active_market.start_time_ms / 1000;
+                            // Attempt to fetch official Polymarket crypto-price for resolution
+                            let official_res = market_discovery::fetch_polymarket_crypto_price(asset, start_epoch_sec).await;
+
+                            let open_p = official_res.as_ref().and_then(|r| r.open_price)
+                                .or(active_market.open_price)
+                                .unwrap_or_else(|| current_spot_price.unwrap_or(0.0));
+
+                            // If official closePrice is present, use it. Otherwise, if next round's openPrice is available, that is identical to closePrice!
+                            let next_open_res = market_discovery::fetch_polymarket_crypto_price(asset, start_epoch_sec + 300).await;
+                            let final_p = official_res.as_ref().and_then(|r| r.close_price)
+                                .or_else(|| next_open_res.as_ref().and_then(|r| r.open_price))
+                                .or(current_spot_price)
+                                .unwrap_or(open_p);
+
                             if open_p > 0.0 && final_p > 0.0 {
                                 info!(
-                                    "🔔 5M Round EXPIRED for {}: {} | Open: {:.2}, Final: {:.2} | Resolving market...",
+                                    "🔔 5M Round EXPIRED for {}: {} | Open: {:.2}, Final: {:.2} | Resolving market with official Chainlink TWAP...",
                                     asset, active_market.id, open_p, final_p
                                 );
                                 let _ = resolution
@@ -142,8 +155,29 @@ impl PolymarketManager {
                     // 2. Also sweep any expired active markets in SQLite DB (recovers unclosed rounds after restart)
                     if let Ok(expired_markets) = resolution.get_unsettled_expired_markets(asset, now_ms).await {
                         for (exp_id, maybe_open) in expired_markets {
-                            let open_p = maybe_open.unwrap_or_else(|| current_spot_price.unwrap_or(0.0));
-                            let final_p = current_spot_price.unwrap_or(open_p);
+                            let parsed_epoch = exp_id.split('-').last().and_then(|s| s.parse::<i64>().ok());
+                            let official_res = if let Some(epoch_sec) = parsed_epoch {
+                                market_discovery::fetch_polymarket_crypto_price(asset, epoch_sec).await
+                            } else {
+                                None
+                            };
+
+                            let open_p = official_res.as_ref().and_then(|r| r.open_price)
+                                .or(maybe_open)
+                                .unwrap_or_else(|| current_spot_price.unwrap_or(0.0));
+
+                            let next_epoch = parsed_epoch.map(|e| e + 300);
+                            let next_open_res = if let Some(ne) = next_epoch {
+                                market_discovery::fetch_polymarket_crypto_price(asset, ne).await
+                            } else {
+                                None
+                            };
+
+                            let final_p = official_res.as_ref().and_then(|r| r.close_price)
+                                .or_else(|| next_open_res.as_ref().and_then(|r| r.open_price))
+                                .or(current_spot_price)
+                                .unwrap_or(open_p);
+
                             if open_p > 0.0 && final_p > 0.0 {
                                 info!(
                                     "🔔 Sweeping historical un-settled market {}: Open={:.2}, Final={:.2}",
@@ -161,12 +195,20 @@ impl PolymarketManager {
                         .ensure_active_market(asset, now_ms, current_spot_price)
                         .await
                     {
-                        // Record open price if spot price or candle open price just became available
-                        if market.open_price.is_none() {
-                            let (window_start_ms, _) = market_discovery::MarketDiscoveryEngine::calculate_5m_window(now_ms);
-                            let resolved_open = market_discovery::fetch_candle_open_price(asset, window_start_ms / 1000).await
-                                .or(current_spot_price);
-                            if let Some(spot) = resolved_open {
+                        // Ensure open price is continuously synchronized with the official Polymarket benchmark (目标价格)
+                        let (window_start_ms, _) = market_discovery::MarketDiscoveryEngine::calculate_5m_window(now_ms);
+                        let start_epoch_sec = window_start_ms / 1000;
+                        if let Some(official_open) = market_discovery::fetch_candle_open_price(asset, start_epoch_sec).await {
+                            let needs_update = match market.open_price {
+                                Some(existing) => (existing - official_open).abs() > 0.001,
+                                None => true,
+                            };
+                            if needs_update {
+                                let _ = discovery.update_open_price(asset, official_open).await;
+                                market.open_price = Some(official_open);
+                            }
+                        } else if market.open_price.is_none() {
+                            if let Some(spot) = current_spot_price {
                                 let _ = discovery.set_open_price(asset, spot).await;
                                 market.open_price = Some(spot);
                             }
