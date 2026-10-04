@@ -32,6 +32,7 @@ pub struct StrategyEngine {
     latest_signals: Arc<DashMap<Asset, PredictionSignal>>,
     recent_decisions: Arc<RwLock<VecDeque<DecisionLog>>>,
     signal_tx: broadcast::Sender<PredictionSignal>,
+    enabled_assets: Arc<SyncRwLock<std::collections::HashSet<Asset>>>,
 }
 
 impl StrategyEngine {
@@ -41,6 +42,11 @@ impl StrategyEngine {
         db: Arc<Database>,
     ) -> Self {
         let (signal_tx, _) = broadcast::channel(1024);
+        let mut initial_enabled = std::collections::HashSet::new();
+        initial_enabled.insert(Asset::BTC);
+        initial_enabled.insert(Asset::ETH);
+        initial_enabled.insert(Asset::SOL);
+
         Self {
             config: Arc::new(SyncRwLock::new(config)),
             execution_config,
@@ -48,6 +54,7 @@ impl StrategyEngine {
             latest_signals: Arc::new(DashMap::new()),
             recent_decisions: Arc::new(RwLock::new(VecDeque::with_capacity(500))),
             signal_tx,
+            enabled_assets: Arc::new(SyncRwLock::new(initial_enabled)),
         }
     }
 
@@ -57,6 +64,22 @@ impl StrategyEngine {
 
     pub fn update_config(&self, new_config: StrategyConfig) {
         *self.config.write() = new_config;
+    }
+
+    pub fn get_enabled_assets(&self) -> Vec<Asset> {
+        let set = self.enabled_assets.read();
+        let mut list: Vec<Asset> = set.iter().cloned().collect();
+        list.sort_by_key(|a| a.to_string());
+        list
+    }
+
+    pub fn set_enabled_assets(&self, assets: Vec<Asset>) {
+        let mut set = self.enabled_assets.write();
+        set.clear();
+        for a in assets {
+            set.insert(a);
+        }
+        info!("Updated enabled trading assets: {:?}", set);
     }
 
     /// Pure evaluation function without side effects, ideal for testing and real-time execution
@@ -69,6 +92,58 @@ impl StrategyEngine {
         is_fresh: bool,
         remaining_seconds: i64,
     ) -> (PredictionSignal, DecisionLog) {
+        // 0. Asset Trading Enabled Check (币种独立开关)
+        if !self.enabled_assets.read().contains(&prediction.asset) {
+            let action = SignalAction::Skip;
+            let decision_reason = format!("标的 {} 自动交易已在设置中禁用", prediction.asset);
+            let confidence = ConfidenceLevel::Skip;
+            let prediction_id = format!("pred_{}", Uuid::new_v4().simple());
+            let market_implied_up = polymarket_tick.and_then(|t| t.up_mid).or(Some(0.50));
+
+            let signal = PredictionSignal {
+                prediction_id,
+                market_id: prediction.market_id.clone(),
+                asset: prediction.asset,
+                timestamp_ms: prediction.timestamp_ms,
+                model_version: prediction.model_version.clone(),
+                p_up: prediction.calibrated_p_up,
+                p_down: prediction.calibrated_p_down,
+                fair_value_up: prediction.calibrated_p_up,
+                fair_value_down: prediction.calibrated_p_down,
+                market_implied_up,
+                gross_edge: 0.0,
+                estimated_fee: self.execution_config.fee_rate,
+                estimated_slippage: self.execution_config.slippage_rate,
+                net_edge: 0.0,
+                signal_score: 0.0,
+                confidence,
+                action,
+                decision_reason: decision_reason.clone(),
+            };
+
+            let decision = DecisionLog {
+                timestamp_ms: prediction.timestamp_ms,
+                market_id: prediction.market_id.clone(),
+                asset: prediction.asset,
+                p_up: prediction.calibrated_p_up,
+                p_down: prediction.calibrated_p_down,
+                up_ask: polymarket_tick.and_then(|t| t.up_ask),
+                down_ask: polymarket_tick.and_then(|t| t.down_ask),
+                gross_edge: 0.0,
+                fee: self.execution_config.fee_rate,
+                slippage: self.execution_config.slippage_rate,
+                net_edge: 0.0,
+                liquidity_check: "PASS".to_string(),
+                spread_check: "PASS".to_string(),
+                time_check: "PASS".to_string(),
+                risk_check: format!("Asset {} disabled in settings", prediction.asset),
+                final_action: action,
+                reason: decision_reason,
+            };
+
+            return (signal, decision);
+        }
+
         let is_up = prediction.calibrated_p_up >= prediction.calibrated_p_down;
         let (calibrated_p, market_ask, directed_obi, directed_momentum) = if is_up {
             let ask = polymarket_tick

@@ -485,3 +485,76 @@ async fn test_strategy_api_endpoints() {
     assert_eq!(decisions[0].market_id, "mkt_btc_api_test");
     assert_eq!(decisions[0].final_action, SignalAction::BuyUp);
 }
+
+#[tokio::test]
+async fn test_enabled_assets_api_and_skip_logic() {
+    let (app, strategy, _, _) = setup_strategy_test_app().await;
+
+    // 1. Initial enabled assets should include BTC, ETH, SOL
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/strategy/assets")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let val: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(val["assets"].as_array().unwrap().len(), 3);
+
+    // 2. Disable ETH and SOL, keep only BTC
+    let update_body = serde_json::json!({
+        "assets": ["BTC"]
+    });
+    let res_set = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/strategy/assets")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&update_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_set.status(), StatusCode::OK);
+
+    // 3. Evaluate ETH prediction - should be SKIPPED because it is disabled
+    let eth_pred = ModelPrediction {
+        market_id: "mkt_eth_test".to_string(),
+        asset: Asset::ETH,
+        timestamp_ms: chrono::Utc::now().timestamp_millis(),
+        model_version: "ensemble_v1.0".to_string(),
+        raw_p_up: 0.85,
+        raw_p_down: 0.15,
+        calibrated_p_up: 0.82,
+        calibrated_p_down: 0.18,
+        confidence: ModelConfidence::High,
+        top_contributions: vec![],
+    };
+    let (eth_sig, eth_dec) = strategy.evaluate(&eth_pred, None, None, 0.002, true, 150);
+    assert_eq!(eth_sig.action, SignalAction::Skip);
+    assert_eq!(eth_dec.final_action, SignalAction::Skip);
+    assert!(eth_sig.decision_reason.contains("自动交易已在设置中禁用"));
+
+    // 4. Evaluate BTC prediction - should NOT be skipped by asset filter
+    let btc_pred = ModelPrediction {
+        market_id: "mkt_btc_test".to_string(),
+        asset: Asset::BTC,
+        timestamp_ms: chrono::Utc::now().timestamp_millis(),
+        model_version: "ensemble_v1.0".to_string(),
+        raw_p_up: 0.85,
+        raw_p_down: 0.15,
+        calibrated_p_up: 0.82,
+        calibrated_p_down: 0.18,
+        confidence: ModelConfidence::High,
+        top_contributions: vec![],
+    };
+    let (btc_sig, _) = strategy.evaluate(&btc_pred, None, None, 0.002, true, 150);
+    assert_ne!(btc_sig.decision_reason, "标的 BTC 自动交易已在设置中禁用");
+}

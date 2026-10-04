@@ -258,21 +258,25 @@ export interface BankrollHistoryEntry {
 }
 
 export interface RiskStatus {
-  mode: string;
-  active_bankroll: number;
-  bankroll_cap: number;
-  locked_profit: number;
-  total_equity: number;
+  mode?: string;
+  active_bankroll?: number;
+  bankroll_cap?: number;
+  locked_profit?: number;
+  total_equity?: number;
   daily_loss_current: number;
   daily_loss_limit: number;
-  current_drawdown_pct: number;
-  max_drawdown_limit_pct: number;
+  current_drawdown?: number;
+  current_drawdown_pct?: number;
+  max_drawdown_limit?: number;
+  max_drawdown_limit_pct?: number;
   consecutive_losses: number;
   max_consecutive_losses: number;
-  cooldown_until_ms?: number;
+  cooldown_until_ms?: number | null;
   is_in_cooldown: boolean;
   is_halted: boolean;
-  halt_reason?: string;
+  is_trading_halted?: boolean;
+  halt_reason?: string | null;
+  peak_equity?: number;
 }
 
 export interface PaperOrder {

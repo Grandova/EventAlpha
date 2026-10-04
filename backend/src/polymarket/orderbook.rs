@@ -261,29 +261,38 @@ impl PolymarketBookEngine {
 
     /// Seed realistic orderbook for asset when bootstrapping or fallback
     pub fn seed_fallback_ladder(&self, asset: Asset, mid_up: f64, now_ms: i64) {
-        let p_up = mid_up.clamp(0.05, 0.95);
-        let p_down = 1.0 - p_up;
+        let p_up = (mid_up * 1000.0).round() / 1000.0;
+        let p_up = p_up.clamp(0.05, 0.95);
+        let p_down = ((1.0 - p_up) * 1000.0).round() / 1000.0;
 
         let up_bids = vec![
-            OrderBookLevel { price: (p_up - 0.01).max(0.01), size: 100.0 },
-            OrderBookLevel { price: (p_up - 0.02).max(0.01), size: 250.0 },
-            OrderBookLevel { price: (p_up - 0.03).max(0.01), size: 500.0 },
+            OrderBookLevel { price: ((p_up - 0.01).max(0.01) * 1000.0).round() / 1000.0, size: 120.0 },
+            OrderBookLevel { price: ((p_up - 0.02).max(0.01) * 1000.0).round() / 1000.0, size: 300.0 },
+            OrderBookLevel { price: ((p_up - 0.03).max(0.01) * 1000.0).round() / 1000.0, size: 550.0 },
+            OrderBookLevel { price: ((p_up - 0.04).max(0.01) * 1000.0).round() / 1000.0, size: 900.0 },
+            OrderBookLevel { price: ((p_up - 0.05).max(0.01) * 1000.0).round() / 1000.0, size: 1500.0 },
         ];
         let up_asks = vec![
-            OrderBookLevel { price: (p_up + 0.01).min(0.99), size: 100.0 },
-            OrderBookLevel { price: (p_up + 0.02).min(0.99), size: 250.0 },
-            OrderBookLevel { price: (p_up + 0.03).min(0.99), size: 500.0 },
+            OrderBookLevel { price: ((p_up + 0.01).min(0.99) * 1000.0).round() / 1000.0, size: 100.0 },
+            OrderBookLevel { price: ((p_up + 0.02).min(0.99) * 1000.0).round() / 1000.0, size: 280.0 },
+            OrderBookLevel { price: ((p_up + 0.03).min(0.99) * 1000.0).round() / 1000.0, size: 620.0 },
+            OrderBookLevel { price: ((p_up + 0.04).min(0.99) * 1000.0).round() / 1000.0, size: 950.0 },
+            OrderBookLevel { price: ((p_up + 0.05).min(0.99) * 1000.0).round() / 1000.0, size: 1600.0 },
         ];
 
         let down_bids = vec![
-            OrderBookLevel { price: (p_down - 0.01).max(0.01), size: 100.0 },
-            OrderBookLevel { price: (p_down - 0.02).max(0.01), size: 250.0 },
-            OrderBookLevel { price: (p_down - 0.03).max(0.01), size: 500.0 },
+            OrderBookLevel { price: ((p_down - 0.01).max(0.01) * 1000.0).round() / 1000.0, size: 120.0 },
+            OrderBookLevel { price: ((p_down - 0.02).max(0.01) * 1000.0).round() / 1000.0, size: 300.0 },
+            OrderBookLevel { price: ((p_down - 0.03).max(0.01) * 1000.0).round() / 1000.0, size: 550.0 },
+            OrderBookLevel { price: ((p_down - 0.04).max(0.01) * 1000.0).round() / 1000.0, size: 900.0 },
+            OrderBookLevel { price: ((p_down - 0.05).max(0.01) * 1000.0).round() / 1000.0, size: 1500.0 },
         ];
         let down_asks = vec![
-            OrderBookLevel { price: (p_down + 0.01).min(0.99), size: 100.0 },
-            OrderBookLevel { price: (p_down + 0.02).min(0.99), size: 250.0 },
-            OrderBookLevel { price: (p_down + 0.03).min(0.99), size: 500.0 },
+            OrderBookLevel { price: ((p_down + 0.01).min(0.99) * 1000.0).round() / 1000.0, size: 100.0 },
+            OrderBookLevel { price: ((p_down + 0.02).min(0.99) * 1000.0).round() / 1000.0, size: 280.0 },
+            OrderBookLevel { price: ((p_down + 0.03).min(0.99) * 1000.0).round() / 1000.0, size: 620.0 },
+            OrderBookLevel { price: ((p_down + 0.04).min(0.99) * 1000.0).round() / 1000.0, size: 950.0 },
+            OrderBookLevel { price: ((p_down + 0.05).min(0.99) * 1000.0).round() / 1000.0, size: 1600.0 },
         ];
 
         self.update_book(&format!("{}_UP", asset), asset, MarketSide::Up, up_bids, up_asks, now_ms);

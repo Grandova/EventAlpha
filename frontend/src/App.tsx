@@ -71,6 +71,7 @@ export const App: React.FC = () => {
   const [activeAccount, setActiveAccount] = useState<PolymarketAccountPublic | null>(null);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
+  const [enabledAssets, setEnabledAssets] = useState<Asset[]>(['BTC', 'ETH', 'SOL']);
 
   // AsmrProg Light / Dark Theme State (Light by default, matching screenshot)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -154,8 +155,33 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       syncTradingMode();
+      api.getEnabledAssets().then((res) => {
+        if (res.success && Array.isArray(res.assets) && res.assets.length > 0) {
+          setEnabledAssets(res.assets);
+        }
+      }).catch(() => {});
     }
   }, [isAuthenticated]);
+
+  const handleToggleEnabledAsset = async (asset: Asset) => {
+    const current = new Set(enabledAssets);
+    if (current.has(asset)) {
+      if (current.size === 1) {
+        alert('请至少保留一个币种开启交易，或在风控设置中暂停交易！');
+        return;
+      }
+      current.delete(asset);
+    } else {
+      current.add(asset);
+    }
+    const nextList = Array.from(current);
+    setEnabledAssets(nextList);
+    try {
+      await api.setEnabledAssets(nextList);
+    } catch (err: any) {
+      console.error('Failed to update enabled trading assets:', err);
+    }
+  };
 
   const handleToggleTradingMode = async (newMode: TradingMode) => {
     if (newMode === tradingMode) return;
@@ -500,6 +526,8 @@ export const App: React.FC = () => {
                   onSelectAsset={setActiveAsset}
                   spotPrices={spotPrices}
                   remainingSeconds={roundRemaining}
+                  enabledAssets={enabledAssets}
+                  onToggleEnabledAsset={handleToggleEnabledAsset}
                 />
 
                 {/* 3. Polymarket 5M Round & AI Opportunity Center */}
@@ -620,6 +648,7 @@ export const App: React.FC = () => {
         isOpen={isBankrollModalOpen}
         onClose={() => setIsBankrollModalOpen(false)}
         currentBankroll={bankroll}
+        currentRisk={risk}
         onSuccess={(newBr) => {
           setBankroll(newBr);
           api.getRiskStatus().then(setRisk).catch(() => {});

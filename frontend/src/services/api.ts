@@ -135,6 +135,27 @@ export const api = {
   getBankrollHistory: (limit = 50) =>
     fetchJson<BankrollHistoryEntry[]>(`/api/v1/paper/bankroll/history?limit=${limit}`),
   getRiskStatus: () => fetchJson<RiskStatus>('/api/v1/risk/status'),
+  updateRiskConfig: (req: {
+    daily_loss_limit?: number;
+    max_consecutive_losses?: number;
+    max_drawdown?: number;
+    cooldown_minutes?: number;
+  }) =>
+    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>('/api/v1/risk/config', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  unhaltTrading: () =>
+    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>('/api/v1/risk/unhalt', {
+      method: 'POST',
+    }),
+  getEnabledAssets: () =>
+    fetchJson<{ success: boolean; assets: Asset[] }>('/api/v1/strategy/assets'),
+  setEnabledAssets: (assets: Asset[]) =>
+    fetchJson<{ success: boolean; message: string; assets: Asset[] }>('/api/v1/strategy/assets', {
+      method: 'POST',
+      body: JSON.stringify({ assets }),
+    }),
   getPaperOrders: (limit = 20) =>
     fetchJson<PaperOrder[]>(`/api/v1/paper/orders?limit=${limit}`),
   getActivePositions: () =>

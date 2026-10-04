@@ -145,6 +145,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/paper/bankroll/set", post(handle_bankroll_set))
         .route("/api/v1/paper/bankroll/history", get(handle_bankroll_history))
         .route("/api/v1/risk/status", get(handle_risk_status))
+        .route("/api/v1/risk/config", post(handle_risk_config_update))
+        .route("/api/v1/risk/unhalt", post(handle_risk_unhalt))
         .route("/api/v1/events", get(handle_events))
         .route("/api/v1/collector/status", get(handle_collector_status))
         .route("/api/v1/collector/prices", get(handle_collector_prices))
@@ -181,6 +183,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/replay/frames", get(handle_replay_frames))
         .route("/api/v1/ws", get(ws::handle_ws_upgrade))
         .route("/api/v1/strategy/config", get(handle_strategy_config_get).post(handle_strategy_config_update))
+        .route("/api/v1/strategy/assets", get(handle_strategy_assets_get).post(handle_strategy_assets_set))
         .route("/api/v1/models/config", get(handle_model_config))
         .route("/api/v1/models/train", post(handle_model_train))
         .route("/api/v1/dataset/generate_synthetic", post(handle_dataset_generate_synthetic))
@@ -379,6 +382,54 @@ async fn handle_bankroll_history(
 
 async fn handle_risk_status(State(state): State<AppState>) -> Json<RiskStatus> {
     Json(state.risk.get_risk_status().await)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateRiskConfigRequest {
+    pub daily_loss_limit: Option<f64>,
+    pub max_consecutive_losses: Option<u32>,
+    pub max_drawdown: Option<f64>,
+    pub cooldown_minutes: Option<u32>,
+}
+
+async fn handle_risk_config_update(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateRiskConfigRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    state
+        .risk
+        .update_risk_limits(
+            req.daily_loss_limit,
+            req.max_consecutive_losses,
+            req.max_drawdown,
+            req.cooldown_minutes,
+        )
+        .await;
+
+    let updated = state.risk.get_risk_status().await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "message": "风控限额设置已更新",
+            "risk": updated
+        })),
+    )
+}
+
+async fn handle_risk_unhalt(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    state.risk.unhalt_trading().await;
+    let updated = state.risk.get_risk_status().await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "message": "风控熔断已解除，交易已恢复",
+            "risk": updated
+        })),
+    )
 }
 
 
@@ -722,6 +773,37 @@ async fn handle_strategy_config_update(
 ) -> Json<crate::config::StrategyConfig> {
     state.strategy.update_config(new_config.clone());
     Json(new_config)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetEnabledAssetsRequest {
+    pub assets: Vec<Asset>,
+}
+
+async fn handle_strategy_assets_get(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let assets = state.strategy.get_enabled_assets();
+    Json(serde_json::json!({
+        "success": true,
+        "assets": assets
+    }))
+}
+
+async fn handle_strategy_assets_set(
+    State(state): State<AppState>,
+    Json(req): Json<SetEnabledAssetsRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    state.strategy.set_enabled_assets(req.assets);
+    let current = state.strategy.get_enabled_assets();
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "message": format!("自动交易标的已更新: {:?}", current),
+            "assets": current
+        })),
+    )
 }
 
 async fn handle_model_config(

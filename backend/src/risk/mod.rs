@@ -10,7 +10,7 @@ use crate::types::{BankrollHistoryEntry, BankrollMode, BankrollState, RiskStatus
 #[derive(Clone)]
 pub struct RiskManager {
     bankroll_config: BankrollConfig,
-    risk_config: RiskConfig,
+    risk_config: Arc<RwLock<RiskConfig>>,
     state: Arc<RwLock<BankrollState>>,
     cooldown_until_ms: Arc<RwLock<Option<i64>>>,
     db: Arc<Database>,
@@ -27,7 +27,7 @@ impl RiskManager {
         let (bankroll_tx, _) = broadcast::channel(1024);
         Self {
             bankroll_config,
-            risk_config,
+            risk_config: Arc::new(RwLock::new(risk_config)),
             state: Arc::new(RwLock::new(initial_state)),
             cooldown_until_ms: Arc::new(RwLock::new(None)),
             db,
@@ -39,6 +39,7 @@ impl RiskManager {
     pub async fn can_open_position(&self, requested_stake: f64) -> Result<(), String> {
         let state = self.state.read().await;
         let now_ms = Utc::now().timestamp_millis();
+        let risk_cfg = self.risk_config.read().await;
 
         // 1. Trading Halted Circuit Breaker
         if state.is_trading_halted {
@@ -60,19 +61,19 @@ impl RiskManager {
         }
 
         // 3. Daily Loss Limit Check
-        if state.daily_loss_current >= self.risk_config.daily_loss_limit {
+        if state.daily_loss_current >= risk_cfg.daily_loss_limit {
             return Err(format!(
                 "Daily loss limit reached: ${:.2} >= limit ${:.2}",
-                state.daily_loss_current, self.risk_config.daily_loss_limit
+                state.daily_loss_current, risk_cfg.daily_loss_limit
             ));
         }
 
         // 4. Max Drawdown Check
-        if state.current_drawdown >= self.risk_config.max_drawdown {
+        if state.current_drawdown >= risk_cfg.max_drawdown {
             return Err(format!(
                 "Max drawdown limit breached: {:.1}% >= limit {:.1}%",
                 state.current_drawdown * 100.0,
-                self.risk_config.max_drawdown * 100.0
+                risk_cfg.max_drawdown * 100.0
             ));
         }
 
@@ -197,28 +198,30 @@ impl RiskManager {
             state.consecutive_losses += 1;
             state.daily_loss_current += loss;
 
+            let risk_cfg = self.risk_config.read().await;
+
             warn!(
                 "📉 Trade LOSS (-${:.2}) | Consecutive Losses: {} | Daily Loss: ${:.2}/${:.2}",
-                loss, state.consecutive_losses, state.daily_loss_current, self.risk_config.daily_loss_limit
+                loss, state.consecutive_losses, state.daily_loss_current, risk_cfg.daily_loss_limit
             );
 
             // Circuit Breaker: Consecutive Loss Cooldown
-            if state.consecutive_losses >= self.risk_config.max_consecutive_losses {
-                let cooldown_ms = now_ms + (self.risk_config.cooldown_minutes as i64 * 60 * 1000);
+            if state.consecutive_losses >= risk_cfg.max_consecutive_losses {
+                let cooldown_ms = now_ms + (risk_cfg.cooldown_minutes as i64 * 60 * 1000);
                 *self.cooldown_until_ms.write().await = Some(cooldown_ms);
                 warn!(
                     "⏸️ RISK CIRCUIT BREAKER: {} consecutive losses hit! Cooldown for {} minutes.",
-                    state.consecutive_losses, self.risk_config.cooldown_minutes
+                    state.consecutive_losses, risk_cfg.cooldown_minutes
                 );
             }
 
             // Circuit Breaker: Daily Loss Limit
-            if state.daily_loss_current >= self.risk_config.daily_loss_limit {
+            if state.daily_loss_current >= risk_cfg.daily_loss_limit {
                 state.is_trading_halted = true;
                 if state.halt_reason.is_none() {
                     state.halt_reason = Some(format!(
                         "Daily loss limit reached: ${:.2} >= limit ${:.2}",
-                        state.daily_loss_current, self.risk_config.daily_loss_limit
+                        state.daily_loss_current, risk_cfg.daily_loss_limit
                     ));
                     warn!("🚨 TRADING HALTED: {}", state.halt_reason.as_ref().unwrap());
                 }
@@ -253,13 +256,14 @@ impl RiskManager {
         };
 
         // Circuit Breaker: Max Drawdown
-        if state.current_drawdown >= self.risk_config.max_drawdown {
+        let risk_cfg = self.risk_config.read().await;
+        if state.current_drawdown >= risk_cfg.max_drawdown {
             state.is_trading_halted = true;
             if state.halt_reason.is_none() {
                 state.halt_reason = Some(format!(
                     "Max drawdown {:.1}% breached limit {:.1}%",
                     state.current_drawdown * 100.0,
-                    self.risk_config.max_drawdown * 100.0
+                    risk_cfg.max_drawdown * 100.0
                 ));
                 warn!("🚨 TRADING HALTED: {}", state.halt_reason.as_ref().unwrap());
             }
@@ -381,19 +385,84 @@ impl RiskManager {
     pub async fn get_risk_status(&self) -> RiskStatus {
         let state = self.state.read().await;
         let cooldown = *self.cooldown_until_ms.read().await;
+        let risk_cfg = self.risk_config.read().await;
+        let now_ms = Utc::now().timestamp_millis();
+        let is_in_cooldown = cooldown.map(|cd| cd > now_ms).unwrap_or(false);
 
         RiskStatus {
             is_trading_halted: state.is_trading_halted,
+            is_halted: state.is_trading_halted,
             halt_reason: state.halt_reason.clone(),
             daily_loss_current: state.daily_loss_current,
-            daily_loss_limit: self.risk_config.daily_loss_limit,
+            daily_loss_limit: risk_cfg.daily_loss_limit,
             current_drawdown: state.current_drawdown,
-            max_drawdown_limit: self.risk_config.max_drawdown,
+            max_drawdown_limit: risk_cfg.max_drawdown,
             peak_equity: state.peak_equity,
             consecutive_losses: state.consecutive_losses,
-            max_consecutive_losses: self.risk_config.max_consecutive_losses,
+            max_consecutive_losses: risk_cfg.max_consecutive_losses,
             cooldown_until_ms: cooldown,
+            is_in_cooldown,
         }
+    }
+
+    /// Update dynamic risk thresholds (daily loss limit, max consecutive losses, etc.)
+    pub async fn update_risk_limits(
+        &self,
+        daily_loss_limit: Option<f64>,
+        max_consecutive_losses: Option<u32>,
+        max_drawdown: Option<f64>,
+        cooldown_minutes: Option<u32>,
+    ) {
+        let mut conf = self.risk_config.write().await;
+        if let Some(dll) = daily_loss_limit {
+            if dll > 0.0 {
+                conf.daily_loss_limit = dll;
+            }
+        }
+        if let Some(mcl) = max_consecutive_losses {
+            if mcl > 0 {
+                conf.max_consecutive_losses = mcl;
+            }
+        }
+        if let Some(md) = max_drawdown {
+            if md > 0.0 && md <= 1.0 {
+                conf.max_drawdown = md;
+            }
+        }
+        if let Some(cm) = cooldown_minutes {
+            conf.cooldown_minutes = cm;
+        }
+
+        info!(
+            "🛡️ Risk limits updated: DailyLossLimit=${:.2}, MaxConsecutiveLosses={}, MaxDrawdown={:.1}%, Cooldown={}m",
+            conf.daily_loss_limit, conf.max_consecutive_losses, conf.max_drawdown * 100.0, conf.cooldown_minutes
+        );
+
+        // If daily loss limit was increased above current daily loss, lift daily loss halt automatically
+        let mut state = self.state.write().await;
+        if state.is_trading_halted {
+            if let Some(ref reason) = state.halt_reason {
+                if reason.contains("Daily loss") && state.daily_loss_current < conf.daily_loss_limit {
+                    state.is_trading_halted = false;
+                    state.halt_reason = None;
+                    info!("Daily loss limit expanded: automatically lifted trading halt.");
+                    let _ = self.bankroll_tx.send(state.clone());
+                }
+            }
+        }
+    }
+
+    /// Manually unhalt trading: reset halt flag, reason, daily loss counter, and cooldown
+    pub async fn unhalt_trading(&self) {
+        let mut state = self.state.write().await;
+        state.is_trading_halted = false;
+        state.halt_reason = None;
+        state.daily_loss_current = 0.0;
+        state.consecutive_losses = 0;
+        *self.cooldown_until_ms.write().await = None;
+
+        info!("🚀 Trading halt manually lifted by user: counters reset and trading resumed.");
+        let _ = self.bankroll_tx.send(state.clone());
     }
 
     pub async fn get_history(&self, limit: i64) -> anyhow::Result<Vec<BankrollHistoryEntry>> {
@@ -404,8 +473,8 @@ impl RiskManager {
         &self.bankroll_config
     }
 
-    pub fn risk_config(&self) -> &RiskConfig {
-        &self.risk_config
+    pub async fn risk_config(&self) -> RiskConfig {
+        self.risk_config.read().await.clone()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<BankrollState> {

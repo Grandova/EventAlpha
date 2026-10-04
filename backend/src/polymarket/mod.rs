@@ -129,10 +129,8 @@ impl PolymarketManager {
                             _ => 0.50,
                         };
 
-                        // Ensure orderbook ladder is populated
-                        if book_engine.get_market_summary(&market.id, asset).is_none() {
-                            book_engine.seed_fallback_ladder(asset, implied_p, now_ms);
-                        }
+                        // Continuously update orderbook ladder with real-time implied probability and spot movements
+                        book_engine.seed_fallback_ladder(asset, implied_p, now_ms);
 
                         // 4. Construct and broadcast PolymarketTick
                         if let Some(summary) = book_engine.get_market_summary(&market.id, asset) {

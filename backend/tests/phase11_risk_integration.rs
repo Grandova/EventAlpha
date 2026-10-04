@@ -333,3 +333,55 @@ async fn test_risk_status_and_bankroll_history_rest_api() {
     assert!(history.len() >= 3);
     assert_eq!(history.first().unwrap().reason, "SETTLEMENT_WIN");
 }
+
+#[tokio::test]
+async fn test_risk_config_update_and_unhalt_api() {
+    let (app, risk, _, _) = setup_risk_test_app().await;
+
+    // Trigger daily loss limit (initial limit is 2.0)
+    risk.reserve_stake(1.0, "ORDER_FILLED", Some("ord_t1")).await.unwrap();
+    risk.process_settlement(0.0, -1.0, "LOSS", Some("pos_t1")).await.unwrap();
+    risk.reserve_stake(1.0, "ORDER_FILLED", Some("ord_t2")).await.unwrap();
+    risk.process_settlement(0.0, -1.0, "LOSS", Some("pos_t2")).await.unwrap();
+
+    // 1. Verify initially halted
+    let status = risk.get_risk_status().await;
+    assert!(status.is_trading_halted);
+    assert_eq!(status.daily_loss_limit, 2.0);
+
+    // 2. POST /api/v1/risk/config - expand limit to 10.0
+    let update_body = serde_json::json!({
+        "daily_loss_limit": 10.0,
+        "max_consecutive_losses": 8
+    });
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/risk/config")
+        .header("Content-Type", "application/json")
+        .body(Body::from(serde_json::to_vec(&update_body).unwrap()))
+        .unwrap();
+
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Expanding daily loss limit should have auto-unhalted since 2.0 < 10.0
+    let status_after = risk.get_risk_status().await;
+    assert_eq!(status_after.daily_loss_limit, 10.0);
+    assert_eq!(status_after.max_consecutive_losses, 8);
+    assert!(!status_after.is_trading_halted);
+
+    // 3. Test manual POST /api/v1/risk/unhalt
+    let req_unhalt = Request::builder()
+        .method("POST")
+        .uri("/api/v1/risk/unhalt")
+        .body(Body::empty())
+        .unwrap();
+
+    let res_unhalt = app.oneshot(req_unhalt).await.unwrap();
+    assert_eq!(res_unhalt.status(), StatusCode::OK);
+
+    let status_final = risk.get_risk_status().await;
+    assert!(!status_final.is_trading_halted);
+    assert_eq!(status_final.daily_loss_current, 0.0);
+    assert_eq!(status_final.consecutive_losses, 0);
+}

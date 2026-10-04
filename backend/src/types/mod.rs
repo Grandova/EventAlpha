@@ -276,6 +276,8 @@ pub struct BankrollHistoryEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskStatus {
     pub is_trading_halted: bool,
+    #[serde(default)]
+    pub is_halted: bool,
     pub halt_reason: Option<String>,
     pub daily_loss_current: f64,
     pub daily_loss_limit: f64,
@@ -285,6 +287,8 @@ pub struct RiskStatus {
     pub consecutive_losses: u32,
     pub max_consecutive_losses: u32,
     pub cooldown_until_ms: Option<i64>,
+    #[serde(default)]
+    pub is_in_cooldown: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
