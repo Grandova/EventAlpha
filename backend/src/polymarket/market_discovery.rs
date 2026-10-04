@@ -3,6 +3,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 
 use crate::db::Database;
@@ -37,6 +38,77 @@ impl Polymarket5mMarket {
     pub fn is_expired(&self, now_ms: i64) -> bool {
         now_ms >= self.end_time_ms
     }
+}
+
+/// Query the deterministic 5-minute candle open price from Coinbase USD (Polymarket resolution benchmark)
+/// or Binance Kline fallback.
+pub async fn fetch_candle_open_price(asset: Asset, start_epoch_sec: i64) -> Option<f64> {
+    let cb_symbol = match asset {
+        Asset::BTC => "BTC-USD",
+        Asset::ETH => "ETH-USD",
+        Asset::SOL => "SOL-USD",
+    };
+
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .user_agent("Mozilla/5.0")
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return None,
+    };
+
+    // 1. Try Coinbase REST API candles (Polymarket official USD benchmark)
+    let cb_url = format!(
+        "https://api.exchange.coinbase.com/products/{}/candles?granularity=300",
+        cb_symbol
+    );
+    if let Ok(resp) = client.get(&cb_url).send().await {
+        if let Ok(candles) = resp.json::<Vec<Vec<serde_json::Value>>>().await {
+            for candle in candles {
+                if candle.len() >= 4 {
+                    if let Some(time_sec) = candle[0].as_i64() {
+                        if time_sec == start_epoch_sec {
+                            if let Some(open) = candle[3].as_f64() {
+                                if open > 0.0 {
+                                    return Some(open);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback: Binance Kline
+    let binance_sym = match asset {
+        Asset::BTC => "BTCUSDT",
+        Asset::ETH => "ETHUSDT",
+        Asset::SOL => "SOLUSDT",
+    };
+    let binance_url = format!(
+        "https://api.binance.com/api/v3/klines?symbol={}&interval=5m&startTime={}&limit=1",
+        binance_sym,
+        start_epoch_sec * 1000
+    );
+    if let Ok(resp) = client.get(&binance_url).send().await {
+        if let Ok(klines) = resp.json::<Vec<Vec<serde_json::Value>>>().await {
+            if let Some(kline) = klines.first() {
+                if kline.len() >= 2 {
+                    if let Some(open_str) = kline[1].as_str() {
+                        if let Ok(open_val) = open_str.parse::<f64>() {
+                            if open_val > 0.0 {
+                                return Some(open_val);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 #[derive(Clone)]
@@ -112,6 +184,20 @@ impl MarketDiscoveryEngine {
             let up_token = format!("{}_{}_UP", market_id, asset);
             let down_token = format!("{}_{}_DOWN", market_id, asset);
 
+            let mut open_p: Option<f64> = row.get("open_price");
+            if open_p.is_none() {
+                let fetched = current_reference_price.or(fetch_candle_open_price(asset, start_epoch_sec).await);
+                if let Some(p) = fetched {
+                    let _ = sqlx::query("UPDATE markets SET open_price = ?, updated_at = ? WHERE id = ?")
+                        .bind(p)
+                        .bind(now_ms)
+                        .bind(&market_id)
+                        .execute(self.db.pool())
+                        .await;
+                    open_p = Some(p);
+                }
+            }
+
             let market = Polymarket5mMarket {
                 id: row.get("id"),
                 condition_id: row.get("condition_id"),
@@ -120,7 +206,7 @@ impl MarketDiscoveryEngine {
                 question: row.get("question"),
                 start_time_ms: row.get("start_time"),
                 end_time_ms: row.get("end_time"),
-                open_price: row.get("open_price"),
+                open_price: open_p,
                 final_price: row.get("final_price"),
                 status,
                 resolution,
@@ -141,6 +227,11 @@ impl MarketDiscoveryEngine {
         let up_token = format!("{}_{}_UP", market_id, asset);
         let down_token = format!("{}_{}_DOWN", market_id, asset);
 
+        // Resolve open price from passed reference (e.g. Coinbase spot) or fallback to candle API
+        let initial_open_price = current_reference_price.or(
+            fetch_candle_open_price(asset, start_epoch_sec).await
+        );
+
         sqlx::query(
             r#"
             INSERT INTO markets (id, condition_id, asset, slug, question, start_time, end_time, open_price, final_price, status, resolution, created_at, updated_at)
@@ -154,7 +245,7 @@ impl MarketDiscoveryEngine {
         .bind(&question)
         .bind(window_start_ms)
         .bind(window_end_ms)
-        .bind(current_reference_price)
+        .bind(initial_open_price)
         .bind(now_ms)
         .bind(now_ms)
         .execute(self.db.pool())
@@ -169,7 +260,7 @@ impl MarketDiscoveryEngine {
             question,
             start_time_ms: window_start_ms,
             end_time_ms: window_end_ms,
-            open_price: current_reference_price,
+            open_price: initial_open_price,
             final_price: None,
             status: MarketStatus::Active,
             resolution: None,

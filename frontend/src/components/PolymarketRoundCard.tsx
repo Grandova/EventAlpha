@@ -58,9 +58,35 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   onOpenAccountManager,
 }) => {
   const isPaper = tradingMode === 'paper';
-  const [stakeInput, setStakeInput] = useState<string>(isPaper ? '5.0' : '0.5');
+  const [stakeInput, setStakeInput] = useState<string>(() => {
+    if (isPaper) {
+      return localStorage.getItem('polyquant_paper_stake') || '5.0';
+    } else {
+      return localStorage.getItem('polyquant_live_stake') || '0.5';
+    }
+  });
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [execStatus, setExecStatus] = useState<{ success: boolean; msg: string } | null>(null);
+
+  // Sync stake input from localStorage when trading mode toggles
+  React.useEffect(() => {
+    if (isPaper) {
+      const saved = localStorage.getItem('polyquant_paper_stake') || '5.0';
+      setStakeInput(saved);
+    } else {
+      const saved = localStorage.getItem('polyquant_live_stake') || '0.5';
+      setStakeInput(saved);
+    }
+  }, [isPaper]);
+
+  const updateStake = (val: string) => {
+    setStakeInput(val);
+    if (isPaper) {
+      localStorage.setItem('polyquant_paper_stake', val);
+    } else {
+      localStorage.setItem('polyquant_live_stake', val);
+    }
+  };
 
   // Financial safety calculations
   const paperBalance = typeof paperBankroll?.active_bankroll === 'number' ? paperBankroll.active_bankroll : 10.0;
@@ -75,15 +101,46 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
   const parsedStake = parseFloat(stakeInput);
   const isValidStake = !isNaN(parsedStake) && parsedStake > 0;
 
+  // Handler to instantly reset live floor to 0 so the entire balance can be used
+  const handleResetFloorToZero = async () => {
+    try {
+      setIsExecuting(true);
+      await api.setBankrollFunds(
+        {
+          active_bankroll: liveBalance,
+          minimum_bankroll: 0,
+        },
+        'live'
+      );
+      setExecStatus({
+        success: true,
+        msg: '✅ 已一键将实盘安全底线调整为 $0.00，全部链上资金现已可用于交易！',
+      });
+      if (onTradeExecuted) {
+        onTradeExecuted();
+      }
+    } catch (err: any) {
+      setExecStatus({ success: false, msg: `调整底线失败: ${err.message || '网络异常'}` });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
   // Real-time pre-flight validation check
   let preflightError: string | null = null;
+  let canOneClickResetFloor = false;
   if (!isPaper) {
     if (!activeAccount) {
       preflightError = '未检测到绑定的实盘账户，请先添加并激活账户';
     } else if (!isValidStake) {
       preflightError = '请输入大于 0 的有效下单金额';
     } else if (parsedStake > maxUsableLive) {
-      preflightError = `下注金额 ($${parsedStake.toFixed(2)}) 超过最大可用余量 ($${maxUsableLive.toFixed(2)})！(余额 $${liveBalance.toFixed(2)} - 底线 $${minFloor.toFixed(2)})`;
+      if (parsedStake <= liveBalance && minFloor > 0) {
+        preflightError = `下注金额 ($${parsedStake.toFixed(2)}) 超过可用额度 ($${maxUsableLive.toFixed(2)})！(余额 $${liveBalance.toFixed(2)} - 安全底线 $${minFloor.toFixed(2)})`;
+        canOneClickResetFloor = true;
+      } else {
+        preflightError = `下注金额 ($${parsedStake.toFixed(2)}) 超过账户总余额 ($${liveBalance.toFixed(2)})！`;
+      }
     }
   } else {
     if (!isValidStake) {
@@ -477,7 +534,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
                 <button
                   key={amt}
                   type="button"
-                  onClick={() => setStakeInput(amt.toString())}
+                  onClick={() => updateStake(amt.toString())}
                   className={`px-2 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
                     parseFloat(stakeInput) === amt
                       ? (isPaper ? 'bg-[#1b9c85] text-white border-[#1b9c85] shadow-sm' : 'bg-[#ff0060] text-white border-[#ff0060] shadow-sm')
@@ -492,7 +549,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
               {!isPaper && maxUsableLive > 0 && (
                 <button
                   type="button"
-                  onClick={() => setStakeInput(maxUsableLive.toFixed(2))}
+                  onClick={() => updateStake(maxUsableLive.toFixed(2))}
                   className={`px-2 py-1 text-[11px] font-mono font-bold rounded-lg border transition cursor-pointer ${
                     parseFloat(stakeInput) === maxUsableLive
                       ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
@@ -514,7 +571,7 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
                 min="0.1"
                 placeholder="自定义"
                 value={stakeInput}
-                onChange={(e) => setStakeInput(e.target.value)}
+                onChange={(e) => updateStake(e.target.value)}
                 className={`w-20 pl-5 pr-2 py-1 text-[11px] font-mono font-bold rounded-lg border bg-white dark:bg-[#202528] text-[#363949] dark:text-white focus:outline-none ${
                   preflightError
                     ? 'border-rose-400 focus:border-rose-500'
@@ -528,9 +585,23 @@ export const PolymarketRoundCard: React.FC<PolymarketRoundCardProps> = ({
 
         {/* Real-time Preflight Validation or Clearance Alert */}
         {preflightError ? (
-          <div className="p-2.5 px-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-[#ff0060] flex items-center gap-2 font-bold animate-fade-in">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{preflightError}</span>
+          <div className="p-2.5 px-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-[#ff0060] flex flex-wrap items-center justify-between gap-2 font-bold animate-fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{preflightError}</span>
+            </div>
+            {canOneClickResetFloor && (
+              <button
+                type="button"
+                onClick={handleResetFloorToZero}
+                disabled={isExecuting}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-extrabold shadow-sm transition flex items-center gap-1 cursor-pointer whitespace-nowrap ml-auto"
+                title="立即将实盘风控底线设置为 0，释放全部钱包余额用于交易"
+              >
+                <Zap className="h-3 w-3" />
+                <span>⚡ 一键将底线设为 $0 (释放可用 ${liveBalance.toFixed(2)})</span>
+              </button>
+            )}
           </div>
         ) : !isPaper && isValidStake ? (
           <div className="p-2 px-3 rounded-xl bg-slate-100 dark:bg-[#202528] border border-slate-200/80 dark:border-slate-800 text-[11px] text-[#7d8da1] font-mono flex items-center justify-between">

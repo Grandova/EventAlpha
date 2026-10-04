@@ -138,6 +138,73 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
     setError(null);
   };
 
+  const handleQuickApplyPaperPreset = async (val: number) => {
+    setPaperAmount(val.toString());
+    setPaperCap(val.toString());
+    setPaperMinFloor('0');
+    const recLoss = Math.max(5, Math.round(val * 0.15));
+    setPaperDailyLossLimit(recLoss.toString());
+    setError(null);
+
+    try {
+      setIsSubmitting(true);
+      const res = await api.setBankrollFunds(
+        {
+          active_bankroll: val,
+          bankroll_cap: val,
+          minimum_bankroll: 0,
+        },
+        'paper'
+      );
+      await api.updateRiskConfig(
+        {
+          daily_loss_limit: recLoss,
+          max_consecutive_losses: 5,
+        },
+        'paper'
+      );
+      if (res.success && res.bankroll) {
+        onSuccess(res.bankroll, 'paper');
+        onClose();
+      } else {
+        setError(res.message || '一键应用模拟本金预设失败');
+      }
+    } catch (err: any) {
+      setError(err.message || '网络或接口异常');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuickApplyLiveCap = async (val: number) => {
+    setLiveCap(val.toString());
+    setError(null);
+
+    try {
+      setIsSubmitting(true);
+      const liveBalance = activeAccount?.balance_usdc ?? (liveBankroll?.active_bankroll ?? 10.0);
+      const numMin = parseFloat(liveMinFloor) || 0;
+      const res = await api.setBankrollFunds(
+        {
+          active_bankroll: liveBalance,
+          bankroll_cap: val,
+          minimum_bankroll: numMin,
+        },
+        'live'
+      );
+      if (res.success && res.bankroll) {
+        onSuccess(res.bankroll, 'live');
+        onClose();
+      } else {
+        setError(res.message || '一键应用实盘硬顶失败');
+      }
+    } catch (err: any) {
+      setError(err.message || '网络或接口异常');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleUnhalt = async () => {
     try {
       setIsUnhalting(true);
@@ -323,7 +390,7 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
         </div>
 
         {/* Form Body with scroll */}
-        <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-4 overflow-y-auto">
+        <form id="bankroll-form" onSubmit={handleSubmit} className="p-6 pt-2 space-y-4 flex-1 overflow-y-auto">
           {error && (
             <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-center gap-2.5 text-xs text-rose-600 dark:text-rose-400">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -361,23 +428,38 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
 
               {/* Live Bankroll Cap Presets */}
               <div>
-                <label className="block text-xs font-bold text-[#7d8da1] mb-2 uppercase tracking-wider">
-                  实盘资金硬顶预设 (Cap USDC)
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-[#7d8da1] uppercase tracking-wider">
+                    实盘资金硬顶预设 (Cap USDC)
+                  </label>
+                  <span className="text-[11px] text-[#ff0060] font-bold">
+                    点击选择或直接点击【⚡生效】
+                  </span>
+                </div>
                 <div className="grid grid-cols-5 gap-2">
                   {liveCapPresets.map((val) => (
-                    <button
-                      type="button"
-                      key={val}
-                      onClick={() => setLiveCap(val.toString())}
-                      className={`py-2 px-1 text-xs font-mono font-bold rounded-xl border transition cursor-pointer ${
-                        parseFloat(liveCap) === val
-                          ? 'bg-[#1b9c85] text-white border-[#1b9c85] shadow-sm'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-[#1b9c85] text-[#363949] dark:text-slate-300'
-                      }`}
-                    >
-                      ${val}
-                    </button>
+                    <div key={val} className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setLiveCap(val.toString())}
+                        className={`py-2 px-1 text-xs font-mono font-bold rounded-xl border transition cursor-pointer ${
+                          parseFloat(liveCap) === val
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-rose-500 text-[#363949] dark:text-slate-300'
+                        }`}
+                      >
+                        ${val}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => handleQuickApplyLiveCap(val)}
+                        className="py-0.5 text-[10px] font-mono font-bold rounded bg-rose-500/10 hover:bg-rose-500/25 text-[#ff0060] border border-rose-500/20 transition cursor-pointer"
+                        title={`一键立即将实盘硬顶设为 $${val}`}
+                      >
+                        ⚡生效
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -499,23 +581,38 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
             <>
               {/* Quick Presets */}
               <div>
-                <label className="block text-xs font-bold text-[#7d8da1] mb-2 uppercase tracking-wider">
-                  快捷模拟本金预设 (USDC)
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-[#7d8da1] uppercase tracking-wider">
+                    快捷模拟本金预设 (USDC)
+                  </label>
+                  <span className="text-[11px] text-[#1b9c85] font-bold">
+                    点击选择或直接点击【⚡生效】
+                  </span>
+                </div>
                 <div className="grid grid-cols-5 gap-2">
                   {paperQuickPresets.map((val) => (
-                    <button
-                      type="button"
-                      key={val}
-                      onClick={() => handleSelectPaperPreset(val)}
-                      className={`py-2 px-1 text-xs font-mono font-bold rounded-xl border transition cursor-pointer ${
-                        parseFloat(paperAmount) === val
-                          ? 'bg-[#1b9c85] text-white border-[#1b9c85] shadow-sm'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-[#1b9c85] text-[#363949] dark:text-slate-300'
-                      }`}
-                    >
-                      ${val}
-                    </button>
+                    <div key={val} className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPaperPreset(val)}
+                        className={`py-2 px-1 text-xs font-mono font-bold rounded-xl border transition cursor-pointer ${
+                          parseFloat(paperAmount) === val
+                            ? 'bg-[#1b9c85] text-white border-[#1b9c85] shadow-sm'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-[#1b9c85] text-[#363949] dark:text-slate-300'
+                        }`}
+                      >
+                        ${val}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => handleQuickApplyPaperPreset(val)}
+                        className="py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/10 hover:bg-emerald-500/25 text-[#1b9c85] border border-emerald-500/20 transition cursor-pointer"
+                        title={`一键立即将模拟本金设为 $${val} 并应用`}
+                      >
+                        ⚡生效
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -661,38 +758,40 @@ export const SetBankrollModal: React.FC<SetBankrollModalProps> = ({
             </span>
           </div>
 
-          {/* Submit Button */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 text-[#7d8da1] font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`flex-1 py-2.5 text-white font-extrabold rounded-xl shadow-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${
-                isLive
-                  ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
-                  : 'bg-[#1b9c85] hover:bg-[#178572] shadow-[#1b9c85]/20'
-              }`}
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>正在保存...</span>
-                </>
-              ) : (
-                <>
-                  <DollarSign className="w-4 h-4" />
-                  <span>确认并应用设置 ({isLive ? '实盘' : '模拟盘'})</span>
-                </>
-              )}
-            </button>
-          </div>
         </form>
+
+        {/* Sticky Action Footer - Always visible without scrolling */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/90 dark:bg-[#181a1e]/90 backdrop-blur-sm shrink-0 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 text-[#7d8da1] font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            form="bankroll-form"
+            disabled={isSubmitting}
+            className={`flex-1 py-2.5 text-white font-extrabold rounded-xl shadow-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${
+              isLive
+                ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                : 'bg-[#1b9c85] hover:bg-[#178572] shadow-[#1b9c85]/20'
+            }`}
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>正在保存并应用...</span>
+              </>
+            ) : (
+              <>
+                <DollarSign className="w-4 h-4" />
+                <span>确认并应用设置 ({isLive ? `实盘硬顶 $${liveCap}` : `模拟本金 $${paperAmount}`})</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

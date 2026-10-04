@@ -64,12 +64,12 @@ impl PolymarketManager {
                 let now_ms = Utc::now().timestamp_millis();
 
                 for &asset in &assets {
-                    // Get current reference spot price from collectors (Binance / OKX / Bybit / Coinbase)
+                    // Get current reference spot price from collectors (Prioritizing Coinbase USD for Polymarket oracle alignment)
                     let current_spot_price = collector
-                        .get_latest_tick(crate::types::Exchange::Binance, asset)
+                        .get_latest_tick(crate::types::Exchange::Coinbase, asset)
+                        .or_else(|| collector.get_latest_tick(crate::types::Exchange::Binance, asset))
                         .or_else(|| collector.get_latest_tick(crate::types::Exchange::Okx, asset))
                         .or_else(|| collector.get_latest_tick(crate::types::Exchange::Bybit, asset))
-                        .or_else(|| collector.get_latest_tick(crate::types::Exchange::Coinbase, asset))
                         .map(|t| t.mid);
 
                     // 1. Check if the currently active market for this asset has expired BEFORE creating a new one!
@@ -111,9 +111,12 @@ impl PolymarketManager {
                         .ensure_active_market(asset, now_ms, current_spot_price)
                         .await
                     {
-                        // Record open price if spot price just became available
+                        // Record open price if spot price or candle open price just became available
                         if market.open_price.is_none() {
-                            if let Some(spot) = current_spot_price {
+                            let (window_start_ms, _) = market_discovery::MarketDiscoveryEngine::calculate_5m_window(now_ms);
+                            let resolved_open = market_discovery::fetch_candle_open_price(asset, window_start_ms / 1000).await
+                                .or(current_spot_price);
+                            if let Some(spot) = resolved_open {
                                 let _ = discovery.set_open_price(asset, spot).await;
                                 market.open_price = Some(spot);
                             }

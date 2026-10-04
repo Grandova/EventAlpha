@@ -59,6 +59,13 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
   const displayResults = showAll ? settledResults : settledResults.slice(0, 10);
   const displayOrders = showAll ? recentOrders : recentOrders.slice(0, 10);
 
+  const currentTotal =
+    activeTab === 'positions'
+      ? activePositions.length
+      : activeTab === 'results'
+      ? settledResults.length
+      : recentOrders.length;
+
   return (
     <div className="asmr-card p-6 lg:p-8 space-y-4">
       {/* Header (Matches screenshot "Recent Orders" title) */}
@@ -152,11 +159,17 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                         持仓中
                       </span>
                     </td>
-                    <td
-                      onClick={() => setSelectedItem({ type: 'position', data: pos })}
-                      className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer"
-                    >
-                      详情
+                    <td className="py-3.5 text-right pr-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedItem({ type: 'position', data: pos });
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-[#6c9bcf]/15 text-[#6c9bcf] hover:bg-[#6c9bcf]/25 border border-[#6c9bcf]/30 transition cursor-pointer"
+                      >
+                        查看详情
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -227,11 +240,17 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                           {isWin ? '盈利 (WIN)' : '亏损 (LOSS)'}
                         </span>
                       </td>
-                      <td
-                        onClick={() => setSelectedItem({ type: 'result', data: res })}
-                        className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer"
-                      >
-                        详情
+                      <td className="py-3.5 text-right pr-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedItem({ type: 'result', data: res });
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-[#6c9bcf]/15 text-[#6c9bcf] hover:bg-[#6c9bcf]/25 border border-[#6c9bcf]/30 transition cursor-pointer"
+                        >
+                          查看详情
+                        </button>
                       </td>
                     </tr>
                   );
@@ -290,11 +309,17 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
                         {ord.status === 'FILLED' ? '已成交' : ord.status === 'PENDING' ? '待撮合' : ord.status}
                       </span>
                     </td>
-                    <td
-                      onClick={() => setSelectedItem({ type: 'order', data: ord })}
-                      className="py-3.5 text-right pr-3 font-mono text-[#6c9bcf] hover:underline cursor-pointer"
-                    >
-                      详情
+                    <td className="py-3.5 text-right pr-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedItem({ type: 'order', data: ord });
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-[#6c9bcf]/15 text-[#6c9bcf] hover:bg-[#6c9bcf]/25 border border-[#6c9bcf]/30 transition cursor-pointer"
+                      >
+                        查看详情
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -310,15 +335,21 @@ export const TradingBlotter: React.FC<TradingBlotterProps> = ({
         )}
       </div>
 
-      {/* AsmrProg Iconic "Show All" Link at bottom (Exact screenshot!) */}
-      <div className="pt-2 text-center">
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-xs font-bold text-[#6c9bcf] hover:underline cursor-pointer transition-colors"
-        >
-          {showAll ? '收起列表' : '展开查看全部记录'}
-        </button>
-      </div>
+      {/* Show All / Expand link */}
+      {currentTotal > 10 ? (
+        <div className="pt-2 text-center">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs font-bold text-[#6c9bcf] hover:underline cursor-pointer transition-colors"
+          >
+            {showAll ? '收起列表' : `展开查看全部记录 (共 ${currentTotal} 笔)`}
+          </button>
+        </div>
+      ) : currentTotal > 0 ? (
+        <div className="pt-2 text-center text-[11px] text-[#7d8da1] font-mono">
+          已显示全部 {currentTotal} 笔记录
+        </div>
+      ) : null}
 
       {/* Transaction & Settlement Details Modal */}
       {selectedItem && (
