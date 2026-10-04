@@ -99,7 +99,13 @@ do
 done
 
 if [ -n "$TARGET_BIN" ] && [ -f "$TARGET_BIN" ]; then
-    cp "$TARGET_BIN" "$INSTALL_PREFIX/bin/poly_quant_backend"
+    echo -e "${CYAN}正在暂停后台服务并替换内核程序...${NC}"
+    systemctl stop polyquant 2>/dev/null || true
+    pkill -f "poly_quant_backend" 2>/dev/null || true
+    sleep 1
+
+    cp "$TARGET_BIN" "$INSTALL_PREFIX/bin/poly_quant_backend.tmp"
+    mv -f "$INSTALL_PREFIX/bin/poly_quant_backend.tmp" "$INSTALL_PREFIX/bin/poly_quant_backend"
     chmod +x "$INSTALL_PREFIX/bin/poly_quant_backend"
     ln -sf "$INSTALL_PREFIX/bin/poly_quant_backend" "$INSTALL_PREFIX/bin/poly-quant-backend"
     echo -e "${GREEN}✓ 后端量化内核升级完毕！${NC}"
@@ -109,8 +115,8 @@ else
 fi
 
 # 5. 重启系统服务
-echo -e "${CYAN}正在重启 polyquant 系统守护服务...${NC}"
-systemctl restart polyquant
+echo -e "${CYAN}正在启动 polyquant 系统守护服务...${NC}"
+systemctl start polyquant 2>/dev/null || systemctl restart polyquant
 sleep 2
 
 PUBLIC_IP=$(curl -s -m 2 https://api.ipify.org || hostname -I | awk '{print $1}' || echo "127.0.0.1")

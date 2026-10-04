@@ -172,7 +172,11 @@ function update_app() {
     fi
 
     if [ -n "$NEW_BIN" ]; then
-        cp "$NEW_BIN" "$BIN_PATH"
+        systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+        pkill -f "poly_quant_backend" 2>/dev/null || true
+        sleep 1
+        cp "$NEW_BIN" "$BIN_PATH.tmp"
+        mv -f "$BIN_PATH.tmp" "$BIN_PATH"
         chmod +x "$BIN_PATH"
         ln -sf "$BIN_PATH" "$APP_DIR/bin/poly-quant-backend"
     fi
