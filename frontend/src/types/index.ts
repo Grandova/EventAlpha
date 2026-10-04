@@ -200,18 +200,20 @@ export interface FilterResult {
   gate_name: string;
   passed: boolean;
   value: string;
-  threshold: string;
+  threshold?: string;
   reason?: string;
 }
 
 export interface ScoreBreakdown {
-  probability_points: number;
+  probability_points?: number;
+  prob_points?: number;
   edge_points: number;
   timing_points: number;
   obi_points: number;
   momentum_points: number;
   total_score: number;
-  score_tier: string;
+  score_tier?: string;
+  tier?: string;
 }
 
 export interface PredictionSignal {
@@ -226,7 +228,7 @@ export interface PredictionSignal {
   p_down: number;
   fair_value_up: number;
   fair_value_down: number;
-  market_implied_up: number;
+  market_implied_up?: number;
   gross_edge: number;
   estimated_fee: number;
   estimated_slippage: number;
@@ -234,8 +236,8 @@ export interface PredictionSignal {
   confidence: string;
   signal_score: number;
   decision_reason: string;
-  gate_results: FilterResult[];
-  score_breakdown: ScoreBreakdown;
+  gate_results?: FilterResult[];
+  score_breakdown?: ScoreBreakdown;
 }
 
 export interface BankrollState {

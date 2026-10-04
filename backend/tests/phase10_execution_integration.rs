@@ -200,6 +200,7 @@ async fn test_paper_execution_depth_walking_fill() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "PASSED".to_string(),
+        ..Default::default()
     };
 
     // 3. Execute paper order
@@ -273,6 +274,7 @@ async fn test_insufficient_liquidity_rejection() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "PASSED".to_string(),
+        ..Default::default()
     };
 
     let res = execution.execute_signal(&signal).await.unwrap();
@@ -318,6 +320,7 @@ async fn test_duplicate_position_prevention() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "PASSED".to_string(),
+        ..Default::default()
     };
 
     // First execution succeeds
@@ -360,6 +363,7 @@ async fn test_paper_orders_and_positions_api_endpoints() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "PASSED".to_string(),
+        ..Default::default()
     };
 
     execution.execute_signal(&signal).await.unwrap();

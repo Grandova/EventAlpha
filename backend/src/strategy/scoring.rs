@@ -1,40 +1,6 @@
-use serde::{Deserialize, Serialize};
-
 use crate::config::ScoreThresholds;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ScoreTier {
-    Skip,
-    Low,
-    Medium,
-    High,
-    VeryHigh,
-}
-
-impl std::fmt::Display for ScoreTier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ScoreTier::Skip => write!(f, "SKIP"),
-            ScoreTier::Low => write!(f, "LOW"),
-            ScoreTier::Medium => write!(f, "MEDIUM"),
-            ScoreTier::High => write!(f, "HIGH"),
-            ScoreTier::VeryHigh => write!(f, "VERY_HIGH"),
-        }
-    }
-}
-
-/// Detailed point breakdown for auditability and transparency
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScoreBreakdown {
-    pub edge_points: f64,     // max 35
-    pub prob_points: f64,     // max 25
-    pub obi_points: f64,      // max 20
-    pub momentum_points: f64, // max 15
-    pub timing_points: f64,   // max 5
-    pub total_score: f64,     // 0 - 100
-    pub tier: ScoreTier,
-}
+pub use crate::types::{ScoreBreakdown, ScoreTier};
 
 pub struct SignalScorer;
 
@@ -169,11 +135,13 @@ impl SignalScorer {
         ScoreBreakdown {
             edge_points,
             prob_points,
+            probability_points: prob_points,
             obi_points,
             momentum_points,
             timing_points,
             total_score: total,
             tier,
+            score_tier: tier.to_string(),
         }
     }
 }

@@ -200,6 +200,7 @@ async fn test_closed_loop_winning_settlement() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "Strong positive edge".to_string(),
+        ..Default::default()
     };
 
     let fill_res = execution.execute_signal(&signal).await.unwrap();
@@ -296,6 +297,7 @@ async fn test_closed_loop_losing_and_void_settlements() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "ETH bullish".to_string(),
+        ..Default::default()
     };
     execution.execute_signal(&sig_eth).await.unwrap();
 
@@ -319,6 +321,7 @@ async fn test_closed_loop_losing_and_void_settlements() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyDown,
         decision_reason: "SOL bearish".to_string(),
+        ..Default::default()
     };
     execution.execute_signal(&sig_sol).await.unwrap();
 
@@ -406,6 +409,7 @@ async fn test_trade_statistics_and_rest_endpoints() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "bull".to_string(),
+        ..Default::default()
     };
     execution.execute_signal(&sig1).await.unwrap();
     execution.handle_market_resolved(&MarketResolvedEvent {
@@ -447,6 +451,7 @@ async fn test_trade_statistics_and_rest_endpoints() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "bull".to_string(),
+        ..Default::default()
     };
     execution.execute_signal(&sig2).await.unwrap();
     execution.handle_market_resolved(&MarketResolvedEvent {

@@ -458,6 +458,8 @@ impl Database {
                 confidence,
                 action,
                 decision_reason: r.get("decision_reason"),
+                gate_results: Vec::new(),
+                score_breakdown: None,
             });
         }
 

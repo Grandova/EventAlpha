@@ -359,6 +359,7 @@ async fn test_db_persistence_and_retrieval_of_signals() {
         confidence: ConfidenceLevel::High,
         action: SignalAction::BuyUp,
         decision_reason: "PASSED all filters".to_string(),
+        ..Default::default()
     };
 
     // Insert into DB

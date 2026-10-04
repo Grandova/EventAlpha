@@ -18,8 +18,8 @@ use crate::db::Database;
 use crate::models::ModelPrediction;
 use crate::polymarket::orderbook::PolymarketBookEngine;
 use crate::types::{
-    Asset, ConfidenceLevel, DecisionLog, OrderBookSnapshot, PolymarketTick, PredictionSignal,
-    SignalAction,
+    Asset, ConfidenceLevel, DecisionLog, GateResult, OrderBookSnapshot, PolymarketTick,
+    PredictionSignal, SignalAction,
 };
 pub use filter::{FilterResult, HardFilterEngine};
 pub use scoring::{ScoreBreakdown, ScoreTier, SignalScorer};
@@ -130,6 +130,8 @@ impl StrategyEngine {
                 confidence,
                 action,
                 decision_reason: decision_reason.clone(),
+                gate_results: Vec::new(),
+                score_breakdown: None,
             };
 
             let decision = DecisionLog {
@@ -264,6 +266,51 @@ impl StrategyEngine {
         let prediction_id = format!("pred_{}", Uuid::new_v4().simple());
         let market_implied_up = polymarket_tick.and_then(|t| t.up_mid).or(Some(0.50));
 
+        let gate_results = vec![
+            GateResult {
+                gate_name: "数据流新鲜度 (Freshness)".to_string(),
+                passed: fresh_res.is_pass(),
+                value: if is_fresh { "数据流实时同步".to_string() } else { "数据流延迟超时".to_string() },
+                threshold: Some("实时新鲜".to_string()),
+            },
+            GateResult {
+                gate_name: "交割窗口时机 (Timing)".to_string(),
+                passed: time_res.is_pass(),
+                value: format!("{}s (窗口: {}s - {}s)", remaining_seconds, cfg.min_time_remaining_sec, cfg.max_time_remaining_sec),
+                threshold: Some(format!("{}s - {}s", cfg.min_time_remaining_sec, cfg.max_time_remaining_sec)),
+            },
+            GateResult {
+                gate_name: "模型胜率置信度 (Probability)".to_string(),
+                passed: prob_res.is_pass(),
+                value: format!("{:.1}% (门槛: {:.0}%)", calibrated_p * 100.0, cfg.min_probability * 100.0),
+                threshold: Some(format!(">= {:.0}%", cfg.min_probability * 100.0)),
+            },
+            GateResult {
+                gate_name: "入场合约买价 (Entry Price)".to_string(),
+                passed: entry_res.is_pass(),
+                value: format!("${:.3} (上限: ${:.2})", market_ask, cfg.max_entry_price),
+                threshold: Some(format!("<= ${:.2}", cfg.max_entry_price)),
+            },
+            GateResult {
+                gate_name: "买卖盘口价差 (Spread)".to_string(),
+                passed: spread_res.is_pass(),
+                value: format!("${:.3} (上限: ${:.3})", spread, cfg.max_spread),
+                threshold: Some(format!("<= ${:.3}", cfg.max_spread)),
+            },
+            GateResult {
+                gate_name: "订单簿流动性深度 (Liquidity)".to_string(),
+                passed: liq_res.is_pass(),
+                value: format!("${:.0} USDC (底线: ${:.0})", total_liquidity, cfg.min_liquidity),
+                threshold: Some(format!(">= ${:.0}", cfg.min_liquidity)),
+            },
+            GateResult {
+                gate_name: "扣费净数学期望 (Net Edge)".to_string(),
+                passed: edge_res.is_pass(),
+                value: format!("{:.2}% (门槛: {:.1}%)", net_edge * 100.0, cfg.min_net_edge * 100.0),
+                threshold: Some(format!(">= {:.1}%", cfg.min_net_edge * 100.0)),
+            },
+        ];
+
         let signal = PredictionSignal {
             prediction_id,
             market_id: prediction.market_id.clone(),
@@ -283,6 +330,8 @@ impl StrategyEngine {
             confidence,
             action,
             decision_reason: decision_reason.clone(),
+            gate_results,
+            score_breakdown: Some(breakdown),
         };
 
         let decision = DecisionLog {

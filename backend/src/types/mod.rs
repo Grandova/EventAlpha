@@ -191,6 +191,53 @@ impl std::fmt::Display for SignalAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ScoreTier {
+    Skip,
+    Low,
+    Medium,
+    High,
+    VeryHigh,
+}
+
+impl std::fmt::Display for ScoreTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScoreTier::Skip => write!(f, "SKIP"),
+            ScoreTier::Low => write!(f, "LOW"),
+            ScoreTier::Medium => write!(f, "MEDIUM"),
+            ScoreTier::High => write!(f, "HIGH"),
+            ScoreTier::VeryHigh => write!(f, "VERY_HIGH"),
+        }
+    }
+}
+
+/// Detailed point breakdown for auditability and transparency
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoreBreakdown {
+    pub edge_points: f64,     // max 35
+    pub prob_points: f64,     // max 25
+    #[serde(default)]
+    pub probability_points: f64, // alias for frontend compatibility
+    pub obi_points: f64,      // max 20
+    pub momentum_points: f64, // max 15
+    pub timing_points: f64,   // max 5
+    pub total_score: f64,     // 0 - 100
+    pub tier: ScoreTier,
+    #[serde(default)]
+    pub score_tier: String,   // alias for frontend compatibility
+}
+
+/// Hard filter gate evaluation result for transparency
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GateResult {
+    pub gate_name: String,
+    pub passed: bool,
+    pub value: String,
+    pub threshold: Option<String>,
+}
+
 /// Strategy prediction and edge assessment
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PredictionSignal {
@@ -212,6 +259,37 @@ pub struct PredictionSignal {
     pub confidence: ConfidenceLevel,
     pub action: SignalAction,
     pub decision_reason: String,
+    #[serde(default)]
+    pub gate_results: Vec<GateResult>,
+    #[serde(default)]
+    pub score_breakdown: Option<ScoreBreakdown>,
+}
+
+impl Default for PredictionSignal {
+    fn default() -> Self {
+        Self {
+            prediction_id: String::new(),
+            market_id: String::new(),
+            asset: Asset::BTC,
+            timestamp_ms: 0,
+            model_version: String::new(),
+            p_up: 0.5,
+            p_down: 0.5,
+            fair_value_up: 0.5,
+            fair_value_down: 0.5,
+            market_implied_up: None,
+            gross_edge: 0.0,
+            estimated_fee: 0.0,
+            estimated_slippage: 0.0,
+            net_edge: 0.0,
+            signal_score: 0.0,
+            confidence: ConfidenceLevel::Skip,
+            action: SignalAction::Skip,
+            decision_reason: String::new(),
+            gate_results: Vec::new(),
+            score_breakdown: None,
+        }
+    }
 }
 
 /// Decision log for complete transparency on every evaluation

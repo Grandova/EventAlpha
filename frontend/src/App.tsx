@@ -709,7 +709,15 @@ export const App: React.FC = () => {
                 </div>
 
                 {/* 4. AI Opportunity Center */}
-                <OpportunityCenter signal={signal} prediction={prediction} />
+                <OpportunityCenter
+                  signal={signal}
+                  prediction={prediction}
+                  market={market}
+                  book={book}
+                  onRefreshSignal={() => {
+                    api.getLatestSignal(activeAsset).then(setSignal).catch(() => {});
+                  }}
+                />
 
                 {/* 4. Recent Orders Table (Matches AsmrProg "Recent Orders" table!) */}
                 {tradingMode === 'live' ? (
