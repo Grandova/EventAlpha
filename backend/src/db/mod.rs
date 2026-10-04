@@ -77,6 +77,12 @@ impl Database {
             .await
             .context("Failed to execute real trading & self learning migrations (0002)")?;
 
+        let migration_sql_3 = include_str!("../../migrations/0003_live_bankroll.sql");
+        sqlx::raw_sql(migration_sql_3)
+            .execute(&self.pool)
+            .await
+            .context("Failed to execute live bankroll migrations (0003)")?;
+
         Ok(())
     }
 
@@ -186,6 +192,98 @@ impl Database {
                     total_equity: initial,
                     minimum_bankroll: config.bankroll.minimum,
                     mode: config.bankroll.mode,
+                    daily_loss_current: 0.0,
+                    consecutive_losses: 0,
+                    peak_equity: initial,
+                    current_drawdown: 0.0,
+                    is_trading_halted: false,
+                    halt_reason: None,
+                })
+            }
+        }
+    }
+
+    /// Get current LIVE bankroll state or initialize it from active Polymarket account
+    pub async fn get_or_init_live_bankroll(&self) -> Result<BankrollState> {
+        let row_opt = sqlx::query(
+            r#"
+            SELECT active_bankroll, locked_profit, total_equity
+            FROM live_bankroll_history
+            ORDER BY id DESC
+            LIMIT 1
+            "#,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to query latest live bankroll history")?;
+
+        let active_account = self.get_active_account().await.ok().flatten();
+
+        match row_opt {
+            Some(row) => {
+                let mut active: f64 = row.get("active_bankroll");
+                let locked: f64 = row.get("locked_profit");
+                if let Some(ref acc) = active_account {
+                    if acc.balance_usdc > 0.0 || active <= 0.0 {
+                        active = acc.balance_usdc;
+                    }
+                }
+                let total = active + locked;
+                let min_floor = 0.50;
+                let is_halted = active <= min_floor && active_account.is_some() && active_account.as_ref().unwrap().balance_usdc > 0.0;
+                let halt_reason = if is_halted {
+                    Some(format!("实盘可用资金 (${:.2}) 低于最低保护底线 (${:.2})", active, min_floor))
+                } else {
+                    None
+                };
+
+                Ok(BankrollState {
+                    initial_bankroll: active,
+                    active_bankroll: active,
+                    bankroll_cap: active.max(10.0),
+                    locked_profit: locked,
+                    total_equity: total,
+                    minimum_bankroll: min_floor,
+                    mode: crate::types::BankrollMode::CapitalRecovery,
+                    daily_loss_current: 0.0,
+                    consecutive_losses: 0,
+                    peak_equity: total,
+                    current_drawdown: 0.0,
+                    is_trading_halted: is_halted,
+                    halt_reason,
+                })
+            }
+            None => {
+                let initial = active_account.as_ref().map(|a| a.balance_usdc).unwrap_or(0.0);
+                let now_ms = Utc::now().timestamp_millis();
+                sqlx::query(
+                    r#"
+                    INSERT INTO live_bankroll_history (timestamp, active_bankroll, locked_profit, total_equity, change_amount, reason, trade_id, created_at)
+                    VALUES (?, ?, 0.0, ?, 0.0, 'LIVE_INIT', NULL, ?)
+                    "#,
+                )
+                .bind(now_ms)
+                .bind(initial)
+                .bind(initial)
+                .bind(now_ms)
+                .execute(&self.pool)
+                .await
+                .context("Failed to insert initial live bankroll record")?;
+
+                info!(
+                    "Initialized new Live Bankroll: active={:.2} USDC (Polymarket Account: {})",
+                    initial,
+                    active_account.as_ref().map(|a| a.label.as_str()).unwrap_or("None")
+                );
+
+                Ok(BankrollState {
+                    initial_bankroll: initial,
+                    active_bankroll: initial,
+                    bankroll_cap: initial.max(10.0),
+                    locked_profit: 0.0,
+                    total_equity: initial,
+                    minimum_bankroll: 0.50,
+                    mode: crate::types::BankrollMode::CapitalRecovery,
                     daily_loss_current: 0.0,
                     consecutive_losses: 0,
                     peak_equity: initial,
@@ -743,6 +841,129 @@ impl Database {
             .collect();
 
         Ok(list)
+    }
+
+    /// Record a LIVE bankroll modification transaction
+    pub async fn record_live_bankroll_entry(
+        &self,
+        active: f64,
+        locked: f64,
+        total: f64,
+        change: f64,
+        reason: &str,
+        trade_id: Option<&str>,
+    ) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        sqlx::query(
+            r#"
+            INSERT INTO live_bankroll_history (timestamp, active_bankroll, locked_profit, total_equity, change_amount, reason, trade_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(now_ms)
+        .bind(active)
+        .bind(locked)
+        .bind(total)
+        .bind(change)
+        .bind(reason)
+        .bind(trade_id)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to record live bankroll history entry")?;
+
+        Ok(())
+    }
+
+    /// Retrieve LIVE bankroll transaction history
+    pub async fn get_live_bankroll_history(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::types::BankrollHistoryEntry>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, timestamp, active_bankroll, locked_profit, total_equity, change_amount, reason, trade_id
+            FROM live_bankroll_history
+            ORDER BY id DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to query live bankroll history")?;
+
+        let list = rows
+            .into_iter()
+            .map(|r| crate::types::BankrollHistoryEntry {
+                id: r.get("id"),
+                timestamp_ms: r.get("timestamp"),
+                active_bankroll: r.get("active_bankroll"),
+                locked_profit: r.get("locked_profit"),
+                total_equity: r.get("total_equity"),
+                change_amount: r.get("change_amount"),
+                reason: r.get("reason"),
+                trade_id: r.get("trade_id"),
+            })
+            .collect();
+
+        Ok(list)
+    }
+
+    /// Retrieve live risk configuration
+    pub async fn get_live_risk_config(&self) -> Result<crate::config::RiskConfig> {
+        let row_opt = sqlx::query(
+            r#"
+            SELECT daily_loss_limit, max_consecutive_losses, max_drawdown, cooldown_minutes
+            FROM live_risk_config
+            WHERE id = 1
+            "#,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to query live risk config")?;
+
+        match row_opt {
+            Some(r) => Ok(crate::config::RiskConfig {
+                daily_loss_limit: r.get("daily_loss_limit"),
+                max_consecutive_losses: r.get::<i64, _>("max_consecutive_losses") as u32,
+                max_drawdown: r.get("max_drawdown"),
+                cooldown_minutes: r.get::<i64, _>("cooldown_minutes") as u32,
+            }),
+            None => Ok(crate::config::RiskConfig {
+                daily_loss_limit: 5.0,
+                max_drawdown: 0.20,
+                max_consecutive_losses: 3,
+                cooldown_minutes: 15,
+            }),
+        }
+    }
+
+    /// Save or update live risk configuration
+    pub async fn save_live_risk_config(&self, cfg: &crate::config::RiskConfig) -> Result<()> {
+        let now_ms = Utc::now().timestamp_millis();
+        sqlx::query(
+            r#"
+            INSERT INTO live_risk_config (id, daily_loss_limit, max_consecutive_losses, max_drawdown, cooldown_minutes, minimum_bankroll, updated_at)
+            VALUES (1, ?, ?, ?, ?, 0.50, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                daily_loss_limit = excluded.daily_loss_limit,
+                max_consecutive_losses = excluded.max_consecutive_losses,
+                max_drawdown = excluded.max_drawdown,
+                cooldown_minutes = excluded.cooldown_minutes,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(cfg.daily_loss_limit)
+        .bind(cfg.max_consecutive_losses as i64)
+        .bind(cfg.max_drawdown)
+        .bind(cfg.cooldown_minutes as i64)
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await
+        .context("Failed to save live risk config")?;
+
+        Ok(())
     }
 
     /// Insert a settled paper trade result with full balance attribution

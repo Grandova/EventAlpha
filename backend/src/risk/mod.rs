@@ -15,6 +15,7 @@ pub struct RiskManager {
     cooldown_until_ms: Arc<RwLock<Option<i64>>>,
     db: Arc<Database>,
     bankroll_tx: broadcast::Sender<BankrollState>,
+    is_live: bool,
 }
 
 impl RiskManager {
@@ -32,7 +33,30 @@ impl RiskManager {
             cooldown_until_ms: Arc::new(RwLock::new(None)),
             db,
             bankroll_tx,
+            is_live: false,
         }
+    }
+
+    pub fn new_live(
+        bankroll_config: BankrollConfig,
+        risk_config: RiskConfig,
+        initial_state: BankrollState,
+        db: Arc<Database>,
+    ) -> Self {
+        let (bankroll_tx, _) = broadcast::channel(1024);
+        Self {
+            bankroll_config,
+            risk_config: Arc::new(RwLock::new(risk_config)),
+            state: Arc::new(RwLock::new(initial_state)),
+            cooldown_until_ms: Arc::new(RwLock::new(None)),
+            db,
+            bankroll_tx,
+            is_live: true,
+        }
+    }
+
+    pub fn is_live(&self) -> bool {
+        self.is_live
     }
 
     /// Pre-trade risk check: verify halted status, cooldowns, drawdown, daily loss, and capital limits
@@ -126,17 +150,31 @@ impl RiskManager {
         }
 
         // Record in SQLite ledger
-        let _ = self
-            .db
-            .record_bankroll_entry(
-                state.active_bankroll,
-                state.locked_profit,
-                state.total_equity,
-                -stake,
-                reason,
-                trade_id,
-            )
-            .await;
+        if self.is_live {
+            let _ = self
+                .db
+                .record_live_bankroll_entry(
+                    state.active_bankroll,
+                    state.locked_profit,
+                    state.total_equity,
+                    -stake,
+                    reason,
+                    trade_id,
+                )
+                .await;
+        } else {
+            let _ = self
+                .db
+                .record_bankroll_entry(
+                    state.active_bankroll,
+                    state.locked_profit,
+                    state.total_equity,
+                    -stake,
+                    reason,
+                    trade_id,
+                )
+                .await;
+        }
 
         let snapshot = state.clone();
         let _ = self.bankroll_tx.send(snapshot.clone());
@@ -273,17 +311,31 @@ impl RiskManager {
         let reason_str = format!("SETTLEMENT_{}", outcome.to_uppercase());
 
         // Record in SQLite ledger
-        let _ = self
-            .db
-            .record_bankroll_entry(
-                state.active_bankroll,
-                state.locked_profit,
-                state.total_equity,
-                change_amount,
-                &reason_str,
-                trade_id,
-            )
-            .await;
+        if self.is_live {
+            let _ = self
+                .db
+                .record_live_bankroll_entry(
+                    state.active_bankroll,
+                    state.locked_profit,
+                    state.total_equity,
+                    change_amount,
+                    &reason_str,
+                    trade_id,
+                )
+                .await;
+        } else {
+            let _ = self
+                .db
+                .record_bankroll_entry(
+                    state.active_bankroll,
+                    state.locked_profit,
+                    state.total_equity,
+                    change_amount,
+                    &reason_str,
+                    trade_id,
+                )
+                .await;
+        }
 
         let snapshot = state.clone();
         let _ = self.bankroll_tx.send(snapshot.clone());
@@ -357,22 +409,36 @@ impl RiskManager {
         let delta = active_bankroll - prev_active;
         let snapshot = state.clone();
 
-        let _ = self
-            .db
-            .record_bankroll_entry(
-                snapshot.active_bankroll,
-                snapshot.locked_profit,
-                snapshot.total_equity,
-                delta,
-                "MANUAL_SET_FUNDS",
-                None,
-            )
-            .await;
+        if self.is_live {
+            let _ = self
+                .db
+                .record_live_bankroll_entry(
+                    snapshot.active_bankroll,
+                    snapshot.locked_profit,
+                    snapshot.total_equity,
+                    delta,
+                    "MANUAL_SET_FUNDS",
+                    None,
+                )
+                .await;
+        } else {
+            let _ = self
+                .db
+                .record_bankroll_entry(
+                    snapshot.active_bankroll,
+                    snapshot.locked_profit,
+                    snapshot.total_equity,
+                    delta,
+                    "MANUAL_SET_FUNDS",
+                    None,
+                )
+                .await;
+        }
 
         let _ = self.bankroll_tx.send(snapshot.clone());
         info!(
-            "Bankroll manually updated to {:.2} USDC (Cap: {:.2} USDC, Min floor: {:.2} USDC)",
-            active_bankroll, cap, min_floor
+            "Bankroll manually updated to {:.2} USDC (Cap: {:.2} USDC, Min floor: {:.2} USDC, Live: {})",
+            active_bankroll, cap, min_floor, self.is_live
         );
 
         Ok(snapshot)
@@ -409,17 +475,31 @@ impl RiskManager {
         );
 
         let snapshot = state.clone();
-        let _ = self
-            .db
-            .record_bankroll_entry(
-                snapshot.active_bankroll,
-                snapshot.locked_profit,
-                snapshot.total_equity,
-                to_transfer,
-                "UNLOCK_PROFIT_TO_ACTIVE",
-                None,
-            )
-            .await;
+        if self.is_live {
+            let _ = self
+                .db
+                .record_live_bankroll_entry(
+                    snapshot.active_bankroll,
+                    snapshot.locked_profit,
+                    snapshot.total_equity,
+                    to_transfer,
+                    "UNLOCK_PROFIT_TO_ACTIVE",
+                    None,
+                )
+                .await;
+        } else {
+            let _ = self
+                .db
+                .record_bankroll_entry(
+                    snapshot.active_bankroll,
+                    snapshot.locked_profit,
+                    snapshot.total_equity,
+                    to_transfer,
+                    "UNLOCK_PROFIT_TO_ACTIVE",
+                    None,
+                )
+                .await;
+        }
 
         let _ = self.bankroll_tx.send(snapshot.clone());
         Ok(snapshot)
@@ -481,9 +561,13 @@ impl RiskManager {
         }
 
         info!(
-            "🛡️ Risk limits updated: DailyLossLimit=${:.2}, MaxConsecutiveLosses={}, MaxDrawdown={:.1}%, Cooldown={}m",
-            conf.daily_loss_limit, conf.max_consecutive_losses, conf.max_drawdown * 100.0, conf.cooldown_minutes
+            "🛡️ Risk limits updated (Live: {}): DailyLossLimit=${:.2}, MaxConsecutiveLosses={}, MaxDrawdown={:.1}%, Cooldown={}m",
+            self.is_live, conf.daily_loss_limit, conf.max_consecutive_losses, conf.max_drawdown * 100.0, conf.cooldown_minutes
         );
+
+        if self.is_live {
+            let _ = self.db.save_live_risk_config(&conf).await;
+        }
 
         // If daily loss limit was increased above current daily loss, lift daily loss halt automatically
         let mut state = self.state.write().await;
@@ -499,6 +583,44 @@ impl RiskManager {
         }
     }
 
+    /// Synchronize live active balance from active Polymarket account
+    pub async fn sync_live_balance(&self, new_balance: f64) {
+        if !self.is_live {
+            return;
+        }
+        let mut state = self.state.write().await;
+        let prev = state.active_bankroll;
+        state.active_bankroll = new_balance;
+        state.total_equity = state.active_bankroll + state.locked_profit;
+        state.peak_equity = state.peak_equity.max(state.total_equity);
+
+        // If balance was replenished above floor, lift floor halt
+        if state.is_trading_halted {
+            if let Some(ref r) = state.halt_reason {
+                if r.contains("底线") || r.contains("floor") || r.contains("minimum") {
+                    if state.active_bankroll > state.minimum_bankroll {
+                        state.is_trading_halted = false;
+                        state.halt_reason = None;
+                        info!("Live bankroll replenished above floor (${:.2} > ${:.2}): trading halt lifted.", state.active_bankroll, state.minimum_bankroll);
+                    }
+                }
+            }
+        }
+
+        let delta = new_balance - prev;
+        if delta.abs() > 0.001 {
+            let _ = self.db.record_live_bankroll_entry(
+                state.active_bankroll,
+                state.locked_profit,
+                state.total_equity,
+                delta,
+                "SYNC_WALLET_BALANCE",
+                None,
+            ).await;
+            let _ = self.bankroll_tx.send(state.clone());
+        }
+    }
+
     /// Manually unhalt trading: reset halt flag, reason, daily loss counter, and cooldown
     pub async fn unhalt_trading(&self) {
         let mut state = self.state.write().await;
@@ -508,12 +630,16 @@ impl RiskManager {
         state.consecutive_losses = 0;
         *self.cooldown_until_ms.write().await = None;
 
-        info!("🚀 Trading halt manually lifted by user: counters reset and trading resumed.");
+        info!("🚀 Trading halt manually lifted by user: counters reset and trading resumed (Live: {}).", self.is_live);
         let _ = self.bankroll_tx.send(state.clone());
     }
 
     pub async fn get_history(&self, limit: i64) -> anyhow::Result<Vec<BankrollHistoryEntry>> {
-        self.db.get_bankroll_history(limit).await
+        if self.is_live {
+            self.db.get_live_bankroll_history(limit).await
+        } else {
+            self.db.get_bankroll_history(limit).await
+        }
     }
 
     pub fn bankroll_config(&self) -> &BankrollConfig {

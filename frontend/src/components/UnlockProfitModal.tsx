@@ -7,6 +7,7 @@ interface UnlockProfitModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentBankroll: BankrollState | null;
+  mode?: 'paper' | 'live';
   onSuccess: (newBankroll: BankrollState) => void;
 }
 
@@ -14,6 +15,7 @@ export const UnlockProfitModal: React.FC<UnlockProfitModalProps> = ({
   isOpen,
   onClose,
   currentBankroll,
+  mode = 'paper',
   onSuccess,
 }) => {
   const lockedProfit = currentBankroll?.locked_profit ?? 0.0;
@@ -69,7 +71,7 @@ export const UnlockProfitModal: React.FC<UnlockProfitModalProps> = ({
     try {
       setIsSubmitting(true);
       setError(null);
-      const res = await api.unlockProfit(numAmount);
+      const res = await api.unlockProfit(numAmount, mode);
       if (res.success && res.bankroll) {
         onSuccess(res.bankroll);
         onClose();
@@ -83,6 +85,8 @@ export const UnlockProfitModal: React.FC<UnlockProfitModalProps> = ({
     }
   };
 
+  const isLive = mode === 'live';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
       <div className="bg-white dark:bg-[#181a1e] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
@@ -94,10 +98,10 @@ export const UnlockProfitModal: React.FC<UnlockProfitModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black text-[#363949] dark:text-white">
-                提取锁定利润至交易本金
+                {isLive ? '提取实盘锁定利润至交易本金' : '提取模拟锁定利润至交易本金'}
               </h2>
               <p className="text-xs text-[#7d8da1] dark:text-slate-400">
-                将隔离金库中的利润转为可用资金继续交易
+                {isLive ? '将实盘隔离金库中的利润转为可用资金继续撮合' : '将隔离金库中的利润转为可用资金继续交易'}
               </p>
             </div>
           </div>

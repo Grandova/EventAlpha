@@ -131,6 +131,7 @@ assets: ["BTC", "ETH", "SOL"]
         models: models.clone(),
         strategy,
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,

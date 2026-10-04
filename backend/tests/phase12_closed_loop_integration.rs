@@ -145,6 +145,7 @@ async fn setup_closed_loop_test_app() -> (
         strategy,
         execution: execution.clone(),
         risk: risk.clone(),
+        live_risk: risk.clone(),
         backtest,
         replay,
         live_execution: std::sync::Arc::new(poly_quant_backend::execution::LiveExecutionEngine::new(

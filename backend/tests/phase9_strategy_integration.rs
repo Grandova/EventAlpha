@@ -136,6 +136,7 @@ async fn setup_strategy_test_app() -> (axum::Router, Arc<StrategyEngine>, Arc<Da
         models: models.clone(),
         strategy: strategy.clone(),
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,

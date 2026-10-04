@@ -56,6 +56,7 @@ pub struct AppState {
     pub live_execution: Arc<crate::execution::LiveExecutionEngine>,
     pub self_learning: Arc<crate::models::SelfLearningEngine>,
     pub risk: Arc<RiskManager>,
+    pub live_risk: Arc<RiskManager>,
     pub backtest: Arc<BacktestEngine>,
     pub replay: Arc<ReplayEngine>,
     pub sessions: Arc<dashmap::DashMap<String, auth::SessionInfo>>,
@@ -81,6 +82,26 @@ impl AppState {
         let clob_http = Arc::new(crate::polymarket::PolymarketClobHttpClient::default());
         let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
         let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
+        let live_risk = Arc::new(crate::risk::RiskManager::new_live(
+            config.bankroll.clone(),
+            config.risk.clone(),
+            crate::types::BankrollState {
+                initial_bankroll: 0.0,
+                active_bankroll: 0.0,
+                bankroll_cap: 10.0,
+                locked_profit: 0.0,
+                total_equity: 0.0,
+                minimum_bankroll: 0.50,
+                mode: crate::types::BankrollMode::CapitalRecovery,
+                daily_loss_current: 0.0,
+                consecutive_losses: 0,
+                peak_equity: 0.0,
+                current_drawdown: 0.0,
+                is_trading_halted: false,
+                halt_reason: None,
+            },
+            db.clone(),
+        ));
         Self {
             config,
             db,
@@ -94,6 +115,7 @@ impl AppState {
             live_execution,
             self_learning,
             risk,
+            live_risk,
             backtest,
             replay,
             sessions: Arc::new(dashmap::DashMap::new()),
@@ -145,9 +167,16 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/paper/bankroll/set", post(handle_bankroll_set))
         .route("/api/v1/paper/bankroll/unlock", post(handle_bankroll_unlock))
         .route("/api/v1/paper/bankroll/history", get(handle_bankroll_history))
+        .route("/api/v1/live/bankroll", get(handle_live_bankroll))
+        .route("/api/v1/live/bankroll/set", post(handle_live_bankroll_set))
+        .route("/api/v1/live/bankroll/unlock", post(handle_live_bankroll_unlock))
+        .route("/api/v1/live/bankroll/history", get(handle_live_bankroll_history))
         .route("/api/v1/risk/status", get(handle_risk_status))
         .route("/api/v1/risk/config", post(handle_risk_config_update))
         .route("/api/v1/risk/unhalt", post(handle_risk_unhalt))
+        .route("/api/v1/live/risk/status", get(handle_live_risk_status))
+        .route("/api/v1/live/risk/config", post(handle_live_risk_config_update))
+        .route("/api/v1/live/risk/unhalt", post(handle_live_risk_unhalt))
         .route("/api/v1/events", get(handle_events))
         .route("/api/v1/collector/status", get(handle_collector_status))
         .route("/api/v1/collector/prices", get(handle_collector_prices))
@@ -459,6 +488,121 @@ async fn handle_risk_unhalt(
         Json(serde_json::json!({
             "success": true,
             "message": "风控熔断已解除，交易已恢复",
+            "risk": updated
+        })),
+    )
+}
+
+// =============================================================================
+// Isolated LIVE Trading Bankroll & Risk Handlers
+// =============================================================================
+
+async fn handle_live_bankroll(State(state): State<AppState>) -> Json<BankrollState> {
+    Json(state.live_risk.get_bankroll_state().await)
+}
+
+async fn handle_live_bankroll_set(
+    State(state): State<AppState>,
+    Json(req): Json<SetBankrollRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state
+        .live_risk
+        .update_bankroll_funds(req.active_bankroll, req.bankroll_cap, req.minimum_bankroll)
+        .await
+    {
+        Ok(new_state) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": format!("实盘资金配置已更新！可用资金: ${:.2} USDC", new_state.active_bankroll),
+                "bankroll": new_state
+            })),
+        ),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "message": err
+            })),
+        ),
+    }
+}
+
+async fn handle_live_bankroll_unlock(
+    State(state): State<AppState>,
+    Json(req): Json<UnlockProfitRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state.live_risk.unlock_profit_to_active(req.amount).await {
+        Ok(new_state) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": format!("成功将实盘锁定利润提取至可用资金！当前可用资金: ${:.2} USDC", new_state.active_bankroll),
+                "bankroll": new_state
+            })),
+        ),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "message": err
+            })),
+        ),
+    }
+}
+
+async fn handle_live_bankroll_history(
+    State(state): State<AppState>,
+    Query(query): Query<LimitQuery>,
+) -> Result<Json<Vec<BankrollHistoryEntry>>, StatusCode> {
+    let limit = query.limit.unwrap_or(50);
+    state
+        .live_risk
+        .get_history(limit)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn handle_live_risk_status(State(state): State<AppState>) -> Json<RiskStatus> {
+    Json(state.live_risk.get_risk_status().await)
+}
+
+async fn handle_live_risk_config_update(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateRiskConfigRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    state
+        .live_risk
+        .update_risk_limits(
+            req.daily_loss_limit,
+            req.max_consecutive_losses,
+            req.max_drawdown,
+            req.cooldown_minutes,
+        )
+        .await;
+
+    let updated = state.live_risk.get_risk_status().await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "message": "实盘风控限额设置已更新",
+            "risk": updated
+        })),
+    )
+}
+
+async fn handle_live_risk_unhalt(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    state.live_risk.unhalt_trading().await;
+    let updated = state.live_risk.get_risk_status().await;
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "message": "实盘风控熔断已解除，实盘交易已恢复",
             "risk": updated
         })),
     )
@@ -1051,6 +1195,11 @@ async fn handle_account_activate(
     Path(id): Path<String>,
 ) -> Json<serde_json::Value> {
     let success = state.db.set_active_account(&id).await.is_ok();
+    if success {
+        if let Ok(Some(acc)) = state.db.get_active_account().await {
+            state.live_risk.sync_live_balance(acc.balance_usdc).await;
+        }
+    }
     Json(serde_json::json!({ "success": success }))
 }
 
@@ -1118,6 +1267,7 @@ async fn handle_account_update(
     if let Some(bal) = req.balance_usdc {
         if bal >= 0.0 {
             account.balance_usdc = bal;
+            state.live_risk.sync_live_balance(bal).await;
         }
     }
 
@@ -1138,6 +1288,7 @@ async fn handle_account_calibrate_balance(
 
     let new_bal = req.balance_usdc.max(0.0);
     state.db.update_account_balance(&account.id, new_bal).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state.live_risk.sync_live_balance(new_bal).await;
 
     Ok(Json(serde_json::json!({
         "account_id": id,
@@ -1163,6 +1314,7 @@ async fn handle_account_balance(
 
     let balance = state.live_execution.clob_client().fetch_balance(&account).await.unwrap_or(account.balance_usdc);
     let _ = state.db.update_account_balance(&account.id, balance).await;
+    state.live_risk.sync_live_balance(balance).await;
 
     Ok(Json(serde_json::json!({
         "account_id": id,
@@ -1398,7 +1550,7 @@ assets: ["BTC", "ETH", "SOL"]
         let risk = Arc::new(RiskManager::new(
             config.bankroll.clone(),
             config.risk.clone(),
-            bankroll_state,
+            bankroll_state.clone(),
             db.clone(),
         ));
 
@@ -1409,6 +1561,12 @@ assets: ["BTC", "ETH", "SOL"]
         let live_execution = Arc::new(crate::execution::LiveExecutionEngine::new(db.clone(), clob_http));
         let self_learning = Arc::new(crate::models::SelfLearningEngine::new(models.clone(), db.clone()));
 
+        let live_risk = Arc::new(RiskManager::new_live(
+            config.bankroll.clone(),
+            config.risk.clone(),
+            bankroll_state.clone(),
+            db.clone(),
+        ));
         let sessions = Arc::new(dashmap::DashMap::new());
 
         AppState {
@@ -1424,6 +1582,7 @@ assets: ["BTC", "ETH", "SOL"]
             live_execution,
             self_learning,
             risk,
+            live_risk,
             backtest,
             replay,
             sessions,

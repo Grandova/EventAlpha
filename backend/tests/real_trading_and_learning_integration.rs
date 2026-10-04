@@ -202,3 +202,80 @@ async fn test_continuous_self_learning_evolution() {
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].round_id, "BTC_5M_ROUND_1");
 }
+
+#[tokio::test]
+async fn test_live_and_paper_bankroll_isolation() {
+    let config = test_config();
+    let db = Arc::new(Database::new(&config).await.unwrap());
+
+    // 1. Setup paper bankroll ($10.00)
+    let paper_bankroll = db.get_or_init_bankroll(&config).await.unwrap();
+    let paper_risk = Arc::new(poly_quant_backend::risk::RiskManager::new(
+        config.bankroll.clone(),
+        config.risk.clone(),
+        paper_bankroll,
+        db.clone(),
+    ));
+
+    // 2. Setup live bankroll anchored to Polymarket account ($1.41 USDC)
+    let acc = PolymarketAccount {
+        id: "acc_live_iso".to_string(),
+        label: "Live Isolation Account".to_string(),
+        api_key: "k".to_string(),
+        api_secret: "s".to_string(),
+        api_passphrase: "p".to_string(),
+        wallet_address: "0x1234567890123456789012345678901234567890".to_string(),
+        proxy_wallet_address: None,
+        is_active: true,
+        balance_usdc: 1.41,
+        created_at: 1000,
+        updated_at: 1000,
+    };
+    db.insert_account(&acc).await.unwrap();
+    db.set_active_account(&acc.id).await.unwrap();
+
+    let live_bankroll = db.get_or_init_live_bankroll().await.unwrap();
+    assert_eq!(live_bankroll.active_bankroll, 1.41);
+
+    let live_risk_cfg = poly_quant_backend::config::RiskConfig {
+        daily_loss_limit: 3.0,
+        max_drawdown: 0.20,
+        max_consecutive_losses: 3,
+        cooldown_minutes: 15,
+    };
+    let live_risk = Arc::new(poly_quant_backend::risk::RiskManager::new_live(
+        config.bankroll.clone(),
+        live_risk_cfg,
+        live_bankroll,
+        db.clone(),
+    ));
+
+    // 3. Verify separation of active funds
+    assert_eq!(paper_risk.get_bankroll_state().await.active_bankroll, 10.0);
+    assert_eq!(live_risk.get_bankroll_state().await.active_bankroll, 1.41);
+
+    // 4. Reserve paper stake: only paper decreases!
+    let _ = paper_risk.reserve_stake(2.0, "PAPER_ORDER", None).await.unwrap();
+    assert_eq!(paper_risk.get_bankroll_state().await.active_bankroll, 8.0);
+    assert_eq!(live_risk.get_bankroll_state().await.active_bankroll, 1.41);
+
+    // 5. Reserve live stake: only live decreases!
+    let _ = live_risk.reserve_stake(0.50, "LIVE_ORDER", None).await.unwrap();
+    assert_eq!(paper_risk.get_bankroll_state().await.active_bankroll, 8.0);
+    assert!((live_risk.get_bankroll_state().await.active_bankroll - 0.91).abs() < 1e-4);
+
+    // 6. Sync on-chain balance to live risk: paper unaffected!
+    live_risk.sync_live_balance(10.50).await;
+    assert_eq!(live_risk.get_bankroll_state().await.active_bankroll, 10.50);
+    assert_eq!(paper_risk.get_bankroll_state().await.active_bankroll, 8.0);
+
+    // 7. Test independent risk halting
+    // Trip paper risk daily loss halt
+    let _ = paper_risk.process_settlement(0.0, -3.0, "LOSS", None).await.unwrap();
+    assert!(paper_risk.get_risk_status().await.is_trading_halted);
+    assert!(!live_risk.get_risk_status().await.is_trading_halted); // Live remains active!
+
+    // Unhalt paper: live remains unaffected
+    paper_risk.unhalt_trading().await;
+    assert!(!paper_risk.get_risk_status().await.is_trading_halted);
+}

@@ -126,32 +126,84 @@ export const api = {
     fetchJson<any[]>(`/api/v1/strategy/decisions/recent?limit=${limit}`),
 
   // Paper Trading & Risk Management
-  getBankroll: () => fetchJson<BankrollState>('/api/v1/paper/bankroll'),
-  setBankrollFunds: (req: { active_bankroll: number; bankroll_cap?: number; minimum_bankroll?: number }) =>
-    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>('/api/v1/paper/bankroll/set', {
+  getBankroll: (mode?: 'paper' | 'live') =>
+    fetchJson<BankrollState>(mode === 'live' ? '/api/v1/live/bankroll' : '/api/v1/paper/bankroll'),
+  setBankrollFunds: (
+    req: { active_bankroll: number; bankroll_cap?: number; minimum_bankroll?: number },
+    mode?: 'paper' | 'live'
+  ) =>
+    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>(
+      mode === 'live' ? '/api/v1/live/bankroll/set' : '/api/v1/paper/bankroll/set',
+      {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }
+    ),
+  unlockProfit: (amount?: number, mode?: 'paper' | 'live') =>
+    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>(
+      mode === 'live' ? '/api/v1/live/bankroll/unlock' : '/api/v1/paper/bankroll/unlock',
+      {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      }
+    ),
+  getBankrollHistory: (limit = 50, mode?: 'paper' | 'live') =>
+    fetchJson<BankrollHistoryEntry[]>(
+      mode === 'live' ? `/api/v1/live/bankroll/history?limit=${limit}` : `/api/v1/paper/bankroll/history?limit=${limit}`
+    ),
+  getRiskStatus: (mode?: 'paper' | 'live') =>
+    fetchJson<RiskStatus>(mode === 'live' ? '/api/v1/live/risk/status' : '/api/v1/risk/status'),
+  updateRiskConfig: (
+    req: {
+      daily_loss_limit?: number;
+      max_consecutive_losses?: number;
+      max_drawdown?: number;
+      cooldown_minutes?: number;
+    },
+    mode?: 'paper' | 'live'
+  ) =>
+    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>(
+      mode === 'live' ? '/api/v1/live/risk/config' : '/api/v1/risk/config',
+      {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }
+    ),
+  unhaltTrading: (mode?: 'paper' | 'live') =>
+    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>(
+      mode === 'live' ? '/api/v1/live/risk/unhalt' : '/api/v1/risk/unhalt',
+      {
+        method: 'POST',
+      }
+    ),
+
+  // Dedicated Live Trading Risk & Bankroll Methods
+  getLiveBankroll: () => fetchJson<BankrollState>('/api/v1/live/bankroll'),
+  setLiveBankrollFunds: (req: { active_bankroll: number; bankroll_cap?: number; minimum_bankroll?: number }) =>
+    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>('/api/v1/live/bankroll/set', {
       method: 'POST',
       body: JSON.stringify(req),
     }),
-  unlockProfit: (amount?: number) =>
-    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>('/api/v1/paper/bankroll/unlock', {
+  unlockLiveProfit: (amount?: number) =>
+    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>('/api/v1/live/bankroll/unlock', {
       method: 'POST',
       body: JSON.stringify({ amount }),
     }),
-  getBankrollHistory: (limit = 50) =>
-    fetchJson<BankrollHistoryEntry[]>(`/api/v1/paper/bankroll/history?limit=${limit}`),
-  getRiskStatus: () => fetchJson<RiskStatus>('/api/v1/risk/status'),
-  updateRiskConfig: (req: {
+  getLiveBankrollHistory: (limit = 50) =>
+    fetchJson<BankrollHistoryEntry[]>(`/api/v1/live/bankroll/history?limit=${limit}`),
+  getLiveRiskStatus: () => fetchJson<RiskStatus>('/api/v1/live/risk/status'),
+  updateLiveRiskConfig: (req: {
     daily_loss_limit?: number;
     max_consecutive_losses?: number;
     max_drawdown?: number;
     cooldown_minutes?: number;
   }) =>
-    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>('/api/v1/risk/config', {
+    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>('/api/v1/live/risk/config', {
       method: 'POST',
       body: JSON.stringify(req),
     }),
-  unhaltTrading: () =>
-    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>('/api/v1/risk/unhalt', {
+  unhaltLiveTrading: () =>
+    fetchJson<{ success: boolean; message: string; risk: RiskStatus }>('/api/v1/live/risk/unhalt', {
       method: 'POST',
     }),
   getEnabledAssets: () =>

@@ -134,6 +134,7 @@ async fn setup_phase7() -> (axum::Router, Arc<ModelManager>, Arc<Database>) {
         models: models.clone(),
         strategy,
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,

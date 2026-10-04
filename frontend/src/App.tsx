@@ -62,6 +62,10 @@ export const App: React.FC = () => {
   const [signal, setSignal] = useState<PredictionSignal | null>(null);
   const [bankroll, setBankroll] = useState<BankrollState | null>(null);
   const [risk, setRisk] = useState<RiskStatus | null>(null);
+  const [liveBankroll, setLiveBankroll] = useState<BankrollState | null>(null);
+  const [liveRisk, setLiveRisk] = useState<RiskStatus | null>(null);
+  const [bankrollModalMode, setBankrollModalMode] = useState<'paper' | 'live'>('paper');
+  const [unlockModalMode, setUnlockModalMode] = useState<'paper' | 'live'>('paper');
   const [activePositions, setActivePositions] = useState<PaperPosition[]>([]);
   const [recentOrders, setRecentOrders] = useState<PaperOrder[]>([]);
   const [settledResults, setSettledResults] = useState<PaperResult[]>([]);
@@ -385,10 +389,12 @@ export const App: React.FC = () => {
     let isMounted = true;
     const pollMedium = async () => {
       try {
-        const [hlth, br, rsk, pos, ord, res, stat] = await Promise.allSettled([
+        const [hlth, br, rsk, lbr, lrsk, pos, ord, res, stat] = await Promise.allSettled([
           api.getHealth(),
-          api.getBankroll(),
-          api.getRiskStatus(),
+          api.getBankroll('paper'),
+          api.getRiskStatus('paper'),
+          api.getBankroll('live'),
+          api.getRiskStatus('live'),
           api.getActivePositions(),
           api.getPaperOrders(20),
           api.getPaperResults(50),
@@ -400,6 +406,8 @@ export const App: React.FC = () => {
         if (hlth.status === 'fulfilled') setHealth(hlth.value);
         if (br.status === 'fulfilled') setBankroll(br.value);
         if (rsk.status === 'fulfilled') setRisk(rsk.value);
+        if (lbr.status === 'fulfilled') setLiveBankroll(lbr.value);
+        if (lrsk.status === 'fulfilled') setLiveRisk(lrsk.value);
         if (pos.status === 'fulfilled') setActivePositions(Array.isArray(pos.value) ? pos.value : []);
         if (ord.status === 'fulfilled') setRecentOrders(Array.isArray(ord.value) ? ord.value : []);
         if (res.status === 'fulfilled') setSettledResults(Array.isArray(res.value) ? res.value : []);
@@ -559,33 +567,62 @@ export const App: React.FC = () => {
                 {/* 1. AsmrProg Iconic Top Stat Cards Row with Circular Progress Rings! */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                   <StatCard
-                    title="活跃资金池 (Bankroll)"
+                    title={tradingMode === 'live' ? '⚡ 实盘活跃资金 (Bankroll)' : '🎮 模拟活跃资金 (Bankroll)'}
                     value={
-                      tradingMode === 'live' && activeAccount
-                        ? `$${(typeof activeAccount.balance_usdc === 'number' && !isNaN(activeAccount.balance_usdc) ? activeAccount.balance_usdc : 0).toFixed(2)}`
+                      tradingMode === 'live'
+                        ? `$${(typeof activeAccount?.balance_usdc === 'number' && !isNaN(activeAccount.balance_usdc) ? activeAccount.balance_usdc : (liveBankroll?.active_bankroll ?? 0.0)).toFixed(2)}`
                         : `$${(typeof bankroll?.active_bankroll === 'number' && !isNaN(bankroll.active_bankroll) ? bankroll.active_bankroll : 10.0).toFixed(2)}`
                     }
                     subtitle={
-                      tradingMode === 'live' && activeAccount
-                        ? `${activeAccount.label}`
+                      tradingMode === 'live'
+                        ? (activeAccount ? `${activeAccount.label} · 链上真实 USDC` : '未绑定实盘账户')
                         : `模式 B 动态硬顶: $${(typeof bankroll?.bankroll_cap === 'number' && !isNaN(bankroll.bankroll_cap) ? bankroll.bankroll_cap : 10.0).toFixed(2)}`
                     }
-                    progress={((bankroll?.active_bankroll ?? 10.0) / (bankroll?.bankroll_cap ?? 10.0)) * 100}
-                    percentageText="+81%"
-                    accentColor="#1b9c85"
-                    onClick={tradingMode === 'paper' ? () => setIsBankrollModalOpen(true) : undefined}
-                    actionLabel={tradingMode === 'paper' ? '⚙️ 设置本金' : undefined}
+                    progress={
+                      tradingMode === 'live'
+                        ? Math.min(100, (((activeAccount?.balance_usdc ?? liveBankroll?.active_bankroll ?? 0.0)) / (liveBankroll?.bankroll_cap || 10.0)) * 100)
+                        : ((bankroll?.active_bankroll ?? 10.0) / (bankroll?.bankroll_cap ?? 10.0)) * 100
+                    }
+                    percentageText={tradingMode === 'live' ? '实盘' : '模拟'}
+                    accentColor={tradingMode === 'live' ? '#ff0060' : '#1b9c85'}
+                    onClick={() => {
+                      setBankrollModalMode(tradingMode);
+                      setIsBankrollModalOpen(true);
+                    }}
+                    actionLabel={tradingMode === 'live' ? '⚙️ 实盘风控设置' : '⚙️ 设置本金'}
                   />
 
                   <StatCard
-                    title="已锁定利润金库"
-                    value={`+$${(typeof bankroll?.locked_profit === 'number' && !isNaN(bankroll.locked_profit) ? bankroll.locked_profit : 0.0).toFixed(2)}`}
-                    subtitle="100% 原始本金已锁定隔离"
-                    progress={Math.min(100, Math.max(10, ((bankroll?.locked_profit ?? 0.0) / 10.0) * 100))}
-                    percentageText={bankroll?.locked_profit ? `+$${bankroll.locked_profit.toFixed(1)}` : '-48%'}
+                    title={tradingMode === 'live' ? '⚡ 实盘锁定利润金库' : '🎮 模拟锁定利润金库'}
+                    value={
+                      tradingMode === 'live'
+                        ? `+$${(typeof liveBankroll?.locked_profit === 'number' && !isNaN(liveBankroll.locked_profit) ? liveBankroll.locked_profit : 0.0).toFixed(2)}`
+                        : `+$${(typeof bankroll?.locked_profit === 'number' && !isNaN(bankroll.locked_profit) ? bankroll.locked_profit : 0.0).toFixed(2)}`
+                    }
+                    subtitle={tradingMode === 'live' ? '实盘利润 100% 绝对隔离' : '模拟利润 100% 绝对隔离'}
+                    progress={
+                      tradingMode === 'live'
+                        ? Math.min(100, Math.max(10, ((liveBankroll?.locked_profit ?? 0.0) / (liveBankroll?.bankroll_cap || 10.0)) * 100))
+                        : Math.min(100, Math.max(10, ((bankroll?.locked_profit ?? 0.0) / 10.0) * 100))
+                    }
+                    percentageText={
+                      tradingMode === 'live'
+                        ? (liveBankroll?.locked_profit ? `+$${liveBankroll.locked_profit.toFixed(1)}` : '0.0')
+                        : (bankroll?.locked_profit ? `+$${bankroll.locked_profit.toFixed(1)}` : '-48%')
+                    }
                     accentColor="#ff0060"
-                    onClick={bankroll && bankroll.locked_profit > 0 ? () => setIsUnlockModalOpen(true) : undefined}
-                    actionLabel={bankroll && bankroll.locked_profit > 0 ? '🔓 提取利润' : undefined}
+                    onClick={() => {
+                      const curLocked = tradingMode === 'live' ? (liveBankroll?.locked_profit ?? 0) : (bankroll?.locked_profit ?? 0);
+                      if (curLocked > 0) {
+                        setUnlockModalMode(tradingMode);
+                        setIsUnlockModalOpen(true);
+                      }
+                    }}
+                    actionLabel={
+                      (tradingMode === 'live' ? (liveBankroll?.locked_profit ?? 0) : (bankroll?.locked_profit ?? 0)) > 0
+                        ? '🔓 提取利润'
+                        : undefined
+                    }
                   />
 
                   <StatCard
@@ -657,8 +694,30 @@ export const App: React.FC = () => {
                 <BankrollRiskMonitor
                   bankroll={bankroll}
                   risk={risk}
-                  onOpenSetBankroll={tradingMode === 'paper' ? () => setIsBankrollModalOpen(true) : undefined}
-                  onBankrollUpdated={(newB) => setBankroll(newB)}
+                  liveBankroll={liveBankroll}
+                  liveRisk={liveRisk}
+                  tradingMode={tradingMode}
+                  activeAccount={activeAccount}
+                  onOpenSetBankroll={(poolMode) => {
+                    setBankrollModalMode(poolMode || tradingMode);
+                    setIsBankrollModalOpen(true);
+                  }}
+                  onBankrollUpdated={(newB, poolMode) => {
+                    if (poolMode === 'live') {
+                      setLiveBankroll(newB);
+                    } else {
+                      setBankroll(newB);
+                    }
+                  }}
+                  onRefreshLiveBalance={async () => {
+                    const accounts = await api.getAccounts();
+                    const active = accounts.find((a) => a.is_active) || accounts[0] || null;
+                    if (active) {
+                      setActiveAccount(active);
+                    }
+                    const refreshed = await api.getBankroll('live');
+                    setLiveBankroll(refreshed);
+                  }}
                 />
               </div>
             )}
@@ -742,11 +801,20 @@ export const App: React.FC = () => {
       <SetBankrollModal
         isOpen={isBankrollModalOpen}
         onClose={() => setIsBankrollModalOpen(false)}
+        mode={bankrollModalMode}
         currentBankroll={bankroll}
         currentRisk={risk}
-        onSuccess={(newBr) => {
-          setBankroll(newBr);
-          api.getRiskStatus().then(setRisk).catch(() => {});
+        liveBankroll={liveBankroll}
+        liveRisk={liveRisk}
+        activeAccount={activeAccount}
+        onSuccess={(newBr, modalMode) => {
+          if (modalMode === 'live') {
+            setLiveBankroll(newBr);
+            api.getRiskStatus('live').then(setLiveRisk).catch(() => {});
+          } else {
+            setBankroll(newBr);
+            api.getRiskStatus('paper').then(setRisk).catch(() => {});
+          }
         }}
       />
 
@@ -754,9 +822,14 @@ export const App: React.FC = () => {
       <UnlockProfitModal
         isOpen={isUnlockModalOpen}
         onClose={() => setIsUnlockModalOpen(false)}
-        currentBankroll={bankroll}
+        mode={unlockModalMode}
+        currentBankroll={unlockModalMode === 'live' ? liveBankroll : bankroll}
         onSuccess={(newBr) => {
-          setBankroll(newBr);
+          if (unlockModalMode === 'live') {
+            setLiveBankroll(newBr);
+          } else {
+            setBankroll(newBr);
+          }
         }}
       />
     </div>

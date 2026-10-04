@@ -134,7 +134,8 @@ async fn setup_backtest_test_app() -> (axum::Router, Arc<BacktestEngine>, Arc<Da
         models: models.clone(),
         strategy,
         execution,
-        risk,
+        risk: risk.clone(),
+        live_risk: risk,
         backtest: backtest.clone(),
         replay,
         live_execution: std::sync::Arc::new(poly_quant_backend::execution::LiveExecutionEngine::new(

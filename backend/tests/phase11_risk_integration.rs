@@ -136,6 +136,7 @@ async fn setup_risk_test_app() -> (axum::Router, Arc<RiskManager>, Arc<Database>
         strategy,
         execution,
         risk: risk.clone(),
+        live_risk: risk.clone(),
         backtest,
         replay,
         live_execution: std::sync::Arc::new(poly_quant_backend::execution::LiveExecutionEngine::new(

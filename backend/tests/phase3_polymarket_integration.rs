@@ -130,6 +130,7 @@ async fn setup_phase3_app() -> (axum::Router, Arc<PolymarketManager>, Arc<Databa
         models: models.clone(),
         strategy,
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,

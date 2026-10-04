@@ -115,11 +115,30 @@ async fn main() -> Result<()> {
         collector.freshness(),
     );
 
-    // 14. Initialize Risk & Bankroll Manager
+    // 14. Initialize Risk & Bankroll Manager (Paper Simulation)
     let risk = Arc::new(poly_quant_backend::risk::RiskManager::new(
         config.bankroll.clone(),
         config.risk.clone(),
         bankroll,
+        db.clone(),
+    ));
+
+    // 14b. Initialize Isolated Real Trading Bankroll & Risk Manager
+    let live_bankroll = db.get_or_init_live_bankroll().await?;
+    let live_risk_cfg = db.get_live_risk_config().await.unwrap_or_else(|_| poly_quant_backend::config::RiskConfig {
+        daily_loss_limit: 5.0,
+        max_drawdown: 0.20,
+        max_consecutive_losses: 3,
+        cooldown_minutes: 15,
+    });
+    info!(
+        "Live Bankroll initialized: Active: {:.2} USDC | Cap: {:.2} USDC | Daily Loss Limit: {:.2} USDC",
+        live_bankroll.active_bankroll, live_bankroll.bankroll_cap, live_risk_cfg.daily_loss_limit
+    );
+    let live_risk = Arc::new(poly_quant_backend::risk::RiskManager::new_live(
+        config.bankroll.clone(),
+        live_risk_cfg,
+        live_bankroll,
         db.clone(),
     ));
 
@@ -142,6 +161,7 @@ async fn main() -> Result<()> {
         db.clone(),
         clob_http.clone(),
     ));
+    live_execution.set_risk_manager(live_risk.clone()).await;
 
     // Listen to trading signals for live execution (if live mode is activated)
     let live_exec_clone = live_execution.clone();
@@ -208,6 +228,7 @@ async fn main() -> Result<()> {
         live_execution: live_execution.clone(),
         self_learning: self_learning.clone(),
         risk: risk.clone(),
+        live_risk: live_risk.clone(),
         backtest,
         replay,
         sessions: Arc::new(dashmap::DashMap::new()),

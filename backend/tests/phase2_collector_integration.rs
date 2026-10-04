@@ -178,6 +178,7 @@ async fn test_collector_status_and_prices_api() {
         models: models.clone(),
         strategy,
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,

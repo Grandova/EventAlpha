@@ -136,6 +136,7 @@ async fn setup_phase4() -> (
         models: models.clone(),
         strategy,
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,

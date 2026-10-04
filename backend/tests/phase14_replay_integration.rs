@@ -138,6 +138,7 @@ async fn setup_replay_test_app() -> (axum::Router, Arc<ReplayEngine>, Arc<Databa
         models: models.clone(),
         strategy,
         execution,
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay: replay.clone(),

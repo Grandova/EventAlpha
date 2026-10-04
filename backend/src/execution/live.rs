@@ -17,6 +17,7 @@ pub struct LiveExecutionEngine {
     max_live_stake: f64,
     order_tx: broadcast::Sender<RealOrder>,
     is_auto_trading_enabled: Arc<SyncRwLock<bool>>,
+    live_risk: Arc<RwLock<Option<Arc<crate::risk::RiskManager>>>>,
 }
 
 impl LiveExecutionEngine {
@@ -29,7 +30,16 @@ impl LiveExecutionEngine {
             max_live_stake: 10.0, // Default hard ceiling: max $10 per live trade
             order_tx,
             is_auto_trading_enabled: Arc::new(SyncRwLock::new(true)),
+            live_risk: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub async fn set_risk_manager(&self, risk: Arc<crate::risk::RiskManager>) {
+        *self.live_risk.write().await = Some(risk);
+    }
+
+    pub async fn live_risk(&self) -> Option<Arc<crate::risk::RiskManager>> {
+        self.live_risk.read().await.clone()
     }
 
     pub fn is_auto_trading_enabled(&self) -> bool {
@@ -76,6 +86,9 @@ impl LiveExecutionEngine {
             match self.clob_client.fetch_balance(&account).await {
                 Ok(bal) => {
                     let _ = self.db.update_account_balance(&account.id, bal).await;
+                    if let Some(risk) = &*self.live_risk.read().await {
+                        risk.sync_live_balance(bal).await;
+                    }
                     info!(
                         "⚡ LIVE TRADING ACTIVATED for account '{}' ({}). Polygon USDC Balance: ${:.2}",
                         account.label, account.wallet_address, bal
@@ -152,6 +165,14 @@ impl LiveExecutionEngine {
         let stake = self.max_live_stake.min(1.0); // Safe $1 default stake
         let size = (stake / requested_price).max(1.0);
 
+        // Pre-trade Live Risk Check
+        if let Some(risk) = &*self.live_risk.read().await {
+            if let Err(e) = risk.can_open_position(stake).await {
+                warn!("🚨 LIVE EXECUTION RISK REJECTION: {}", e);
+                return Ok(None);
+            }
+        }
+
         let now_ms = Utc::now().timestamp_millis();
         let internal_order_id = Uuid::new_v4().to_string();
 
@@ -188,6 +209,12 @@ impl LiveExecutionEngine {
                 (None, "FAILED".to_string(), Some(e), 0.0)
             }
         };
+
+        if status == "FILLED" {
+            if let Some(risk) = &*self.live_risk.read().await {
+                let _ = risk.reserve_stake(stake, "LIVE_ORDER_FILLED", Some(&internal_order_id)).await;
+            }
+        }
 
         let real_order = RealOrder {
             id: internal_order_id,
@@ -251,6 +278,14 @@ impl LiveExecutionEngine {
         let requested_price = 0.50; // Fallback price estimation
         let size = (requested_stake / requested_price).max(1.0);
 
+        // Pre-trade Live Risk Check for manual orders
+        if let Some(risk) = &*self.live_risk.read().await {
+            if let Err(e) = risk.can_open_position(requested_stake).await {
+                warn!("🚨 MANUAL LIVE ORDER RISK REJECTION: {}", e);
+                return Err(format!("实盘风控拦截: {}", e));
+            }
+        }
+
         let now_ms = Utc::now().timestamp_millis();
         let internal_order_id = Uuid::new_v4().to_string();
 
@@ -286,6 +321,12 @@ impl LiveExecutionEngine {
                 (None, "FAILED".to_string(), Some(e), 0.0)
             }
         };
+
+        if status == "FILLED" {
+            if let Some(risk) = &*self.live_risk.read().await {
+                let _ = risk.reserve_stake(requested_stake, "LIVE_MANUAL_ORDER_FILLED", Some(&internal_order_id)).await;
+            }
+        }
 
         let real_order = RealOrder {
             id: internal_order_id,

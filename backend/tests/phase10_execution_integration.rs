@@ -143,6 +143,7 @@ async fn setup_execution_test_app() -> (
         models: models.clone(),
         strategy,
         execution: execution.clone(),
+        live_risk: risk.clone(),
         risk,
         backtest,
         replay,
