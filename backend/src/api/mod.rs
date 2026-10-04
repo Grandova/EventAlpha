@@ -142,6 +142,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/safety", get(handle_safety))
         .route("/api/v1/config", get(handle_config))
         .route("/api/v1/paper/bankroll", get(handle_bankroll))
+        .route("/api/v1/paper/bankroll/set", post(handle_bankroll_set))
         .route("/api/v1/paper/bankroll/history", get(handle_bankroll_history))
         .route("/api/v1/risk/status", get(handle_risk_status))
         .route("/api/v1/events", get(handle_events))
@@ -327,6 +328,40 @@ async fn handle_config(State(state): State<AppState>) -> Json<AppConfig> {
 
 async fn handle_bankroll(State(state): State<AppState>) -> Json<BankrollState> {
     Json(state.risk.get_bankroll_state().await)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetBankrollRequest {
+    pub active_bankroll: f64,
+    pub bankroll_cap: Option<f64>,
+    pub minimum_bankroll: Option<f64>,
+}
+
+async fn handle_bankroll_set(
+    State(state): State<AppState>,
+    Json(req): Json<SetBankrollRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state
+        .risk
+        .update_bankroll_funds(req.active_bankroll, req.bankroll_cap, req.minimum_bankroll)
+        .await
+    {
+        Ok(new_state) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": format!("模拟资金成功设置为 ${:.2} USDC", new_state.active_bankroll),
+                "bankroll": new_state
+            })),
+        ),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "message": err
+            })),
+        ),
+    }
 }
 
 async fn handle_bankroll_history(

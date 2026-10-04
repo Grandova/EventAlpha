@@ -1,6 +1,7 @@
-import React from 'react';
-import { Target, CheckCircle2, XCircle } from 'lucide-react';
-import { PredictionSignal, ModelPrediction } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Target, CheckCircle2, XCircle, Sliders, Zap } from 'lucide-react';
+import { PredictionSignal, ModelPrediction, StrategyConfig } from '../types';
+import { api } from '../services/api';
 
 interface OpportunityCenterProps {
   signal: PredictionSignal | null;
@@ -11,11 +12,35 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
   signal,
   prediction,
 }) => {
+  const [strategyConfig, setStrategyConfig] = useState<StrategyConfig | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    api.getStrategyConfig().then(setStrategyConfig).catch(() => {});
+  }, []);
+
+  const handleUpdateThreshold = async (newProb: number) => {
+    if (!strategyConfig) return;
+    try {
+      setIsUpdating(true);
+      const updated = await api.updateStrategyConfig({
+        ...strategyConfig,
+        min_probability: newProb,
+      });
+      setStrategyConfig(updated);
+    } catch (err) {
+      console.error('Failed to update threshold:', err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const action = signal?.action ?? 'SKIP';
   const score = signal?.signal_score ?? 0;
   const reason = signal?.decision_reason ?? 'Waiting for next evaluation cycle...';
   const breakdown = signal?.score_breakdown;
   const gates = signal?.gate_results ?? [];
+  const currentThreshold = strategyConfig?.min_probability ?? 0.70;
 
   const actionConfig = {
     BUY_UP: {
@@ -91,6 +116,53 @@ export const OpportunityCenter: React.FC<OpportunityCenterProps> = ({
               {breakdown?.score_tier ?? (score >= 60 ? 'PASS' : 'HOLD')}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Sensitivity Preset Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-[#f6f6f9] dark:bg-[#181a1e] rounded-2xl border border-slate-100 dark:border-slate-800 mb-4">
+        <div className="flex items-center gap-1.5 text-xs text-[#7d8da1] dark:text-slate-400">
+          <Sliders className="w-3.5 h-3.5 text-[#1b9c85]" />
+          <span className="font-bold">策略买入开仓胜率门槛:</span>
+          <span className="font-mono text-[#363949] dark:text-white font-extrabold">
+            {(currentThreshold * 100).toFixed(0)}%
+          </span>
+          {isUpdating && <span className="text-[10px] text-[#1b9c85] animate-pulse">正在热更新参数...</span>}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleUpdateThreshold(0.55)}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition ${
+              currentThreshold === 0.55
+                ? 'bg-[#ff0060] text-white border-[#ff0060] shadow-sm'
+                : 'border-slate-200 dark:border-slate-700 text-[#7d8da1] hover:text-[#ff0060]'
+            }`}
+          >
+            激进高频 (55%)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleUpdateThreshold(0.60)}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition ${
+              currentThreshold === 0.60
+                ? 'bg-[#1b9c85] text-white border-[#1b9c85] shadow-sm'
+                : 'border-slate-200 dark:border-slate-700 text-[#7d8da1] hover:text-[#1b9c85]'
+            }`}
+          >
+            标准均衡 (60%)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleUpdateThreshold(0.70)}
+            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition ${
+              currentThreshold === 0.70
+                ? 'bg-[#6c9bcf] text-white border-[#6c9bcf] shadow-sm'
+                : 'border-slate-200 dark:border-slate-700 text-[#7d8da1] hover:text-[#6c9bcf]'
+            }`}
+          >
+            严苛保守 (70%)
+          </button>
         </div>
       </div>
 

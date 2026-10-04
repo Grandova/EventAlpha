@@ -13,6 +13,8 @@ interface StatCardProps {
     isPositive?: boolean;
     label?: string;
   };
+  onClick?: () => void;
+  actionLabel?: string;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -23,6 +25,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   percentageText,
   accentColor = '#1b9c85',
   trend,
+  onClick,
+  actionLabel,
 }) => {
   const radius = 28;
   const strokeWidth = 6;
@@ -35,12 +39,24 @@ export const StatCard: React.FC<StatCardProps> = ({
   const displayPercent = percentageText || `${normalizedProgress > 0 ? '+' : ''}${Math.round(normalizedProgress)}%`;
 
   return (
-    <div className="asmr-card p-6 flex items-center justify-between transition-all duration-300 hover:-translate-y-1">
+    <div
+      onClick={onClick}
+      className={`asmr-card p-6 flex items-center justify-between transition-all duration-300 hover:-translate-y-1 ${
+        onClick ? 'cursor-pointer hover:ring-2 hover:ring-[#1b9c85]/40 group' : ''
+      }`}
+    >
       {/* Left: Titles & Large Value */}
       <div className="space-y-1">
-        <h4 className="text-sm font-semibold text-[#7d8da1] dark:text-slate-400">
-          {title}
-        </h4>
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-[#7d8da1] dark:text-slate-400">
+            {title}
+          </h4>
+          {actionLabel && (
+            <span className="text-[10px] bg-[#1b9c85]/10 text-[#1b9c85] font-bold px-1.5 py-0.5 rounded group-hover:bg-[#1b9c85] group-hover:text-white transition">
+              {actionLabel}
+            </span>
+          )}
+        </div>
         <h2 className="text-2xl lg:text-3xl font-extrabold text-[#363949] dark:text-white font-mono-num tracking-tight">
           {value}
         </h2>

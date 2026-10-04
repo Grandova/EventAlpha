@@ -127,6 +127,11 @@ export const api = {
 
   // Paper Trading & Risk Management
   getBankroll: () => fetchJson<BankrollState>('/api/v1/paper/bankroll'),
+  setBankrollFunds: (req: { active_bankroll: number; bankroll_cap?: number; minimum_bankroll?: number }) =>
+    fetchJson<{ success: boolean; message: string; bankroll: BankrollState }>('/api/v1/paper/bankroll/set', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
   getBankrollHistory: (limit = 50) =>
     fetchJson<BankrollHistoryEntry[]>(`/api/v1/paper/bankroll/history?limit=${limit}`),
   getRiskStatus: () => fetchJson<RiskStatus>('/api/v1/risk/status'),

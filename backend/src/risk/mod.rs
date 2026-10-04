@@ -321,6 +321,59 @@ impl RiskManager {
         state.halt_reason = None;
     }
 
+    /// Manually adjust or set active bankroll funds, lifting any minimum floor halts
+    pub async fn update_bankroll_funds(
+        &self,
+        active_bankroll: f64,
+        bankroll_cap: Option<f64>,
+        minimum_bankroll: Option<f64>,
+    ) -> Result<BankrollState, String> {
+        if active_bankroll <= 0.0 {
+            return Err("资金金额必须大于 0".to_string());
+        }
+
+        let mut state = self.state.write().await;
+        let cap = bankroll_cap.unwrap_or(active_bankroll).max(active_bankroll);
+        let min_floor = minimum_bankroll.unwrap_or(0.0).min(active_bankroll * 0.5);
+
+        let prev_active = state.active_bankroll;
+        state.active_bankroll = active_bankroll;
+        state.bankroll_cap = cap;
+        state.minimum_bankroll = min_floor;
+        state.total_equity = state.active_bankroll + state.locked_profit;
+        state.peak_equity = state.peak_equity.max(state.total_equity);
+        state.current_drawdown = 0.0;
+        state.daily_loss_current = 0.0;
+        state.consecutive_losses = 0;
+        state.is_trading_halted = false;
+        state.halt_reason = None;
+
+        *self.cooldown_until_ms.write().await = None;
+
+        let delta = active_bankroll - prev_active;
+        let snapshot = state.clone();
+
+        let _ = self
+            .db
+            .record_bankroll_entry(
+                snapshot.active_bankroll,
+                snapshot.locked_profit,
+                snapshot.total_equity,
+                delta,
+                "MANUAL_SET_FUNDS",
+                None,
+            )
+            .await;
+
+        let _ = self.bankroll_tx.send(snapshot.clone());
+        info!(
+            "Bankroll manually updated to {:.2} USDC (Cap: {:.2} USDC, Min floor: {:.2} USDC)",
+            active_bankroll, cap, min_floor
+        );
+
+        Ok(snapshot)
+    }
+
     pub async fn get_bankroll_state(&self) -> BankrollState {
         self.state.read().await.clone()
     }

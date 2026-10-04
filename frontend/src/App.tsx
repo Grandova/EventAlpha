@@ -19,6 +19,7 @@ import { LiveTradingBlotter } from './components/LiveTradingBlotter';
 import { AccountManagerModal } from './components/AccountManagerModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginPage } from './components/LoginPage';
+import { SetBankrollModal } from './components/SetBankrollModal';
 import { api, getStoredToken, clearStoredToken } from './services/api';
 import { wsClient } from './services/ws';
 import {
@@ -69,6 +70,7 @@ export const App: React.FC = () => {
   const [tradingMode, setTradingMode] = useState<TradingMode>('paper');
   const [activeAccount, setActiveAccount] = useState<PolymarketAccountPublic | null>(null);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
 
   // AsmrProg Light / Dark Theme State (Light by default, matching screenshot)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -469,6 +471,8 @@ export const App: React.FC = () => {
                     progress={((bankroll?.active_bankroll ?? 10.0) / (bankroll?.bankroll_cap ?? 10.0)) * 100}
                     percentageText="+81%"
                     accentColor="#1b9c85"
+                    onClick={tradingMode === 'paper' ? () => setIsBankrollModalOpen(true) : undefined}
+                    actionLabel={tradingMode === 'paper' ? '⚙️ 设置本金' : undefined}
                   />
 
                   <StatCard
@@ -531,7 +535,11 @@ export const App: React.FC = () => {
                 />
 
                 {/* 6. Bankroll & Risk Monitor */}
-                <BankrollRiskMonitor bankroll={bankroll} risk={risk} />
+                <BankrollRiskMonitor
+                  bankroll={bankroll}
+                  risk={risk}
+                  onOpenSetBankroll={tradingMode === 'paper' ? () => setIsBankrollModalOpen(true) : undefined}
+                />
               </div>
             )}
 
@@ -604,6 +612,17 @@ export const App: React.FC = () => {
         onAccountActivated={(acc) => {
           setActiveAccount(acc);
           syncTradingMode();
+        }}
+      />
+
+      {/* Set Bankroll Modal */}
+      <SetBankrollModal
+        isOpen={isBankrollModalOpen}
+        onClose={() => setIsBankrollModalOpen(false)}
+        currentBankroll={bankroll}
+        onSuccess={(newBr) => {
+          setBankroll(newBr);
+          api.getRiskStatus().then(setRisk).catch(() => {});
         }}
       />
     </div>

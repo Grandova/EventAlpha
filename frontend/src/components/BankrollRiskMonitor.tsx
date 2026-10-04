@@ -5,11 +5,13 @@ import { BankrollState, RiskStatus } from '../types';
 interface BankrollRiskMonitorProps {
   bankroll: BankrollState | null;
   risk: RiskStatus | null;
+  onOpenSetBankroll?: () => void;
 }
 
 export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
   bankroll,
   risk,
+  onOpenSetBankroll,
 }) => {
   const activeBankroll = bankroll?.active_bankroll ?? 10.0;
   const bankrollCap = bankroll?.bankroll_cap ?? 10.0;
@@ -47,8 +49,18 @@ export const BankrollRiskMonitor: React.FC<BankrollRiskMonitorProps> = ({
           </div>
         </div>
 
-        {/* Circuit Breaker Status Badge */}
-        <div className="flex items-center gap-2">
+        {/* Actions & Circuit Breaker Status Badge */}
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenSetBankroll && (
+            <button
+              onClick={onOpenSetBankroll}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-[var(--color-primary)] border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 transition-colors shadow-sm cursor-pointer"
+              title="自定义配置模拟盘本金、硬顶并解除熔断"
+            >
+              ⚙️ 调整模拟本金
+            </button>
+          )}
+
           {isHalted ? (
             <span className="flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-950 text-[#ff0060] border border-rose-300 dark:border-rose-800">
               <ShieldAlert className="h-3.5 w-3.5" /> 触发熔断: 交易暂停

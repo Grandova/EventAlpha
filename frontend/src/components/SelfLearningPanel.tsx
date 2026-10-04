@@ -74,14 +74,23 @@ export const SelfLearningPanel: React.FC<SelfLearningPanelProps> = ({
     try {
       setIsRetraining(true);
       setFeedbackMsg('正在基于历史所有结算盘面执行全局 SGD 重新训练与校准...');
-      const res = await api.retrainLearning(activeAsset);
-      setFeedbackMsg(
-        `全局自进化完成！样本数: ${res.samples}，拟合准确率: ${(res.accuracy * 100).toFixed(1)}%，Brier 分数: ${res.brier_score.toFixed(4)}`
-      );
+      const res: any = await api.retrainLearning(activeAsset);
+      const data = res?.result ?? res;
+      if (res?.success && data && typeof data.accuracy === 'number') {
+        const acc = (data.accuracy * 100).toFixed(1);
+        const brier = typeof data.brier_score === 'number' ? data.brier_score.toFixed(4) : '--';
+        setFeedbackMsg(
+          `全局自进化完成！样本数: ${data.samples ?? 0}，拟合准确率: ${acc}%，Brier 分数: ${brier}`
+        );
+      } else {
+        setFeedbackMsg(
+          `历史样本积累中：当前为全新启动系统，盘面尚未产生已结算的历史盘口。每轮 5 分钟盘面结算后，系统将自动录入特征与胜负并启动自学习。`
+        );
+      }
       await loadLearningData();
-      setTimeout(() => setFeedbackMsg(null), 5000);
+      setTimeout(() => setFeedbackMsg(null), 6000);
     } catch (err: any) {
-      setFeedbackMsg(`重新训练失败: ${err.message || '未知错误'}`);
+      setFeedbackMsg(`重新训练提示: ${err.message || '暂无可用历史结算样本'}`);
     } finally {
       setIsRetraining(false);
     }
