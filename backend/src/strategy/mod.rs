@@ -253,9 +253,11 @@ impl StrategyEngine {
             recents.push_back(decision.clone());
         }
 
-        // Persist to database predictions table
-        if let Err(e) = self.db.insert_prediction(&signal).await {
-            warn!("Failed to persist prediction signal to database: {:#}", e);
+        // Persist to database predictions table only for active signals or periodic 10s audit sampling
+        if signal.action != SignalAction::Skip || signal.timestamp_ms % 10_000 < 150 {
+            if let Err(e) = self.db.insert_prediction(&signal).await {
+                warn!("Failed to persist prediction signal to database: {:#}", e);
+            }
         }
 
         // Broadcast to consumers (e.g. Paper Trading Engine & WebSocket clients)
